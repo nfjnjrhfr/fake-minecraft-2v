@@ -1,2 +1,69 @@
-# fake-minecraft-2v
-u8ujujujujujujujujujuujuujujujujuujujujujujjujjujujujuujjunjerivcfv dnds xdfbdehbhebhbdehbhbhrhbehebhderbhrvrdfgvfrfrevefvfegfhdevegdervgedryegehwrwehgerhwhrbhdbhdbdhbedbdiuheiuhur4ury4yeeyurheu4u44uyy56t4rueyrjdhjddbhdjebbhjejbhdwehjhejrhjedhjdjdndejndjnsdsjndsjndsjkkd.                                                                             67
+# MineTube
+
+一個仿 YouTube 介面的影音平台示範，內容是虛構的 Minecraft 頻道。
+純 HTML / CSS / JavaScript，**沒有任何框架、沒有任何外部請求、沒有任何圖片或影片檔案**。
+
+畫面上所有的縮圖與「影片」都是即時用 Canvas 畫出來的方塊場景——播放器裡跑的不是
+`<video>`，而是 `drawScene(t)`：每一格畫面都是時間 `t` 的函數，所以拖動進度條、
+變速、預覽縮圖全部都能正常運作，而且整個專案只有幾十 KB。
+
+## 直接開啟
+
+```bash
+# 方法一：任何靜態伺服器（首頁使用 ES modules，需要 http://）
+python3 -m http.server 8000    # 然後開 http://localhost:8000/index.html
+
+# 方法二：打包成單一檔案後，直接用瀏覽器開啟，不需要伺服器
+node tools/bundle.mjs
+open dist/minetube.html
+```
+
+## 功能
+
+**瀏覽**
+- 首頁影片牆、分類 chips 篩選、滑鼠移到縮圖上會播放動態預覽
+- 搜尋（含輸入建議）、搜尋結果頁、頻道頁、訂閱內容、觀看紀錄、播放清單
+- 深色 / 淺色主題切換、側邊欄可收合成 icon rail、手機版排版
+- 訂閱、喜歡、儲存、留言等狀態都存在 `localStorage`，重新整理不會消失
+
+**播放器**（`assets/js/player.js`）
+- 播放 / 暫停、進度條拖曳、滑過進度條會顯示該時間點的預覽縮圖
+- 音量滑桿、靜音、播放速度（0.25x–2x）、畫質（真的會改變算圖解析度）、字幕選單
+- 劇院模式、迷你播放器、全螢幕、播放結束自動接下一部
+- 鍵盤快捷鍵：`空白鍵`/`K` 播放暫停、`J`/`L` ±10 秒、`←`/`→` ±5 秒、
+  `↑`/`↓` 音量、`M` 靜音、`F` 全螢幕、`T` 劇院模式、`0`–`9` 跳到百分比位置
+
+## 場景
+
+`assets/js/scene.js` 有六種程序生成的方塊場景，每部影片依 `style` 欄位挑一種，
+再用影片 id 當亂數種子，所以同一部影片每次開啟畫面都一樣：
+
+| style | 內容 |
+| --- | --- |
+| `overworld` | 90 秒一輪的日夜循環、雲、樹、地形視差、走路的角色 |
+| `nether` | 岩漿波動、地獄石天花板、飄過的地獄幽靈、火星 |
+| `cave` | 火把光暈閃爍、鑽石/金/銅礦脈、暗處若隱若現的苦力怕 |
+| `redstone` | 紅石訊號沿著線傳遞、中繼器、活塞、依序閃爍的紅石燈 |
+| `build` | 一座隨時間一塊一塊蓋起來的城堡 |
+| `ocean` | 水下光柱、海帶擺動、游動的魚、氣泡 |
+
+## 檔案結構
+
+```
+index.html              頁面骨架（header / sidebar / <main>）
+assets/css/style.css    全部樣式，深淺色用 CSS 變數切換
+assets/js/
+  rng.js                固定種子的亂數與 value noise
+  scene.js              六種方塊場景 + 縮圖繪製
+  data.js               虛構的頻道、影片、留言資料
+  util.js               數字/時間格式化、SVG icon、DOM 小工具
+  player.js             播放器（Canvas + 控制列 + 快捷鍵）
+  app.js                hash 路由與各頁面渲染
+tools/bundle.mjs        把上面全部打包成單一 HTML 檔
+dist/minetube.html      打包結果（可直接開啟）
+```
+
+## 說明
+
+介面佈局參考自常見的影音網站，但名稱、標誌、頻道與影片內容全部是虛構的，
+僅作為前端練習用途，與任何實際存在的服務或創作者無關。

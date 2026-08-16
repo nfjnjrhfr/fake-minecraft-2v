@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MineTube — 方塊世界影音平台</title>
+<meta name="description" content="MineTube：一個用純 HTML / CSS / JavaScript 做的仿 YouTube 影音平台示範，所有影片畫面都是即時運算產生的。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23ff0033'/%3E%3Cpath d='M13 10l10 6-10 6z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <button id="menu-btn" class="icon-btn" data-icon="menu" aria-label="開啟選單"></button>
+    <a id="logo" class="logo" href="#/" aria-label="MineTube 首頁">
+      <span class="logo-mark" aria-hidden="true">
+        <svg viewBox="0 0 34 24" width="34" height="24">
+          <rect x="0" y="0" width="34" height="24" rx="6" fill="var(--brand)"/>
+          <path d="M13.5 6.5L24 12l-10.5 5.5z" fill="#fff"/>
+        </svg>
+      </span>
+      <span class="logo-text">MineTube<sup>TW</sup></span>
+    </a>
+  </div>
+
+  <div class="topbar-center">
+    <div class="search-wrap">
+      <form id="search-form" class="search" role="search">
+        <input id="search-input" type="search" placeholder="搜尋" aria-label="搜尋" autocomplete="off">
+        <button class="search-btn" type="submit" data-icon="search" aria-label="搜尋"></button>
+      </form>
+      <div id="suggestions" class="suggestions" hidden></div>
+      <button class="icon-btn mic" data-icon="mic" aria-label="語音搜尋"></button>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <button id="theme-btn" class="icon-btn" aria-label="切換深色/淺色模式"></button>
+    <button class="icon-btn" data-icon="create" aria-label="建立"></button>
+    <button class="icon-btn has-dot" data-icon="bell" aria-label="通知"></button>
+    <button class="avatar me" aria-label="帳戶">你</button>
+  </div>
+</header>
+
+<nav id="sidebar" class="sidebar" aria-label="主選單"></nav>
+<div id="scrim" class="scrim"></div>
+
+<main id="view" class="view"></main>
+
+<script type="module" src="assets/js/app.js"></script>
+</body>
+</html>

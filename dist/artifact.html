@@ -1,0 +1,2515 @@
+<title>MineTube — 方塊世界影音平台</title>
+<style>
+/* MineTube — layout modelled on a familiar video site, with its own branding.
+   Dark is the default; .light on <html> flips the token set. */
+
+:root {
+  --brand: #ff0033;
+  --bg: #0f0f0f;
+  --bg-elev: #212121;
+  --bg-hover: #272727;
+  --bg-chip: #272727;
+  --bg-chip-active: #f1f1f1;
+  --fg-chip-active: #0f0f0f;
+  --fg: #f1f1f1;
+  --fg-dim: #aaaaaa;
+  --border: #303030;
+  --overlay: rgba(0, 0, 0, 0.6);
+  --shadow: 0 4px 32px rgba(0, 0, 0, 0.6);
+  --header-h: 56px;
+  --side-w: 240px;
+  --rail-w: 72px;
+  --radius: 12px;
+}
+
+html.light {
+  --bg: #ffffff;
+  --bg-elev: #f2f2f2;
+  --bg-hover: #e5e5e5;
+  --bg-chip: #f2f2f2;
+  --bg-chip-active: #0f0f0f;
+  --fg-chip-active: #ffffff;
+  --fg: #0f0f0f;
+  --fg-dim: #606060;
+  --border: #e5e5e5;
+  --overlay: rgba(0, 0, 0, 0.5);
+  --shadow: 0 4px 32px rgba(0, 0, 0, 0.2);
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", Roboto,
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+h1, h2, h3 { margin: 0; font-weight: 600; }
+.ic { fill: currentColor; display: block; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #6b6b6b66; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #909090aa; }
+
+/* ------------------------------------------------------------------ topbar */
+
+.topbar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  background: var(--bg);
+  z-index: 60;
+}
+
+.topbar-left { display: flex; align-items: center; gap: 8px; min-width: 170px; }
+.topbar-center { flex: 1; display: flex; justify-content: center; }
+.topbar-right { display: flex; align-items: center; gap: 4px; justify-content: flex-end; min-width: 170px; }
+
+.icon-btn {
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  color: var(--fg);
+  position: relative;
+}
+.icon-btn:hover { background: var(--bg-hover); }
+.icon-btn.has-dot::after {
+  content: "3";
+  position: absolute; top: 3px; right: 2px;
+  min-width: 15px; height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 10px; line-height: 15px; text-align: center;
+}
+
+.logo { display: flex; align-items: center; gap: 4px; }
+.logo-mark { display: block; }
+.logo-text { font-size: 20px; font-weight: 700; letter-spacing: -0.6px; }
+.logo-text sup { font-size: 10px; font-weight: 500; color: var(--fg-dim); margin-left: 1px; }
+
+.search-wrap { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 690px; position: relative; }
+.search {
+  display: flex; flex: 1;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 40px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg-elev) 55%, transparent);
+}
+.search:focus-within { border-color: #3ea6ff; }
+.search input {
+  flex: 1;
+  padding: 0 16px;
+  border: 0; outline: 0;
+  background: transparent;
+  color: var(--fg);
+  font-size: 16px;
+}
+.search input::placeholder { color: var(--fg-dim); }
+.search-btn {
+  width: 64px;
+  display: grid; place-items: center;
+  background: var(--bg-elev);
+  border-left: 1px solid var(--border);
+  color: var(--fg);
+}
+.search-btn:hover { background: var(--bg-hover); }
+.mic { background: var(--bg-elev); flex: none; }
+
+.suggestions {
+  position: absolute;
+  top: 46px; left: 0; right: 56px;
+  background: var(--bg-elev);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 8px 0;
+  z-index: 80;
+  max-height: 60vh; overflow: auto;
+}
+.suggestion {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%;
+  padding: 6px 16px;
+  text-align: left;
+  color: var(--fg);
+}
+.suggestion span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggestion:hover { background: var(--bg-hover); }
+
+.avatar {
+  width: 36px; height: 36px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--c, #555);
+  color: #fff;
+  display: grid; place-items: center;
+  font-size: 15px; font-weight: 600;
+}
+.avatar.me { width: 32px; height: 32px; background: #7a5cff; font-size: 13px; margin-left: 8px; }
+.avatar.tiny { width: 24px; height: 24px; font-size: 11px; }
+.avatar.lg { width: 40px; height: 40px; }
+.avatar.xl { width: 96px; height: 96px; font-size: 40px; }
+
+/* ----------------------------------------------------------------- sidebar */
+
+.sidebar {
+  position: fixed;
+  top: var(--header-h); bottom: 0; left: 0;
+  width: var(--side-w);
+  padding: 12px;
+  overflow-y: auto;
+  background: var(--bg);
+  z-index: 55;
+  scrollbar-width: thin;
+}
+.sidebar::-webkit-scrollbar { width: 0; }
+.sidebar:hover::-webkit-scrollbar { width: 8px; }
+
+.side-section { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.side-section:last-of-type { border-bottom: 0; }
+.side-title { font-size: 16px; font-weight: 500; padding: 6px 12px; }
+.side-link {
+  display: flex; align-items: center; gap: 24px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.side-link:hover { background: var(--bg-hover); }
+.side-link .ic { flex: none; }
+.side-link span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-foot { padding: 16px 12px; color: var(--fg-dim); font-size: 12px; }
+.side-foot p { margin: 0 0 12px; }
+.side-copy { opacity: 0.7; }
+
+.scrim {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 54;
+  display: none;
+}
+body.drawer-open .scrim { display: block; }
+
+/* Collapsed rail: icons only, labels underneath. */
+body.rail .sidebar { width: var(--rail-w); padding: 12px 4px; }
+body.rail .side-link {
+  flex-direction: column;
+  gap: 4px;
+  height: 74px;
+  justify-content: center;
+  font-size: 10px;
+  padding: 0 2px;
+}
+body.rail .side-title,
+body.rail .side-foot,
+body.rail .side-section:nth-of-type(n+3) { display: none; }
+body.rail .view { margin-left: var(--rail-w); }
+
+.view {
+  margin-left: var(--side-w);
+  padding: calc(var(--header-h) + 12px) 24px 60px;
+  min-height: 100vh;
+}
+
+/* On the watch page the sidebar becomes an overlay drawer, like the real thing. */
+body.watch-mode .sidebar { transform: translateX(-100%); transition: transform 0.15s ease; }
+body.watch-mode.drawer-open .sidebar { transform: none; }
+body.watch-mode .view { margin-left: 0; padding-left: 24px; padding-right: 24px; }
+
+@media (max-width: 1000px) {
+  .sidebar { transform: translateX(-100%); transition: transform 0.15s ease; }
+  body.drawer-open .sidebar { transform: none; }
+  .view, body.rail .view { margin-left: 0; }
+  .topbar-left { min-width: auto; }
+  .logo-text { display: none; }
+}
+
+/* Phones: drop the secondary chrome so the search field still fits. */
+@media (max-width: 700px) {
+  .topbar { padding: 0 8px; gap: 4px; }
+  .topbar-right { min-width: auto; gap: 0; }
+  .topbar-right .icon-btn:not(#theme-btn) { display: none; }
+  .mic { display: none; }
+  .search input { font-size: 14px; padding: 0 12px; }
+  .search-btn { width: 48px; }
+  .suggestions { right: 0; }
+  .view { padding-left: 12px; padding-right: 12px; }
+  body.watch-mode .view { padding-left: 0; padding-right: 0; }
+  body.watch-mode .player-box { border-radius: 0; }
+  body.watch-mode .watch-title,
+  body.watch-mode .watch-actions,
+  body.watch-mode .desc,
+  body.watch-mode .comments,
+  body.watch-mode .watch-secondary { padding-left: 12px; padding-right: 12px; }
+  .action-row { margin-left: 0; overflow-x: auto; }
+  .player-time { font-size: 11px; padding: 0 4px; }
+  .js-next, .js-mini { display: none; }
+}
+
+/* ------------------------------------------------------------------- chips */
+
+.chips {
+  position: sticky;
+  top: var(--header-h);
+  display: flex; gap: 12px;
+  padding: 12px 0;
+  margin-bottom: 4px;
+  background: var(--bg);
+  overflow-x: auto;
+  scrollbar-width: none;
+  z-index: 40;
+}
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none;
+  padding: 0 12px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-chip);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.chip:hover { background: var(--bg-hover); }
+.chip.active { background: var(--bg-chip-active); color: var(--fg-chip-active); }
+
+/* ------------------------------------------------------------------- cards */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 40px 16px;
+}
+@media (max-width: 700px) { .grid { grid-template-columns: 1fr; gap: 24px; } }
+
+.thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #000;
+}
+.thumb-canvas { width: 100%; height: 100%; display: block; image-rendering: auto; }
+.card.previewing .thumb { border-radius: 0; }
+.badge {
+  position: absolute;
+  right: 8px; bottom: 8px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 12px; font-weight: 500;
+}
+.badge-live { background: var(--brand); }
+.thumb-progress {
+  position: absolute; left: 0; bottom: 0;
+  height: 3px; width: 0;
+  background: var(--brand);
+}
+.card:visited .thumb-progress { width: 42%; }
+
+.card { display: block; }
+.card-body { display: flex; gap: 12px; padding: 12px 0 0; position: relative; }
+.card-meta { min-width: 0; flex: 1; }
+.card-title {
+  font-size: 16px; font-weight: 500; line-height: 1.4;
+  max-height: 2.8em; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.card-sub { color: var(--fg-dim); font-size: 13px; }
+.card-channel { display: inline-flex; align-items: center; gap: 4px; }
+.card-channel:hover { color: var(--fg); }
+.verified { display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--fg-dim); color: var(--bg); }
+.verified .ic { width: 10px; height: 10px; }
+.card-more { position: absolute; right: -6px; top: 8px; padding: 6px; border-radius: 50%; color: var(--fg); opacity: 0; }
+.card:hover .card-more { opacity: 1; }
+.card-more:hover { background: var(--bg-hover); }
+
+/* list variant (search results) */
+.results { display: flex; flex-direction: column; gap: 16px; max-width: 1096px; }
+.card-list { display: grid; grid-template-columns: 360px 1fr; gap: 16px; }
+.card-list .card-body { padding: 0; }
+.card-list .card-title { font-size: 18px; -webkit-line-clamp: 2; margin-bottom: 4px; }
+.card-list .card-channel-line { margin: 8px 0; }
+.card-desc { color: var(--fg-dim); font-size: 12px; margin: 4px 0 0; }
+.card-channel-line { display: flex; align-items: center; gap: 8px; }
+@media (max-width: 800px) { .card-list { grid-template-columns: 1fr; } }
+
+/* compact variant (up next) */
+.card-compact { display: grid; grid-template-columns: 168px 1fr; gap: 8px; }
+.card-compact .card-body { padding: 0; }
+.card-compact .card-title { font-size: 14px; }
+.card-compact .card-sub { font-size: 12px; }
+.card-compact .card-more { top: 0; right: 0; }
+
+.results-head {
+  display: flex; align-items: center; justify-content: space-between;
+  max-width: 1096px;
+  padding: 8px 0 16px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.filter-btn { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 20px; }
+.filter-btn:hover { background: var(--bg-hover); }
+.results-count { color: var(--fg-dim); font-size: 13px; }
+
+.page-title { font-size: 24px; margin-bottom: 20px; }
+.empty { grid-column: 1 / -1; display: grid; place-items: center; gap: 12px; padding: 80px 0; color: var(--fg-dim); }
+.empty-icon { opacity: 0.4; }
+
+/* ----------------------------------------------------------------- channel */
+
+.channel { max-width: 1284px; margin: 0 auto 24px; }
+.channel-banner { height: 170px; border-radius: 14px; background: linear-gradient(110deg, var(--c), #111 70%); }
+.channel-head { display: flex; align-items: center; gap: 24px; padding: 20px 0; }
+.channel-info { flex: 1; min-width: 0; }
+.channel-info h1 { font-size: 24px; }
+.channel-sub { color: var(--fg-dim); font-size: 13px; margin-top: 4px; }
+.channel-desc { color: var(--fg-dim); font-size: 13px; margin: 6px 0 0; }
+.channel-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border); }
+.channel-tab { padding: 12px 0; color: var(--fg-dim); border-bottom: 2px solid transparent; }
+.channel-tab.active { color: var(--fg); border-bottom-color: var(--fg); }
+
+.subscribe {
+  flex: none;
+  height: 36px; padding: 0 16px;
+  border-radius: 18px;
+  background: var(--fg); color: var(--bg);
+  font-weight: 500;
+}
+.subscribe:hover { opacity: 0.85; }
+.subscribe.subscribed { background: var(--bg-elev); color: var(--fg); }
+
+/* ------------------------------------------------------------------- watch */
+
+.watch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 402px;
+  gap: 24px;
+  max-width: 1754px;
+  margin: 0 auto;
+}
+.watch-primary { min-width: 0; }
+.watch-secondary { display: flex; flex-direction: column; gap: 8px; }
+@media (max-width: 1100px) { .watch { grid-template-columns: 1fr; } }
+
+body.theater .watch { grid-template-columns: 1fr; max-width: none; }
+/* Cap by width rather than height so the 16:9 box never letterboxes itself
+   into a lopsided gap. */
+body.theater .player-box { margin: 0 auto 16px; border-radius: 0; width: 100%; max-width: calc((100vh - 150px) * 16 / 9); }
+body.theater .watch-secondary { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+
+.player-box { position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius); overflow: hidden; background: #000; }
+.watch-title { font-size: 20px; margin: 12px 0 8px; line-height: 1.35; }
+
+.watch-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.channel-row { display: flex; align-items: center; gap: 12px; }
+.channel-name { display: flex; align-items: center; gap: 4px; font-size: 16px; font-weight: 500; }
+.channel-subs { color: var(--fg-dim); font-size: 12px; }
+.action-row { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+
+.pill-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 36px; padding: 0 16px;
+  border-radius: 18px;
+  background: var(--bg-elev);
+  font-size: 14px; font-weight: 500;
+  white-space: nowrap;
+}
+.pill-btn:hover { background: var(--bg-hover); }
+.pill-btn.on { background: var(--bg-hover); color: #3ea6ff; }
+.pill-btn.icon-only { padding: 0 10px; }
+.pill-group { display: flex; background: var(--bg-elev); border-radius: 18px; }
+.pill-group .pill-btn { background: none; }
+.pill-group .pill-btn:first-child { border-right: 1px solid var(--border); }
+
+.desc {
+  background: var(--bg-elev);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 24px;
+  font-size: 14px;
+}
+.desc-head { font-weight: 600; margin-bottom: 6px; }
+.desc-body { white-space: pre-line; max-height: 3em; overflow: hidden; }
+.desc.open .desc-body { max-height: none; }
+.desc-toggle { margin-top: 6px; font-weight: 600; }
+
+.comments-head { display: flex; align-items: center; gap: 24px; margin-bottom: 20px; }
+.comments-head h2 { font-size: 20px; }
+.text-btn { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; padding: 8px 12px; border-radius: 18px; }
+.text-btn:hover { background: var(--bg-hover); }
+.primary-btn { background: #3ea6ff; color: #0f0f0f; padding: 8px 16px; border-radius: 18px; font-weight: 500; }
+
+.comment-add { display: flex; gap: 16px; margin-bottom: 28px; }
+.comment-add-body { flex: 1; }
+.comment-input {
+  width: 100%;
+  padding: 4px 0 6px;
+  background: none; border: 0; border-bottom: 1px solid var(--border);
+  color: var(--fg); font-size: 14px; outline: none;
+}
+.comment-input:focus { border-bottom-color: var(--fg); }
+.comment-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+.comment-list { display: flex; flex-direction: column; gap: 16px; }
+.comment { display: flex; gap: 16px; }
+.comment-body { min-width: 0; }
+.comment-head { display: flex; align-items: baseline; gap: 8px; }
+.cm-author { font-size: 13px; font-weight: 600; }
+.cm-time { color: var(--fg-dim); font-size: 12px; }
+.cm-text { margin: 2px 0 6px; white-space: pre-line; }
+.cm-actions { display: flex; align-items: center; gap: 8px; }
+.cm-btn { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-dim); font-size: 12px; padding: 4px; border-radius: 14px; }
+.cm-btn:hover { background: var(--bg-hover); }
+.cm-btn.on { color: #3ea6ff; }
+.cm-btn.text { padding: 6px 12px; font-weight: 600; color: var(--fg); }
+.cm-replies { color: #3ea6ff; font-weight: 600; font-size: 13px; margin-top: 6px; padding: 4px 8px; border-radius: 14px; }
+.cm-replies:hover { background: #3ea6ff22; }
+
+.up-next-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.up-next-head > span { font-weight: 500; }
+.autoplay { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fg-dim); cursor: pointer; }
+.switch { position: relative; width: 34px; height: 14px; border-radius: 7px; background: var(--fg-dim); display: inline-block; }
+.switch input { position: absolute; opacity: 0; }
+.knob { position: absolute; top: -3px; left: 0; width: 20px; height: 20px; border-radius: 50%; background: #909090; transition: transform 0.15s; }
+.switch input:checked + .knob { transform: translateX(16px); background: var(--fg); }
+
+/* ------------------------------------------------------------------ player */
+
+/* The Player mounts onto .player-box itself, so this must not re-position it. */
+.player { position: relative; background: #000; outline: none; }
+/* Absolute so the canvas's intrinsic size can never feed back into layout —
+   otherwise resizing the canvas grows the box that the canvas is measured from. */
+.player-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.player.is-mini { position: fixed; right: 16px; bottom: 16px; width: 400px; height: 225px; inset: auto 16px 16px auto; z-index: 90; border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
+.player.is-fullscreen { border-radius: 0; aspect-ratio: auto; width: 100%; height: 100%; }
+
+.player-scrim {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 24%, rgba(0,0,0,0) 100%);
+  opacity: 1; transition: opacity 0.2s;
+  pointer-events: none;
+}
+.player.hide-ui .player-scrim { opacity: 0; }
+
+.player-bigplay {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.15);
+  transition: opacity 0.15s;
+}
+.player-bigplay .ic { filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6)); }
+.player.is-playing .player-bigplay { opacity: 0; pointer-events: none; }
+
+.player-livebadge {
+  position: absolute; top: 12px; left: 12px;
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 8px; border-radius: 4px;
+  background: var(--brand); color: #fff; font-size: 12px; font-weight: 600;
+}
+.player-livebadge span { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: blink 1.4s infinite; }
+@keyframes blink { 50% { opacity: 0.2; } }
+
+.player-toast {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 10px 18px; border-radius: 4px;
+  background: rgba(0, 0, 0, 0.75); color: #fff;
+  font-size: 18px; font-weight: 600;
+  pointer-events: none;
+}
+
+.player-controls {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 0 12px 6px;
+  opacity: 1; transition: opacity 0.2s, transform 0.2s;
+}
+.player.hide-ui .player-controls { opacity: 0; transform: translateY(8px); pointer-events: none; }
+.player.hide-ui { cursor: none; }
+
+.player-scrub { position: relative; height: 16px; display: flex; align-items: center; cursor: pointer; touch-action: none; }
+.scrub-track { position: relative; width: 100%; height: 3px; background: rgba(255,255,255,0.28); transition: height 0.1s; }
+.player-scrub:hover .scrub-track { height: 5px; }
+.scrub-buffer { position: absolute; inset: 0 auto 0 0; width: 0; background: rgba(255,255,255,0.45); }
+.scrub-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--brand); }
+.scrub-knob { position: absolute; top: 50%; left: 0; width: 13px; height: 13px; margin-left: -6px; border-radius: 50%; background: var(--brand); transform: translateY(-50%) scale(0); transition: transform 0.1s; }
+.player-scrub:hover .scrub-knob { transform: translateY(-50%) scale(1); }
+.scrub-fill { transition: none; }
+.player-scrub:hover .scrub-knob { left: var(--knob, 0); }
+
+.scrub-preview {
+  position: absolute; bottom: 22px; transform: translateX(-50%);
+  background: #000; border: 2px solid rgba(255,255,255,0.25); border-radius: 4px;
+  padding: 0; pointer-events: none; text-align: center;
+}
+.scrub-preview canvas { display: block; width: 160px; height: 90px; }
+.scrub-preview span { display: block; color: #fff; font-size: 12px; padding: 2px 0; }
+
+.player-bar { display: flex; align-items: center; gap: 4px; color: #fff; }
+.pbtn { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; color: #fff; }
+.pbtn:hover { background: rgba(255, 255, 255, 0.12); }
+.player-spacer { flex: 1; }
+.player-time { font-size: 13px; padding: 0 8px; font-variant-numeric: tabular-nums; }
+
+.player-volume { display: flex; align-items: center; }
+.vol-slider {
+  width: 0; opacity: 0;
+  transition: width 0.15s, opacity 0.15s;
+  -webkit-appearance: none; appearance: none;
+  height: 3px; border-radius: 2px;
+  background: linear-gradient(to right, #fff var(--vol, 70%), rgba(255,255,255,0.35) var(--vol, 70%));
+  outline: none; cursor: pointer;
+}
+.player-volume:hover .vol-slider, .vol-slider:focus { width: 68px; opacity: 1; margin: 0 8px 0 4px; }
+.vol-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+.vol-slider::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: #fff; }
+
+.player-menu-wrap { position: relative; }
+.player-menu {
+  position: absolute; right: 0; bottom: 48px;
+  min-width: 210px;
+  background: rgba(28, 28, 28, 0.95);
+  border-radius: 12px;
+  padding: 8px 0;
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+.menu-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  width: 100%; padding: 10px 16px;
+  color: #fff; font-size: 14px; text-align: left;
+}
+.menu-row:hover { background: rgba(255, 255, 255, 0.12); }
+.menu-val { color: #aaa; }
+.menu-check { width: 20px; display: inline-grid; place-items: center; }
+.menu-head { border-bottom: 1px solid rgba(255,255,255,0.15); margin-bottom: 6px; padding-bottom: 12px; }
+
+/* ------------------------------------------------------------------- toast */
+
+.toast {
+  position: fixed; left: 24px; bottom: 24px;
+  padding: 14px 20px;
+  border-radius: 6px;
+  background: #f1f1f1; color: #0f0f0f;
+  font-size: 14px;
+  box-shadow: var(--shadow);
+  opacity: 0; transform: translateY(12px);
+  transition: opacity 0.18s, transform 0.18s;
+  pointer-events: none;
+  z-index: 100;
+}
+.toast.show { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+</style>
+<header class="topbar">
+  <div class="topbar-left">
+    <button id="menu-btn" class="icon-btn" data-icon="menu" aria-label="開啟選單"></button>
+    <a id="logo" class="logo" href="#/" aria-label="MineTube 首頁">
+      <span class="logo-mark" aria-hidden="true">
+        <svg viewBox="0 0 34 24" width="34" height="24">
+          <rect x="0" y="0" width="34" height="24" rx="6" fill="var(--brand)"/>
+          <path d="M13.5 6.5L24 12l-10.5 5.5z" fill="#fff"/>
+        </svg>
+      </span>
+      <span class="logo-text">MineTube<sup>TW</sup></span>
+    </a>
+  </div>
+
+  <div class="topbar-center">
+    <div class="search-wrap">
+      <form id="search-form" class="search" role="search">
+        <input id="search-input" type="search" placeholder="搜尋" aria-label="搜尋" autocomplete="off">
+        <button class="search-btn" type="submit" data-icon="search" aria-label="搜尋"></button>
+      </form>
+      <div id="suggestions" class="suggestions" hidden></div>
+      <button class="icon-btn mic" data-icon="mic" aria-label="語音搜尋"></button>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <button id="theme-btn" class="icon-btn" aria-label="切換深色/淺色模式"></button>
+    <button class="icon-btn" data-icon="create" aria-label="建立"></button>
+    <button class="icon-btn has-dot" data-icon="bell" aria-label="通知"></button>
+    <button class="avatar me" aria-label="帳戶">你</button>
+  </div>
+</header>
+
+<nav id="sidebar" class="sidebar" aria-label="主選單"></nav>
+<div id="scrim" class="scrim"></div>
+
+<main id="view" class="view"></main>
+<script>
+(function () {
+'use strict';
+/* ==== rng.js ==== */
+/* Deterministic pseudo-randomness so every thumbnail / scene looks the same
+   on every reload. Seeds are plain strings (usually a video id). */
+
+function hashSeed(str) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function makeRng(seed) {
+  let a = typeof seed === 'string' ? hashSeed(seed) : seed >>> 0;
+  return function rng() {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* Smooth 1-D value noise — used for terrain silhouettes and cloud drift. */
+function noise1d(seed) {
+  const rng = makeRng(seed);
+  const table = Array.from({ length: 256 }, rng);
+  return function sample(x) {
+    const i = Math.floor(x);
+    const f = x - i;
+    const a = table[((i % 256) + 256) % 256];
+    const b = table[(((i + 1) % 256) + 256) % 256];
+    const s = f * f * (3 - 2 * f);
+    return a + (b - a) * s;
+  };
+}
+
+function pick(rng, list) {
+  return list[Math.floor(rng() * list.length) % list.length];
+}
+
+/* ==== util.js ==== */
+/* Formatting + the icon set. Icons are inline SVG paths so the page has zero
+   network requests. */
+
+function formatViews(n) {
+  if (n >= 100_000_000) return `${Math.round(n / 100_000_000)} 億`;
+  if (n >= 10_000) return `${(n / 10_000).toFixed(n >= 100_000 ? 0 : 1).replace(/\.0$/, '')} 萬`;
+  if (n >= 1_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')} 千`;
+  return String(n);
+}
+
+function formatSubs(n) {
+  return `${formatViews(n)}位訂閱者`;
+}
+
+function formatAgo(days) {
+  if (days === 0) return '今天';
+  if (days < 7) return `${days} 天前`;
+  if (days < 30) return `${Math.floor(days / 7)} 週前`;
+  if (days < 365) return `${Math.floor(days / 30)} 個月前`;
+  return `${Math.floor(days / 365)} 年前`;
+}
+
+function formatHours(h) {
+  if (h < 1) return '剛剛';
+  if (h < 24) return `${h} 小時前`;
+  return `${Math.floor(h / 24)} 天前`;
+}
+
+function formatDuration(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return h
+    ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    : `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function formatCount(n) {
+  if (n >= 10_000) return `${(n / 10_000).toFixed(1).replace(/\.0$/, '')}萬`;
+  if (n >= 1_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}千`;
+  return String(n);
+}
+
+function el(tag, attrs = {}, children = []) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === false || v == null) continue;
+    if (k === 'class') node.className = v;
+    else if (k === 'html') node.innerHTML = v;
+    else if (k === 'text') node.textContent = v;
+    else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v);
+  }
+  for (const c of [].concat(children)) {
+    if (c == null || c === false) continue;
+    node.append(c.nodeType ? c : document.createTextNode(c));
+  }
+  return node;
+}
+
+const P = {
+  menu: 'M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z',
+  search: 'M20.87 20.17l-5.59-5.59A6.94 6.94 0 0016.8 10a7 7 0 10-7 7 6.94 6.94 0 004.58-1.72l5.59 5.59zM5 10a5 5 0 115 5 5 5 0 01-5-5z',
+  mic: 'M12 15a3 3 0 003-3V6a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V22h2v-3.08A7 7 0 0019 12z',
+  create: 'M14 13h-3v3H9.5v-3h-3v-1.5h3v-3H11v3h3zm3-6H3v12h14v-6.39l4 1.83V8.56l-4 1.83zm1 4.7l2-.92v4.44l-2-.92zM16 8v10H4V8z',
+  bell: 'M10 20h4a2 2 0 01-4 0zm9-2H5v-1l1.5-1.5V11a5.5 5.5 0 014-5.3V5a1.5 1.5 0 013 0v.7a5.5 5.5 0 014 5.3v4.5L19 17z',
+  home: 'M4 10.5L12 4l8 6.5V20h-6v-6h-4v6H4z',
+  shorts: 'M10 14.65v-5.3L15 12zm7.77-4.33c-.77-.32-1.2-.5-1.2-.5L18 9.06c1.84-.96 2.53-3.23 1.56-5.06s-3.24-2.53-5.07-1.56L6 6.94c-1.29.68-2.07 2.04-2 3.49.07 1.42.93 2.67 2.22 3.25.03.01 1.2.5 1.2.5L6 14.93c-1.83.97-2.53 3.24-1.56 5.07.97 1.83 3.24 2.53 5.07 1.56l8.5-4.5c1.29-.68 2.06-2.05 1.99-3.5-.07-1.42-.94-2.68-2.23-3.24z',
+  subs: 'M10 18v-6l5 3zM17 3H7v1h10zm3 3H4v1h16zm2 3H2v12h20zM3 10h18v10H3z',
+  library: 'M4 6H2v14a2 2 0 002 2h14v-2H4zm16-4H8a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2zm-8 12V6l5.5 4z',
+  history: 'M11 7v5.41l3.79 3.8 1.42-1.42L13 11.59V7zm1-5a10 10 0 00-9.95 9H0l4 4 4-4H4.05A8 8 0 1112 20a7.94 7.94 0 01-5.65-2.35l-1.42 1.42A10 10 0 1012 2z',
+  clock: 'M12 2a10 10 0 1010 10A10 10 0 0012 2zm0 18a8 8 0 118-8 8 8 0 01-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z',
+  like: 'M18.77 11h-4.23l1.52-4.94A1.54 1.54 0 0014.6 4a1.53 1.53 0 00-1.35.8L9 12v9h9.28a1.5 1.5 0 001.48-1.25l1.22-7A1.5 1.5 0 0018.77 11zM7 12H3v9h4z',
+  dislike: 'M5.23 13h4.23l-1.52 4.94A1.54 1.54 0 009.4 20a1.53 1.53 0 001.35-.8L15 12V3H5.72a1.5 1.5 0 00-1.48 1.25l-1.22 7A1.5 1.5 0 005.23 13zM17 12h4V3h-4z',
+  share: 'M15 5.63L20.66 12 15 18.37V15h-1a9 9 0 00-7.75 4.4A9.53 9.53 0 016 18c0-4.42 3.58-8 8-8h1zM14 8h-.28A10 10 0 004 18a10 10 0 001 4.34l.5 1.06.5-1.06A8 8 0 0114 18.5V22l9-10-9-10z',
+  download: 'M17 18v1H6v-1zm-.5-6.6l-.7-.7-3.3 3.29V4h-1v9.99L8.2 10.7l-.7.7 4.5 4.5z',
+  more: 'M7.5 12a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm6 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm6 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z',
+  play: 'M8 5v14l11-7z',
+  pause: 'M6 5h4v14H6zm8 0h4v14h-4z',
+  next: 'M6 5l8.5 7L6 19zm10 0h2v14h-2z',
+  prev: 'M18 19l-8.5-7L18 5zM8 5H6v14h2z',
+  volume: 'M3 9v6h4l5 5V4L7 9zm13.5 3a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4zM14 3.23v2.06a7 7 0 010 13.42v2.06a9 9 0 000-17.54z',
+  muted: 'M3 9v6h4l5 5V4L7 9zm13.59 3L20 8.59 18.59 7.17 15.17 10.59 11.76 7.17 10.34 8.59 13.76 12l-3.42 3.41 1.42 1.42L15.17 13.4l3.42 3.42L20 15.41z',
+  settings: 'M12 8a4 4 0 104 4 4 4 0 00-4-4zm0 6.5a2.5 2.5 0 112.5-2.5 2.5 2.5 0 01-2.5 2.5zm9.43-2.02l-.02-.96 1.72-1.34-1.9-3.3-2.03.8-.83-.48-.3-2.16h-3.8l-.3 2.16-.83.48-2.03-.8-1.9 3.3 1.72 1.34-.02.96-1.72 1.34 1.9 3.3 2.03-.8.83.48.3 2.16h3.8l.3-2.16.83-.48 2.03.8 1.9-3.3z',
+  miniplayer: 'M21 7v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2zm-2 0H5v10h14zm-2 2h-6v5h6z',
+  theater: 'M19 6H5a1 1 0 00-1 1v10a1 1 0 001 1h14a1 1 0 001-1V7a1 1 0 00-1-1zm-1 10H6V8h12z',
+  fullscreen: 'M10 4H4v6h2V6h4zm4 0h6v6h-2V6h-4zM6 14H4v6h6v-2H6zm14 0h-2v4h-4v2h6z',
+  exitFullscreen: 'M10 10H4V8h4V4h2zm4 0h6V8h-4V4h-2zM4 14h6v6H8v-4H4zm10 0h6v2h-4v4h-2z',
+  moon: 'M12 22a10 10 0 009.54-13.1A8 8 0 1110.9 2.46 10 10 0 1012 22z',
+  sun: 'M12 7a5 5 0 105 5 5 5 0 00-5-5zm0 8a3 3 0 113-3 3 3 0 01-3 3zm-1-13h2v3h-2zm0 17h2v3h-2zM2 11h3v2H2zm17 0h3v2h-3zM4.2 5.6l1.4-1.4 2.1 2.1-1.4 1.4zm12.1 12.1l1.4-1.4 2.1 2.1-1.4 1.4zM4.2 18.4l2.1-2.1 1.4 1.4-2.1 2.1zM16.3 6.3l2.1-2.1 1.4 1.4-2.1 2.1z',
+  check: 'M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z',
+  close: 'M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
+  back: 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z',
+  flag: 'M13 4l1 2h6v11h-7l-1-2H6v8H4V4z',
+  save: 'M22 13h-4v4h-2v-4h-4v-2h4V7h2v4h4zM14 7H2v1h12zm0 3H2v1h12zM2 14h8v-1H2z',
+  trending: 'M3 16l6-6 4 4 8-8v6h2V2h-8v2h6l-8 8-4-4-7 7z',
+  gaming: 'M10 12H8v2H6v-2H4v-2h2V8h2v2h2zm4.5 2a1.5 1.5 0 111.5-1.5 1.5 1.5 0 01-1.5 1.5zm3-3a1.5 1.5 0 111.5-1.5 1.5 1.5 0 01-1.5 1.5zM12 5H8a6 6 0 000 12h8a6 6 0 000-12z',
+  live: 'M12 8a4 4 0 104 4 4 4 0 00-4-4zm-6.36-.36l-1.42-1.42a9 9 0 000 11.56l1.42-1.42a7 7 0 010-8.72zm12.72 0a7 7 0 010 8.72l1.42 1.42a9 9 0 000-11.56z',
+  sort: 'M3 6h18v2H3zm3 5h12v2H6zm3 5h6v2H9z',
+};
+
+function icon(name, size = 24, cls = '') {
+  const d = P[name] || P.more;
+  return `<svg class="ic ${cls}" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path d="${d}"/></svg>`;
+}
+
+function debounce(fn, ms) {
+  let id;
+  return (...args) => {
+    clearTimeout(id);
+    id = setTimeout(() => fn(...args), ms);
+  };
+}
+
+/* ==== scene.js ==== */
+/* Procedural blocky scenes.
+   Every video "plays" by rendering one of these into a canvas as a pure
+   function of (time, seed) — which is what makes scrubbing work: seeking to
+   0:42 just draws frame t=42, no buffering, no video files in the repo. */
+
+
+const BLOCKS_ACROSS = 40;
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+
+function mixHex(a, b, t) {
+  const pa = [parseInt(a.slice(1, 3), 16), parseInt(a.slice(3, 5), 16), parseInt(a.slice(5, 7), 16)];
+  const pb = [parseInt(b.slice(1, 3), 16), parseInt(b.slice(3, 5), 16), parseInt(b.slice(5, 7), 16)];
+  const out = pa.map((c, i) => Math.round(lerp(c, pb[i], clamp(t, 0, 1))));
+  return `rgb(${out[0]},${out[1]},${out[2]})`;
+}
+
+/* Blocks are drawn with a lighter top face and a darker right face so the flat
+   rectangles read as cubes without any real 3-D maths. */
+function block(ctx, x, y, s, color, shade = 0.18) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, s, s);
+  ctx.fillStyle = `rgba(255,255,255,${shade})`;
+  ctx.fillRect(x, y, s, Math.max(1, s * 0.18));
+  ctx.fillStyle = `rgba(0,0,0,${shade * 0.9})`;
+  ctx.fillRect(x + s - Math.max(1, s * 0.18), y, Math.max(1, s * 0.18), s);
+}
+
+function speckle(ctx, x, y, s, rng, color, n = 3) {
+  ctx.fillStyle = color;
+  for (let i = 0; i < n; i++) {
+    const px = x + Math.floor(rng() * 4) * (s / 4);
+    const py = y + Math.floor(rng() * 4) * (s / 4);
+    ctx.fillRect(px, py, s / 4, s / 4);
+  }
+}
+
+/* ---------------------------------------------------------------- overworld */
+
+const SKY_DAY = '#79b8ff';
+const SKY_DUSK = '#f0895a';
+const SKY_NIGHT = '#0b1030';
+
+function overworld(ctx, w, h, t, seed, opts = {}) {
+  const rng = makeRng(seed + ':ow');
+  const terrain = noise1d(seed + ':terrain');
+  const s = w / BLOCKS_ACROSS;
+  const phase = opts.static ? 0.25 : (t / 90) % 1; // full day cycle every 90s
+  const sun = Math.sin(phase * Math.PI * 2);
+  const night = clamp(-sun * 1.6, 0, 1);
+  const dusk = clamp(1 - Math.abs(sun) * 2.4, 0, 1);
+
+  let sky = mixHex(SKY_DAY, SKY_NIGHT, night);
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h);
+  if (dusk > 0) {
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, `rgba(0,0,0,0)`);
+    g.addColorStop(1, mixHex(SKY_DUSK, '#ffd08a', 0.3));
+    ctx.globalAlpha = dusk * 0.75;
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 1;
+  }
+
+  // stars
+  if (night > 0.05) {
+    ctx.globalAlpha = night;
+    const srng = makeRng(seed + ':stars');
+    for (let i = 0; i < 60; i++) {
+      const sx = Math.floor(srng() * BLOCKS_ACROSS) * s;
+      const sy = Math.floor(srng() * (h * 0.55) / s) * s;
+      ctx.fillStyle = srng() > 0.7 ? '#ffffff' : '#c9d6ff';
+      ctx.fillRect(sx, sy, s * 0.35, s * 0.35);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // sun / moon riding an arc across the sky
+  const bodyX = w * (0.5 + 0.42 * Math.cos((phase + 0.5) * Math.PI * 2));
+  const bodyY = h * 0.62 - Math.sin(phase * Math.PI * 2) * h * 0.5;
+  const isSun = sun >= 0;
+  ctx.fillStyle = isSun ? '#fff2a8' : '#e8ecf5';
+  ctx.fillRect(bodyX - s, bodyY - s, s * 2.4, s * 2.4);
+  if (!isSun) {
+    ctx.fillStyle = mixHex(SKY_DAY, SKY_NIGHT, night);
+    ctx.fillRect(bodyX - s * 0.2, bodyY - s * 0.8, s * 1.2, s * 1.6);
+  }
+
+  // parallax clouds
+  ctx.fillStyle = `rgba(255,255,255,${0.85 - night * 0.55})`;
+  const crng = makeRng(seed + ':cloud');
+  for (let i = 0; i < 5; i++) {
+    const cy = Math.floor(crng() * 5 + 1) * s;
+    const len = 3 + Math.floor(crng() * 5);
+    const speed = 6 + crng() * 8;
+    let cx = ((crng() * w + t * speed) % (w + len * s)) - len * s;
+    for (let b = 0; b < len; b++) ctx.fillRect(cx + b * s, cy, s, s);
+    ctx.fillRect(cx + s, cy - s, (len - 2) * s, s);
+  }
+
+  // far hills, then the ground the player walks on
+  const scroll = opts.static ? 0 : t * 1.6;
+  for (let layer = 0; layer < 2; layer++) {
+    const depth = layer === 0 ? 0.45 : 1;
+    const base = h * (layer === 0 ? 0.62 : 0.72);
+    const grass = layer === 0 ? mixHex('#4b7a2b', sky, 0.35) : '#5aa832';
+    const dirt = layer === 0 ? mixHex('#6b4b2a', sky, 0.35) : '#8a5a33';
+    for (let x = -1; x <= BLOCKS_ACROSS + 1; x++) {
+      const wx = x + scroll * depth * 0.25;
+      const hgt = Math.round(terrain(wx * 0.12 + layer * 40) * (layer === 0 ? 4 : 3));
+      const top = base - hgt * s;
+      const px = x * s - ((scroll * depth * 0.25 * s) % s);
+      block(ctx, px, top, s, grass, 0.14);
+      for (let y = top + s; y < h; y += s) {
+        const brng = makeRng(`${seed}:${x}:${y}:${layer}`);
+        block(ctx, px, y, s, y > top + s * 3 ? '#6f6f6f' : dirt, 0.1);
+        if (brng() > 0.88) speckle(ctx, px, y, s, brng, 'rgba(0,0,0,0.18)', 2);
+      }
+      // trees on the near layer only
+      if (layer === 1) {
+        const trng = makeRng(`${seed}:tree:${Math.floor(wx)}`);
+        if (trng() > 0.86) {
+          const th = 3 + Math.floor(trng() * 2);
+          for (let k = 0; k < th; k++) block(ctx, px, top - (k + 1) * s, s, '#6b4a24', 0.12);
+          for (let ly = -1; ly <= 1; ly++) {
+            for (let lx = -2; lx <= 2; lx++) {
+              if (Math.abs(lx) === 2 && ly === 1) continue;
+              block(ctx, px + lx * s, top - (th + 1 + ly) * s, s, '#3f7d1e', 0.16);
+            }
+          }
+        }
+      }
+    }
+    if (layer === 0) {
+      ctx.fillStyle = `rgba(${night > 0.5 ? '10,14,40' : '160,200,255'},0.22)`;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+
+  // the little guy, bobbing as he "walks". Stacked head→body→legs so his feet
+  // land exactly on the block he is standing on.
+  if (opts.player !== false) {
+    const bob = Math.abs(Math.sin(t * 4)) * s * 0.18;
+    const px = w * 0.32;
+    const groundTop = h * 0.72 - Math.round(terrain((w * 0.32 / s + scroll * 0.25) * 0.12 + 40) * 3) * s;
+    const py = groundTop - s * 3.8 + bob;
+    const swing = Math.sin(t * 4) * s * 0.2;
+    ctx.fillStyle = '#c98d63'; ctx.fillRect(px, py, s * 1.2, s * 1.2);                      // head
+    ctx.fillStyle = '#5c3b21'; ctx.fillRect(px, py, s * 1.2, s * 0.3);                      // hair
+    ctx.fillStyle = '#f0f0f0'; ctx.fillRect(px + s * 0.2, py + s * 0.55, s * 0.25, s * 0.2);
+    ctx.fillRect(px + s * 0.75, py + s * 0.55, s * 0.25, s * 0.2);
+    ctx.fillStyle = '#2f6fb0'; ctx.fillRect(px + s * 0.1, py + s * 1.2, s, s * 1.4);        // body
+    ctx.fillStyle = '#c98d63'; ctx.fillRect(px + s * 1.0, py + s * 1.3 + swing, s * 0.35, s * 1.1);
+    ctx.fillStyle = '#3a3f8a';                                                              // legs
+    ctx.fillRect(px + s * 0.1, py + s * 2.6, s * 0.42, s * 1.2 - swing * 0.5);
+    ctx.fillRect(px + s * 0.68, py + s * 2.6, s * 0.42, s * 1.2 + swing * 0.5);
+  }
+
+  if (opts.rain) {
+    ctx.strokeStyle = 'rgba(190,210,255,0.5)';
+    ctx.lineWidth = Math.max(1, s * 0.1);
+    for (let i = 0; i < 70; i++) {
+      const rx = (rng() * w + t * 40) % w;
+      const ry = (rng() * h + t * 700) % h;
+      ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(rx - s * 0.2, ry + s * 0.9); ctx.stroke();
+    }
+  }
+}
+
+/* ------------------------------------------------------------------- nether */
+
+function nether(ctx, w, h, t, seed) {
+  const s = w / BLOCKS_ACROSS;
+  const rng = makeRng(seed + ':nether');
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, '#4a0d0d');
+  g.addColorStop(1, '#8f1f0b');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+
+  // netherrack ceiling
+  for (let x = 0; x < BLOCKS_ACROSS; x++) {
+    const drop = 1 + Math.round(noise1d(seed + ':ceil')(x * 0.3) * 3);
+    for (let y = 0; y < drop; y++) {
+      const brng = makeRng(`${seed}:c:${x}:${y}`);
+      block(ctx, x * s, y * s, s, '#6e2626', 0.12);
+      speckle(ctx, x * s, y * s, s, brng, 'rgba(0,0,0,0.25)', 2);
+    }
+  }
+
+  // lava lake with a slow rolling surface
+  const lavaTop = h * 0.74;
+  ctx.fillStyle = '#ff7a18';
+  ctx.fillRect(0, lavaTop, w, h - lavaTop);
+  for (let x = 0; x < BLOCKS_ACROSS; x++) {
+    const wave = Math.sin(t * 1.6 + x * 0.5) * s * 0.25;
+    ctx.fillStyle = mixHex('#ffb43d', '#ff5f00', (Math.sin(t * 2 + x) + 1) / 2);
+    ctx.fillRect(x * s, lavaTop + wave, s, s * 0.8);
+  }
+  const glow = ctx.createLinearGradient(0, lavaTop - h * 0.25, 0, lavaTop);
+  glow.addColorStop(0, 'rgba(255,120,0,0)');
+  glow.addColorStop(1, `rgba(255,150,30,${0.35 + Math.sin(t * 2) * 0.08})`);
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, lavaTop - h * 0.25, w, h * 0.25);
+
+  // netherrack platforms
+  for (let i = 0; i < 3; i++) {
+    const px = Math.floor(rng() * (BLOCKS_ACROSS - 8)) * s;
+    const py = lavaTop - (2 + Math.floor(rng() * 3)) * s;
+    const len = 4 + Math.floor(rng() * 5);
+    for (let b = 0; b < len; b++) {
+      block(ctx, px + b * s, py, s, '#7a2b2b', 0.12);
+      block(ctx, px + b * s, py + s, s, '#5e2020', 0.1);
+    }
+  }
+
+  // ghast drifting past
+  const gx = ((t * 22) % (w + 8 * s)) - 4 * s;
+  const gy = h * 0.3 + Math.sin(t * 0.9) * s * 1.5;
+  ctx.fillStyle = '#e8e2e2';
+  ctx.fillRect(gx, gy, s * 4, s * 4);
+  ctx.fillStyle = '#2b2b2b';
+  ctx.fillRect(gx + s * 0.8, gy + s * 1.3, s * 0.7, s * 0.5);
+  ctx.fillRect(gx + s * 2.5, gy + s * 1.3, s * 0.7, s * 0.5);
+  ctx.fillRect(gx + s * 1.4, gy + s * 2.4, s * 1.2, s * 0.6);
+  for (let i = 0; i < 5; i++) {
+    ctx.fillRect(gx + s * (0.4 + i * 0.8), gy + s * 4, s * 0.5, s * (1 + Math.sin(t * 3 + i) * 0.4));
+  }
+
+  // embers
+  ctx.fillStyle = '#ffd27a';
+  for (let i = 0; i < 40; i++) {
+    const ex = (rng() * w + Math.sin(t + i) * s) % w;
+    const ey = h - ((rng() * h + t * 30 * (0.5 + rng())) % h);
+    ctx.globalAlpha = 0.3 + rng() * 0.5;
+    ctx.fillRect(ex, ey, s * 0.22, s * 0.22);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* --------------------------------------------------------------------- cave */
+
+function cave(ctx, w, h, t, seed) {
+  const s = w / BLOCKS_ACROSS;
+  ctx.fillStyle = '#0b0b0e';
+  ctx.fillRect(0, 0, w, h);
+  const floor = noise1d(seed + ':cavef');
+  const roof = noise1d(seed + ':caver');
+
+  for (let x = 0; x < BLOCKS_ACROSS; x++) {
+    const fh = 3 + Math.round(floor(x * 0.25) * 4);
+    const rh = 2 + Math.round(roof(x * 0.22) * 4);
+    for (let y = 0; y < rh; y++) {
+      const brng = makeRng(`${seed}:r:${x}:${y}`);
+      block(ctx, x * s, y * s, s, '#3c3c42', 0.08);
+      speckle(ctx, x * s, y * s, s, brng, 'rgba(0,0,0,0.3)', 2);
+    }
+    for (let y = 0; y < fh; y++) {
+      const py = h - (y + 1) * s;
+      const brng = makeRng(`${seed}:f:${x}:${y}`);
+      block(ctx, x * s, py, s, '#45454c', 0.08);
+      const r = brng();
+      if (r > 0.93) speckle(ctx, x * s, py, s, brng, '#5ad7d7', 4);      // diamond
+      else if (r > 0.88) speckle(ctx, x * s, py, s, brng, '#f2c14e', 4); // gold
+      else if (r > 0.8) speckle(ctx, x * s, py, s, brng, '#c98d63', 4);  // copper
+      else speckle(ctx, x * s, py, s, brng, 'rgba(0,0,0,0.28)', 2);
+    }
+  }
+
+  // torchlight pooling on the walls, flickering
+  const torches = [0.2, 0.5, 0.78];
+  torches.forEach((tx, i) => {
+    const flick = 0.82 + Math.sin(t * 9 + i * 2) * 0.1 + Math.sin(t * 23 + i) * 0.05;
+    const cx = w * tx;
+    const cy = h * 0.52;
+    const rg = ctx.createRadialGradient(cx, cy, s * 0.5, cx, cy, s * 9 * flick);
+    rg.addColorStop(0, 'rgba(255,190,90,0.55)');
+    rg.addColorStop(0.5, 'rgba(255,150,60,0.14)');
+    rg.addColorStop(1, 'rgba(255,140,60,0)');
+    ctx.fillStyle = rg;
+    ctx.fillRect(cx - s * 10, cy - s * 10, s * 20, s * 20);
+    ctx.fillStyle = '#6b4a24';
+    ctx.fillRect(cx, cy, s * 0.4, s * 1.6);
+    ctx.fillStyle = '#ffcf5c';
+    ctx.fillRect(cx - s * 0.1, cy - s * 0.5, s * 0.6, s * 0.6);
+  });
+
+  // creeper lurking in the dark, breathing in and out of visibility
+  const vis = clamp(Math.sin(t * 0.5) * 0.5 + 0.5, 0.12, 0.95);
+  const cx = w * 0.66;
+  const cy = h * 0.55;
+  ctx.globalAlpha = vis;
+  ctx.fillStyle = '#4f9e46';
+  ctx.fillRect(cx, cy, s * 2, s * 2);
+  ctx.fillStyle = '#0d1a0d';
+  ctx.fillRect(cx + s * 0.3, cy + s * 0.5, s * 0.5, s * 0.5);
+  ctx.fillRect(cx + s * 1.2, cy + s * 0.5, s * 0.5, s * 0.5);
+  ctx.fillRect(cx + s * 0.7, cy + s * 1.1, s * 0.6, s * 0.7);
+  ctx.globalAlpha = 1;
+}
+
+/* ---------------------------------------------------------------- redstone */
+
+function redstone(ctx, w, h, t, seed) {
+  const s = w / BLOCKS_ACROSS;
+  const rng = makeRng(seed + ':rs');
+  // Per-build variation, otherwise every redstone contraption looks alike.
+  const palette = [['#5a5a62', '#63636b'], ['#6d6a60', '#78756b'], ['#8e8e96', '#9a9aa2']][Math.floor(rng() * 3)];
+  const lampCount = 4 + Math.floor(rng() * 4);
+  const pistonCount = 2 + Math.floor(rng() * 3);
+  const repeaterGap = 6 + Math.floor(rng() * 4);
+  const floorRow = 0.52 + rng() * 0.16;
+  const speed = 0.9 + rng() * 0.9;
+
+  ctx.fillStyle = '#1b1c22';
+  ctx.fillRect(0, 0, w, h);
+
+  // smooth-stone floor
+  for (let x = 0; x < BLOCKS_ACROSS; x++) {
+    for (let y = Math.floor(h * floorRow / s); y < h / s + 1; y++) {
+      block(ctx, x * s, y * s, s, (x + y) % 2 ? palette[0] : palette[1], 0.07);
+    }
+  }
+
+  const floorTop = Math.floor(h * floorRow / s) * s;
+  const pulse = (t * speed) % 1;
+
+  // dust line, lighting up left-to-right like a signal travelling
+  for (let x = 0; x < BLOCKS_ACROSS; x++) {
+    const lit = clamp(1 - Math.abs(x / BLOCKS_ACROSS - pulse) * 9, 0, 1);
+    ctx.fillStyle = mixHex('#5a1010', '#ff2d2d', lit);
+    ctx.fillRect(x * s, floorTop - s * 0.18, s, s * 0.18);
+    if (lit > 0.4) {
+      ctx.fillStyle = `rgba(255,60,60,${lit * 0.25})`;
+      ctx.fillRect(x * s - s, floorTop - s * 2, s * 3, s * 2);
+    }
+  }
+
+  // repeaters
+  for (let i = 0; i * repeaterGap + 6 < BLOCKS_ACROSS; i++) {
+    const bx = 6 + i * repeaterGap;
+    const rx = bx * s;
+    const lit = clamp(1 - Math.abs(bx / BLOCKS_ACROSS - pulse) * 9, 0, 1);
+    ctx.fillStyle = '#9a9aa2';
+    ctx.fillRect(rx, floorTop - s * 0.3, s, s * 0.3);
+    ctx.fillStyle = lit > 0.4 ? '#ff4d4d' : '#5a1010';
+    ctx.fillRect(rx + s * 0.15, floorTop - s * 0.5, s * 0.2, s * 0.2);
+  }
+
+  // lamps blinking in sequence
+  const lampGap = (BLOCKS_ACROSS - 6) / lampCount;
+  for (let i = 0; i < lampCount; i++) {
+    const lx = (3 + i * lampGap) * s;
+    const on = Math.sin(t * 2 - i * 0.7) > 0;
+    block(ctx, lx, floorTop - s * 3, s * 1.6, on ? '#ffd98a' : '#4a4436', 0.12);
+    if (on) {
+      const rg = ctx.createRadialGradient(lx + s * 0.8, floorTop - s * 2.2, s * 0.3, lx + s * 0.8, floorTop - s * 2.2, s * 5);
+      rg.addColorStop(0, 'rgba(255,215,140,0.35)');
+      rg.addColorStop(1, 'rgba(255,215,140,0)');
+      ctx.fillStyle = rg;
+      ctx.fillRect(lx - s * 4, floorTop - s * 7, s * 10, s * 10);
+    }
+  }
+
+  // pistons firing
+  for (let i = 0; i < pistonCount; i++) {
+    const px = (8 + i * (24 / pistonCount)) * s;
+    const ext = clamp(Math.sin(t * 3 - i) * 2, 0, 1);
+    block(ctx, px, floorTop - s * 5, s * 1.4, '#7d6a4a', 0.12);
+    ctx.fillStyle = '#c8b58c';
+    ctx.fillRect(px + s * 0.1, floorTop - s * 5 - ext * s, s * 1.2, s * 0.5 + ext * s);
+  }
+}
+
+/* -------------------------------------------------------------------- build */
+
+function build(ctx, w, h, t, seed) {
+  const s = w / BLOCKS_ACROSS;
+  const rng = makeRng(seed + ':build');
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, '#8fc9f2');
+  g.addColorStop(1, '#dbeeff');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+
+  const groundTop = h * 0.78;
+  for (let x = 0; x < BLOCKS_ACROSS; x++) {
+    block(ctx, x * s, groundTop, s, '#5aa832', 0.14);
+    for (let y = groundTop + s; y < h; y += s) block(ctx, x * s, y, s, '#8a5a33', 0.1);
+  }
+
+  // a castle that assembles itself over the clip's length
+  const left = 5 + Math.floor(rng() * 5);
+  const right = BLOCKS_ACROSS - 4 - Math.floor(rng() * 6);
+  const towerH = 7 + Math.floor(rng() * 4);
+  const wallBase = 4 + Math.floor(rng() * 3);
+  const towerGap = 5 + Math.floor(rng() * 4);
+  const stones = [['#8d8d95', '#a2a2aa'], ['#a89274', '#bda884'], ['#7f8a99', '#93a0af']][Math.floor(rng() * 3)];
+
+  const plan = [];
+  for (let x = left; x < right; x++) {
+    const isTower = x === left || x === right - 1 || (x - left) % towerGap === 0;
+    const wallH = x === left || x === right - 1 ? towerH : (isTower ? towerH - 1 : wallBase);
+    for (let y = 0; y < wallH; y++) plan.push([x, y]);
+  }
+  plan.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  const progress = clamp((t % 30) / 24, 0, 1);
+  const built = Math.floor(plan.length * progress);
+  for (let i = 0; i < built; i++) {
+    const [bx, by] = plan[i];
+    block(ctx, bx * s, groundTop - (by + 1) * s, s, (bx + by) % 3 === 0 ? stones[0] : stones[1], 0.12);
+  }
+  // the block currently being placed, with a little placement flash
+  if (built < plan.length) {
+    const [bx, by] = plan[built];
+    ctx.globalAlpha = 0.5 + Math.sin(t * 12) * 0.3;
+    block(ctx, bx * s, groundTop - (by + 1) * s, s, '#ffffff', 0.2);
+    ctx.globalAlpha = 1;
+  }
+
+  // scaffolding clouds
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  for (let i = 0; i < 4; i++) {
+    const cy = Math.floor(rng() * 4 + 1) * s;
+    const len = 3 + Math.floor(rng() * 4);
+    const cx = ((rng() * w + t * 5) % (w + len * s)) - len * s;
+    for (let b = 0; b < len; b++) ctx.fillRect(cx + b * s, cy, s, s);
+  }
+}
+
+/* -------------------------------------------------------------------- ocean */
+
+function ocean(ctx, w, h, t, seed) {
+  const s = w / BLOCKS_ACROSS;
+  const rng = makeRng(seed + ':ocean');
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, '#1b6fa8');
+  g.addColorStop(1, '#052744');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+
+  // god rays
+  for (let i = 0; i < 5; i++) {
+    const rx = w * (0.1 + i * 0.2) + Math.sin(t * 0.4 + i) * s * 2;
+    ctx.fillStyle = `rgba(180,225,255,${0.05 + Math.sin(t + i) * 0.02})`;
+    ctx.beginPath();
+    ctx.moveTo(rx, 0); ctx.lineTo(rx + s * 2, 0); ctx.lineTo(rx + s * 6, h); ctx.lineTo(rx, h);
+    ctx.fill();
+  }
+
+  // seabed
+  const bed = noise1d(seed + ':bed');
+  for (let x = 0; x < BLOCKS_ACROSS; x++) {
+    const hgt = 2 + Math.round(bed(x * 0.3) * 3);
+    for (let y = 0; y < hgt; y++) {
+      block(ctx, x * s, h - (y + 1) * s, s, y === hgt - 1 ? '#c8bb8a' : '#9c8f63', 0.1);
+    }
+    if (makeRng(`${seed}:kelp:${x}`)() > 0.82) {
+      const kh = 3 + Math.floor(makeRng(`${seed}:kh:${x}`)() * 4);
+      for (let k = 0; k < kh; k++) {
+        const sway = Math.sin(t * 1.5 + k * 0.5 + x) * s * 0.3;
+        block(ctx, x * s + sway, h - (hgt + k + 1) * s, s * 0.8, '#3d8b4a', 0.14);
+      }
+    }
+  }
+
+  // fish
+  for (let i = 0; i < 7; i++) {
+    const speed = 12 + rng() * 25;
+    const fy = h * (0.15 + rng() * 0.5);
+    const fx = ((rng() * w + t * speed) % (w + s * 4)) - s * 2;
+    const col = ['#f5a623', '#e8e8e8', '#5ad7d7', '#d95555'][Math.floor(rng() * 4)];
+    ctx.fillStyle = col;
+    ctx.fillRect(fx, fy + Math.sin(t * 3 + i) * s * 0.3, s * 1.1, s * 0.7);
+    ctx.fillRect(fx - s * 0.4, fy + s * 0.15 + Math.sin(t * 3 + i) * s * 0.3, s * 0.4, s * 0.4);
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(fx + s * 0.75, fy + s * 0.2 + Math.sin(t * 3 + i) * s * 0.3, s * 0.18, s * 0.18);
+  }
+
+  // bubbles
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  for (let i = 0; i < 30; i++) {
+    const bx = rng() * w + Math.sin(t + i) * s * 0.4;
+    const by = h - ((rng() * h + t * 25) % h);
+    ctx.fillRect(bx, by, s * 0.25, s * 0.25);
+  }
+}
+
+const SCENES = { overworld, nether, cave, redstone, build, ocean };
+
+function drawScene(ctx, w, h, t, seed, style, opts = {}) {
+  const fn = SCENES[style] || overworld;
+  ctx.save();
+  fn(ctx, w, h, Math.max(0, t), seed, opts);
+  ctx.restore();
+}
+
+/* Thumbnails are just frame 0-ish of the same scene, plus the big blocky
+   caption every Minecraft thumbnail on the internet seems to be legally
+   required to have. */
+function drawThumbnail(canvas, video) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  drawScene(ctx, w, h, video.thumbTime ?? 12, video.seed, video.style, { static: false });
+
+  if (video.overlay) {
+    const fs = Math.round(h * 0.19);
+    ctx.font = `900 ${fs}px "Segoe UI", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const tx = w / 2;
+    const ty = h * 0.24;
+    ctx.lineWidth = Math.max(3, fs * 0.16);
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.lineJoin = 'round';
+    ctx.strokeText(video.overlay, tx, ty);
+    ctx.fillStyle = video.overlayColor || '#ffe14d';
+    ctx.fillText(video.overlay, tx, ty);
+  }
+}
+
+/* ==== data.js ==== */
+/* All the fake content the site runs on. */
+
+const CHANNELS = {
+  cr: { id: 'cr', name: '苦力怕實驗室', handle: '@creeperlab', subs: 2840000, color: '#4f9e46', verified: true },
+  rs: { id: 'rs', name: '紅石大師 Redstone', handle: '@redstone_master', subs: 1120000, color: '#d93636', verified: true },
+  bd: { id: 'bd', name: '方塊建築家', handle: '@blockbuilder', subs: 764000, color: '#3b82c4', verified: true },
+  sv: { id: 'sv', name: '生存日記 Survival', handle: '@survivaldiary', subs: 431000, color: '#c98d63', verified: false },
+  nt: { id: 'nt', name: '地獄探險隊', handle: '@netherteam', subs: 189000, color: '#8f1f0b', verified: false },
+  oc: { id: 'oc', name: '深海方塊', handle: '@deepblocks', subs: 92300, color: '#1b6fa8', verified: false },
+  sp: { id: 'sp', name: '速通紀錄 Speedrun', handle: '@blockspeed', subs: 1580000, color: '#f2a03d', verified: true },
+};
+
+const CATEGORIES = [
+  '全部', '遊戲', '生存', '紅石', '建築', '速通', '地獄', '模組', '直播中', '教學', '搞笑', '音樂',
+];
+
+const VIDEOS = [
+  {
+    id: 'a1x9k', title: '我在極限模式活了 100 天，第 97 天差點全毀',
+    channel: 'cr', views: 4820000, days: 3, duration: 1_852, style: 'overworld',
+    overlay: '100 天', tags: ['生存', '遊戲'], live: false,
+    desc: '這是我第一次挑戰極限模式 100 天，中途遇到雷暴、女巫村莊還有一隻卡在礦車裡的苦力怕。第 97 天那段真的手抖到不行。\n\n本集重點：\n00:00 開場\n03:12 第一個家\n11:40 下礦\n24:05 第 97 天事故現場\n\n#Minecraft #生存挑戰',
+  },
+  {
+    id: 'b7m2q', title: '全自動西瓜農場｜每小時 3200 顆，零延遲設計',
+    channel: 'rs', views: 1240000, days: 8, duration: 946, style: 'redstone',
+    overlay: '3200/hr', overlayColor: '#ff5d5d', tags: ['紅石', '教學'],
+    desc: '這個設計不需要觀察者鏈，也不會有卡頓問題。材料清單放在留言區置頂。',
+  },
+  {
+    id: 'c3d8p', title: '花了 400 小時蓋的空島城市，內部全部可以走進去',
+    channel: 'bd', views: 2760000, days: 14, duration: 1_320, style: 'build',
+    overlay: '400 HR', overlayColor: '#7ee0ff', tags: ['建築'],
+    desc: '整座城市使用約 180 萬個方塊，地圖下載連結在下方。',
+  },
+  {
+    id: 'd5f1w', title: '地獄要塞速通紀錄！4 分 12 秒（世界紀錄）',
+    channel: 'sp', views: 8930000, days: 1, duration: 268, style: 'nether',
+    overlay: '4:12', overlayColor: '#ffe14d', tags: ['速通', '地獄'],
+    desc: '種子碼在說明欄。這局的地獄門運氣好到不真實。',
+  },
+  {
+    id: 'e9h4r', title: '礦坑深處傳來的聲音…我不敢再往下挖了',
+    channel: 'sv', views: 612000, days: 5, duration: 1_105, style: 'cave',
+    overlay: '?', overlayColor: '#ff4d4d', tags: ['生存', '搞笑'],
+    desc: '戴耳機看。第 14 分鐘那個聲音到現在還沒人解釋得出來。',
+  },
+  {
+    id: 'f2j7t', title: '海底神殿改造成透明水族館，全程無作弊',
+    channel: 'oc', views: 358000, days: 11, duration: 1_640, style: 'ocean',
+    overlay: '水族館', overlayColor: '#7ee0ff', tags: ['建築', '生存'],
+    desc: '抽乾海底神殿花了三個禮拜，海綿真的不夠用。',
+  },
+  {
+    id: 'g8k3v', title: '【直播中】和觀眾一起蓋一座村莊',
+    channel: 'bd', views: 12400, days: 0, duration: 7_200, style: 'build',
+    live: true, overlay: 'LIVE', overlayColor: '#ff4d4d', tags: ['直播中', '建築'],
+    desc: '聊天室輸入方塊名稱就會出現在地圖上。',
+  },
+  {
+    id: 'h4n6y', title: '用 1 格紅石做出的最小自動門（真的只有 1 格）',
+    channel: 'rs', views: 2010000, days: 21, duration: 412, style: 'redstone',
+    overlay: '1 格', overlayColor: '#ff5d5d', tags: ['紅石', '教學'],
+    desc: '這個設計在 1.21 依然可用。',
+  },
+  {
+    id: 'i6p9z', title: '苦力怕爆炸 100 次的慢動作合輯',
+    channel: 'cr', views: 5310000, days: 30, duration: 738, style: 'overworld',
+    overlay: 'BOOM', overlayColor: '#ff8a3d', tags: ['搞笑', '遊戲'],
+    desc: '全部都是真的，沒有指令。第 87 次最誇張。',
+  },
+  {
+    id: 'j1q5a', title: '在地獄蓋一座安全屋，結果被豬布林包圍',
+    channel: 'nt', views: 274000, days: 6, duration: 1_490, style: 'nether',
+    overlay: '救命', overlayColor: '#ffe14d', tags: ['地獄', '生存'],
+    desc: '教訓：在地獄不要挖金磚。',
+  },
+  {
+    id: 'k7r2b', title: '從零開始的鐵人塔教學（新手也能蓋）',
+    channel: 'rs', views: 892000, days: 45, duration: 1_026, style: 'redstone',
+    tags: ['紅石', '教學'],
+    desc: '一步一步慢慢講，材料很便宜。',
+  },
+  {
+    id: 'l3s8c', title: '洞穴更新後的地底世界有多深？我挖到了世界底部',
+    channel: 'sv', views: 1450000, days: 60, duration: 1_712, style: 'cave',
+    overlay: 'Y=-64', overlayColor: '#7ee0ff', tags: ['生存', '遊戲'],
+    desc: '總共挖了 6 小時，剪成 28 分鐘。',
+  },
+  {
+    id: 'm9t4d', title: '模組整合包實測：這 12 個模組讓遊戲完全變樣',
+    channel: 'cr', views: 731000, days: 9, duration: 1_980, style: 'overworld',
+    tags: ['模組', '遊戲'],
+    desc: '整合包連結在說明欄，全部免費。',
+  },
+  {
+    id: 'n5u1e', title: '海底遺跡尋寶，找到了附魔書 XVIII',
+    channel: 'oc', views: 143000, days: 17, duration: 884, style: 'ocean',
+    tags: ['生存'],
+    desc: '運氣真的很好，開了 7 個箱子就中了。',
+  },
+  {
+    id: 'o2v7f', title: '不用鑽石通關的挑戰，全程只用石頭工具',
+    channel: 'sp', views: 3120000, days: 25, duration: 1_368, style: 'overworld',
+    overlay: '無鑽石', overlayColor: '#ffe14d', tags: ['速通', '生存'],
+    desc: '末影龍那段打了 40 分鐘。',
+  },
+  {
+    id: 'p8w3g', title: '中世紀城堡建築教學 EP.1｜地基與城牆',
+    channel: 'bd', views: 486000, days: 38, duration: 1_554, style: 'build',
+    tags: ['建築', '教學'],
+    desc: '這是系列的第一集，之後會出到內裝。',
+  },
+  {
+    id: 'q4x9h', title: '把整個地獄改造成高速公路網（花了 200 小時）',
+    channel: 'nt', views: 967000, days: 52, duration: 2_240, style: 'nether',
+    overlay: '200 HR', overlayColor: '#ff8a3d', tags: ['地獄', '建築'],
+    desc: '八格一格的比例真的很好用。',
+  },
+  {
+    id: 'r6y5i', title: '凌晨三點的礦坑直播重播｜完整版',
+    channel: 'sv', views: 89400, days: 4, duration: 5_412, style: 'cave',
+    tags: ['生存', '直播中'],
+    desc: '完整重播，沒有剪輯。',
+  },
+  {
+    id: 's1z6j', title: '這個紅石音樂盒可以完整播放一首歌',
+    channel: 'rs', views: 1780000, days: 70, duration: 322, style: 'redstone',
+    overlay: '♪', overlayColor: '#7ee0ff', tags: ['紅石', '音樂'],
+    desc: '總共用了 340 個音符盒。',
+  },
+  {
+    id: 't7a2k', title: '末影龍第一次挑戰就成功？新手的運氣有點誇張',
+    channel: 'cr', views: 2240000, days: 12, duration: 1_142, style: 'overworld',
+    tags: ['生存', '遊戲'],
+    desc: '朋友第一次玩就打贏了，我玩三年才第一次過。',
+  },
+  {
+    id: 'u3b8l', title: '在生存模式蓋一台會動的電梯',
+    channel: 'bd', views: 542000, days: 28, duration: 968, style: 'build',
+    tags: ['建築', '紅石'],
+    desc: '黏性活塞 + 觀察者，材料很好取得。',
+  },
+  {
+    id: 'v9c4m', title: '海底也能種田？全自動海帶農場設計',
+    channel: 'oc', views: 226000, days: 33, duration: 754, style: 'ocean',
+    tags: ['紅石', '建築'],
+    desc: '海帶其實是很不錯的燃料來源。',
+  },
+  {
+    id: 'w5d1n', title: '地獄門連結出錯，我掉到了不存在的座標',
+    channel: 'nt', views: 1330000, days: 19, duration: 626, style: 'nether',
+    overlay: 'BUG', overlayColor: '#ff4d4d', tags: ['地獄', '搞笑'],
+    desc: '存檔還在，有人知道這是什麼情況嗎。',
+  },
+  {
+    id: 'x2e7o', title: '五分鐘學會所有附魔（完整表格）',
+    channel: 'sp', views: 4110000, days: 90, duration: 314, style: 'cave',
+    overlay: '5 分鐘', overlayColor: '#ffe14d', tags: ['教學', '遊戲'],
+    desc: '表格圖在說明欄，可以直接存起來。',
+  },
+];
+
+const COMMENT_POOL = [
+  ['方塊阿明', '第 14 分鐘那個聲音我聽了三次，還是覺得有東西在後面', 1240, 18],
+  ['紅石小廢物', '照著做成功了，感謝大大！雖然我炸了兩次家', 862, 12],
+  ['Steve_2011', '這個剪輯品質根本電影等級', 431, 6],
+  ['苦力怕本人', '我只是想抱抱而已', 9820, 3],
+  ['挖礦挖到懷疑人生', '演算法把我推來這裡，結果一口氣看完整個系列', 226, 30],
+  ['末影人不想被看', '請問你的材質包是哪一個？', 118, 9],
+  ['村民 Hmmm', 'Hmmm.', 2410, 2],
+  ['建築系學生', '這個比例抓得超好，我拿去當作業參考了（不是）', 356, 21],
+  ['半夜不睡覺', '00:00 開頭那段音樂叫什麼', 74, 44],
+  ['鑽石礦脈', '看完立刻去開新存檔，謝謝你毀了我的週末', 1503, 7],
+  ['小白第一天', '新手問一下，這個要什麼版本才能做？', 52, 15],
+  ['老玩家 2014', '從 beta 玩到現在，這遊戲還是能給我驚喜', 688, 26],
+];
+
+function commentsFor(videoId, count = 8) {
+  let h = 0;
+  for (let i = 0; i < videoId.length; i++) h = (h * 31 + videoId.charCodeAt(i)) >>> 0;
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const [author, text, likes, hours] = COMMENT_POOL[(h + i * 7) % COMMENT_POOL.length];
+    out.push({
+      author,
+      text,
+      likes: Math.round(likes * (0.4 + (((h >> i) & 7) / 7))),
+      hours: hours + i * 3,
+      replies: ((h >> (i + 2)) & 3) === 0 ? 1 + ((h >> i) & 7) : 0,
+      color: `hsl(${(h + i * 47) % 360} 55% 45%)`,
+    });
+  }
+  return out;
+}
+
+/* Derived fields the UI wants everywhere. */
+const VIDEO_MAP = Object.fromEntries(
+  VIDEOS.map((v) => {
+    const seeded = { ...v, seed: v.id, channelObj: CHANNELS[v.channel] };
+    seeded.likes = Math.round(v.views * 0.041);
+    return [v.id, seeded];
+  }),
+);
+
+const ALL = Object.values(VIDEO_MAP);
+
+/* ==== player.js ==== */
+/* The player. There is no <video> element anywhere in this project — the
+   "footage" is drawn frame by frame into a canvas from drawScene(t), so
+   scrubbing, speed changes and looping all fall out for free. */
+
+
+
+const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+const QUALITIES = ['1080p', '720p', '480p', '360p', '144p'];
+
+class Player {
+  constructor(root, video, opts = {}) {
+    this.video = video;
+    this.duration = video.duration;
+    this.time = 0;
+    this.playing = false;
+    this.speed = 1;
+    this.volume = Number(localStorage.getItem('mt:volume') ?? 0.7);
+    this.muted = localStorage.getItem('mt:muted') === '1';
+    this.quality = localStorage.getItem('mt:quality') || '1080p';
+    this.onEnded = opts.onEnded || (() => {});
+    this.onTheater = opts.onTheater || (() => {});
+    this.theater = opts.theater || false;
+    this._lastFrame = 0;
+    this._hideTimer = 0;
+    this.root = root;
+    this._build();
+    this._bind();
+    this._loop = this._loop.bind(this);
+    this._raf = requestAnimationFrame(this._loop);
+    this.render();
+  }
+
+  _build() {
+    this.root.classList.add('player');
+    this.root.tabIndex = 0;
+    this.root.innerHTML = `
+      <canvas class="player-canvas"></canvas>
+      <div class="player-scrim"></div>
+      <button class="player-bigplay" aria-label="播放">${icon('play', 42)}</button>
+      <div class="player-toast" hidden></div>
+      ${this.video.live ? '<div class="player-livebadge"><span></span>直播中</div>' : ''}
+      <div class="player-controls">
+        <div class="player-scrub" role="slider" aria-label="播放進度" tabindex="0">
+          <div class="scrub-track">
+            <div class="scrub-buffer"></div>
+            <div class="scrub-fill"></div>
+            <div class="scrub-knob"></div>
+          </div>
+          <div class="scrub-preview" hidden>
+            <canvas width="160" height="90"></canvas>
+            <span>0:00</span>
+          </div>
+        </div>
+        <div class="player-bar">
+          <button class="pbtn js-play" aria-label="播放">${icon('play')}</button>
+          <button class="pbtn js-next" aria-label="下一部影片">${icon('next')}</button>
+          <div class="player-volume">
+            <button class="pbtn js-mute" aria-label="靜音">${icon('volume')}</button>
+            <input class="vol-slider" type="range" min="0" max="1" step="0.01" aria-label="音量">
+          </div>
+          <span class="player-time"><span class="js-cur">0:00</span> / <span class="js-dur">0:00</span></span>
+          <div class="player-spacer"></div>
+          <div class="player-menu-wrap">
+            <button class="pbtn js-settings" aria-label="設定">${icon('settings')}</button>
+            <div class="player-menu" hidden></div>
+          </div>
+          <button class="pbtn js-mini" aria-label="迷你播放器">${icon('miniplayer')}</button>
+          <button class="pbtn js-theater" aria-label="劇院模式">${icon('theater')}</button>
+          <button class="pbtn js-fs" aria-label="全螢幕">${icon('fullscreen')}</button>
+        </div>
+      </div>`;
+
+    this.canvas = this.root.querySelector('.player-canvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.scrub = this.root.querySelector('.player-scrub');
+    this.fill = this.root.querySelector('.scrub-fill');
+    this.buffer = this.root.querySelector('.scrub-buffer');
+    this.preview = this.root.querySelector('.scrub-preview');
+    this.previewCanvas = this.preview.querySelector('canvas');
+    this.previewLabel = this.preview.querySelector('span');
+    this.menu = this.root.querySelector('.player-menu');
+    this.volSlider = this.root.querySelector('.vol-slider');
+    this.volSlider.value = this.muted ? 0 : this.volume;
+    this.root.querySelector('.js-dur').textContent = formatDuration(this.duration);
+    this._syncVolumeIcon();
+    this._resize();
+  }
+
+  _bind() {
+    const q = (s) => this.root.querySelector(s);
+    q('.js-play').addEventListener('click', () => this.toggle());
+    q('.player-bigplay').addEventListener('click', () => this.toggle());
+    this.canvas.addEventListener('click', () => this.toggle());
+    this.canvas.addEventListener('dblclick', () => this.toggleFullscreen());
+    q('.js-next').addEventListener('click', () => this.onEnded());
+    q('.js-mute').addEventListener('click', () => this.setMuted(!this.muted));
+    q('.js-theater').addEventListener('click', () => {
+      this.theater = !this.theater;
+      this.onTheater(this.theater);
+      this._resize();
+    });
+    q('.js-fs').addEventListener('click', () => this.toggleFullscreen());
+    q('.js-mini').addEventListener('click', () => {
+      this.root.classList.toggle('is-mini');
+      this._resize();
+    });
+    q('.js-settings').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.menu.hidden ? this._openMenu() : this._closeMenu();
+    });
+    document.addEventListener('click', () => this._closeMenu());
+
+    this.volSlider.addEventListener('input', () => {
+      this.volume = Number(this.volSlider.value);
+      this.muted = this.volume === 0;
+      localStorage.setItem('mt:volume', String(this.volume));
+      localStorage.setItem('mt:muted', this.muted ? '1' : '0');
+      this._syncVolumeIcon();
+    });
+
+    // scrubbing
+    const seekFromEvent = (e) => {
+      const r = this.scrub.getBoundingClientRect();
+      const x = ((e.touches ? e.touches[0].clientX : e.clientX) - r.left) / r.width;
+      this.seek(Math.max(0, Math.min(1, x)) * this.duration);
+    };
+    let dragging = false;
+    this.scrub.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      this.scrub.setPointerCapture(e.pointerId);
+      seekFromEvent(e);
+    });
+    this.scrub.addEventListener('pointermove', (e) => {
+      if (dragging) seekFromEvent(e);
+      this._showPreview(e);
+    });
+    this.scrub.addEventListener('pointerup', (e) => {
+      dragging = false;
+      this.scrub.releasePointerCapture(e.pointerId);
+    });
+    this.scrub.addEventListener('pointerleave', () => {
+      this.preview.hidden = true;
+    });
+    this.scrub.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') this.seek(this.time + 5);
+      if (e.key === 'ArrowLeft') this.seek(this.time - 5);
+    });
+
+    this.root.addEventListener('mousemove', () => this._wake());
+    this.root.addEventListener('mouseleave', () => {
+      if (this.playing) this.root.classList.add('hide-ui');
+    });
+    this.root.addEventListener('keydown', (e) => this._key(e));
+    document.addEventListener('keydown', (e) => {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      this._key(e);
+    });
+    document.addEventListener('fullscreenchange', () => {
+      const fs = document.fullscreenElement === this.root;
+      this.root.classList.toggle('is-fullscreen', fs);
+      this.root.querySelector('.js-fs').innerHTML = icon(fs ? 'exitFullscreen' : 'fullscreen');
+      this._resize();
+    });
+    this._ro = new ResizeObserver(() => this._resize());
+    this._ro.observe(this.root);
+  }
+
+  _key(e) {
+    const keys = {
+      ' ': () => this.toggle(),
+      k: () => this.toggle(),
+      j: () => this.seek(this.time - 10),
+      l: () => this.seek(this.time + 10),
+      ArrowLeft: () => this.seek(this.time - 5),
+      ArrowRight: () => this.seek(this.time + 5),
+      ArrowUp: () => this._nudgeVolume(0.05),
+      ArrowDown: () => this._nudgeVolume(-0.05),
+      m: () => this.setMuted(!this.muted),
+      f: () => this.toggleFullscreen(),
+      t: () => {
+        this.theater = !this.theater;
+        this.onTheater(this.theater);
+      },
+      '>': () => this._cycleSpeed(1),
+      '<': () => this._cycleSpeed(-1),
+    };
+    const fn = keys[e.key];
+    if (fn) {
+      e.preventDefault();
+      fn();
+      this._wake();
+      return;
+    }
+    if (/^[0-9]$/.test(e.key)) {
+      e.preventDefault();
+      this.seek((Number(e.key) / 10) * this.duration);
+      this._wake();
+    }
+  }
+
+  _nudgeVolume(d) {
+    this.volume = Math.max(0, Math.min(1, this.volume + d));
+    this.muted = this.volume === 0;
+    this.volSlider.value = this.volume;
+    localStorage.setItem('mt:volume', String(this.volume));
+    this._syncVolumeIcon();
+    this._toast(`音量 ${Math.round(this.volume * 100)}%`);
+  }
+
+  _cycleSpeed(dir) {
+    const i = SPEEDS.indexOf(this.speed);
+    this.speed = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, i + dir))];
+    this._toast(`${this.speed}x`);
+  }
+
+  _syncVolumeIcon() {
+    const b = this.root.querySelector('.js-mute');
+    b.innerHTML = icon(this.muted || this.volume === 0 ? 'muted' : 'volume');
+    this.volSlider.style.setProperty('--vol', `${(this.muted ? 0 : this.volume) * 100}%`);
+  }
+
+  _toast(msg) {
+    const t = this.root.querySelector('.player-toast');
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => { t.hidden = true; }, 900);
+  }
+
+  _openMenu() {
+    this.menu.hidden = false;
+    this.menu.innerHTML = `
+      <button class="menu-row" data-menu="speed"><span>播放速度</span><span class="menu-val">${this.speed === 1 ? '標準' : this.speed + 'x'} ›</span></button>
+      <button class="menu-row" data-menu="quality"><span>畫質</span><span class="menu-val">${this.quality} ›</span></button>
+      <button class="menu-row" data-menu="captions"><span>字幕</span><span class="menu-val">中文（繁體）›</span></button>`;
+    this.menu.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const row = e.target.closest('[data-menu]');
+      if (!row) return;
+      const kind = row.dataset.menu;
+      if (kind === 'speed') this._submenu('播放速度', SPEEDS.map((s) => [s === 1 ? '標準' : `${s}x`, s]), this.speed, (v) => {
+        this.speed = v;
+        this._closeMenu();
+      });
+      if (kind === 'quality') this._submenu('畫質', QUALITIES.map((s) => [s, s]), this.quality, (v) => {
+        this.quality = v;
+        localStorage.setItem('mt:quality', v);
+        this._closeMenu();
+        this._resize();
+      });
+      if (kind === 'captions') this._submenu('字幕', [['關閉', 'off'], ['中文（繁體）', 'zh'], ['English', 'en']], 'zh', () => this._closeMenu());
+    }, { once: true });
+  }
+
+  _submenu(title, items, current, onPick) {
+    this.menu.innerHTML = `<button class="menu-row menu-head">‹ ${title}</button>` +
+      items.map(([label, val]) => `<button class="menu-row" data-val="${val}">
+        <span class="menu-check">${String(val) === String(current) ? icon('check', 18) : ''}</span><span>${label}</span></button>`).join('');
+    this.menu.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (e.target.closest('.menu-head')) { this._openMenu(); return; }
+      const row = e.target.closest('[data-val]');
+      if (!row) return;
+      const raw = row.dataset.val;
+      onPick(isNaN(Number(raw)) ? raw : Number(raw));
+    }, { once: true });
+  }
+
+  _closeMenu() {
+    if (this.menu) this.menu.hidden = true;
+  }
+
+  _showPreview(e) {
+    const r = this.scrub.getBoundingClientRect();
+    const p = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    const t = p * this.duration;
+    this.preview.hidden = false;
+    this.preview.style.left = `${Math.max(84, Math.min(r.width - 84, p * r.width))}px`;
+    this.previewLabel.textContent = formatDuration(t);
+    drawScene(this.previewCanvas.getContext('2d'), 160, 90, t, this.video.seed, this.video.style);
+  }
+
+  _wake() {
+    this.root.classList.remove('hide-ui');
+    clearTimeout(this._hideTimer);
+    this._hideTimer = setTimeout(() => {
+      if (this.playing) this.root.classList.add('hide-ui');
+    }, 2600);
+  }
+
+  _resize() {
+    const rect = this.root.getBoundingClientRect();
+    if (!rect.width) return;
+    // Lower "quality" settings genuinely render fewer pixels, which is a
+    // cheap way to make the setting mean something.
+    const scale = { '1080p': 1, '720p': 0.72, '480p': 0.5, '360p': 0.36, '144p': 0.16 }[this.quality] ?? 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2) * scale;
+    // Clamped to the viewport as a backstop: if a host page ever lets the
+    // canvas size drive layout, an unclamped value would grow every tick.
+    const cw = Math.min(rect.width, window.innerWidth) * dpr;
+    const ch = Math.min(rect.height, window.innerHeight) * dpr;
+    this.canvas.width = Math.max(160, Math.round(cw));
+    this.canvas.height = Math.max(90, Math.round(ch));
+    this.render();
+  }
+
+  _loop(now) {
+    const dt = this._lastFrame ? (now - this._lastFrame) / 1000 : 0;
+    this._lastFrame = now;
+    if (this.playing) {
+      this.time += dt * this.speed;
+      if (this.time >= this.duration) {
+        this.time = this.duration;
+        this.playing = false;
+        this._syncPlayIcon();
+        this.root.classList.remove('hide-ui');
+        this.onEnded();
+      }
+      this.render();
+      this._syncProgress();
+    }
+    this._raf = requestAnimationFrame(this._loop);
+  }
+
+  render() {
+    drawScene(this.ctx, this.canvas.width, this.canvas.height, this.time, this.video.seed, this.video.style);
+  }
+
+  _syncProgress() {
+    const p = (this.time / this.duration) * 100;
+    this.fill.style.width = `${p}%`;
+    this.buffer.style.width = `${Math.min(100, p + 12 + (Math.sin(this.time / 7) + 1) * 6)}%`;
+    this.root.querySelector('.js-cur').textContent = formatDuration(this.time);
+    this.scrub.setAttribute('aria-valuenow', Math.round(this.time));
+  }
+
+  _syncPlayIcon() {
+    const name = this.playing ? 'pause' : 'play';
+    this.root.querySelector('.js-play').innerHTML = icon(name);
+    this.root.querySelector('.js-play').setAttribute('aria-label', this.playing ? '暫停' : '播放');
+    this.root.classList.toggle('is-playing', this.playing);
+  }
+
+  play() {
+    if (this.time >= this.duration) this.time = 0;
+    this.playing = true;
+    this._syncPlayIcon();
+    this._wake();
+  }
+
+  pause() {
+    this.playing = false;
+    this._syncPlayIcon();
+    this.root.classList.remove('hide-ui');
+  }
+
+  toggle() {
+    this.playing ? this.pause() : this.play();
+  }
+
+  seek(t) {
+    this.time = Math.max(0, Math.min(this.duration, t));
+    this.render();
+    this._syncProgress();
+    this._wake();
+  }
+
+  setMuted(m) {
+    this.muted = m;
+    if (!m && this.volume === 0) this.volume = 0.5;
+    this.volSlider.value = m ? 0 : this.volume;
+    localStorage.setItem('mt:muted', m ? '1' : '0');
+    this._syncVolumeIcon();
+    this._toast(m ? '靜音' : `音量 ${Math.round(this.volume * 100)}%`);
+  }
+
+  toggleFullscreen() {
+    if (document.fullscreenElement === this.root) document.exitFullscreen();
+    else this.root.requestFullscreen?.();
+  }
+
+  destroy() {
+    cancelAnimationFrame(this._raf);
+    this._ro?.disconnect();
+    clearTimeout(this._hideTimer);
+  }
+}
+
+/* ==== app.js ==== */
+/* Router + views. Hash-based so the whole thing works from file:// too. */
+
+
+
+
+
+const view = document.getElementById('view');
+const state = {
+  player: null,
+  theater: false,
+  category: '全部',
+  subs: new Set(JSON.parse(localStorage.getItem('mt:subs') || '[]')),
+  likes: JSON.parse(localStorage.getItem('mt:likes') || '{}'),
+  saved: new Set(JSON.parse(localStorage.getItem('mt:saved') || '[]')),
+  history: JSON.parse(localStorage.getItem('mt:history') || '[]'),
+};
+
+function persist() {
+  localStorage.setItem('mt:subs', JSON.stringify([...state.subs]));
+  localStorage.setItem('mt:likes', JSON.stringify(state.likes));
+  localStorage.setItem('mt:saved', JSON.stringify([...state.saved]));
+  localStorage.setItem('mt:history', JSON.stringify(state.history.slice(0, 30)));
+}
+
+/* ------------------------------------------------------------------ chrome */
+
+function initChrome() {
+  // Static chrome declares which glyph it wants; the SVG is injected here so
+  // the markup stays readable.
+  document.querySelectorAll('[data-icon]').forEach((n) => {
+    n.insertAdjacentHTML('afterbegin', icon(n.dataset.icon, Number(n.dataset.iconSize) || 24));
+  });
+
+  document.getElementById('menu-btn').addEventListener('click', toggleSidebar);
+  document.getElementById('logo').addEventListener('click', (e) => {
+    e.preventDefault();
+    location.hash = '#/';
+  });
+
+  const form = document.getElementById('search-form');
+  const input = document.getElementById('search-input');
+  const suggestBox = document.getElementById('suggestions');
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const q = input.value.trim();
+    suggestBox.hidden = true;
+    input.blur();
+    location.hash = q ? `#/results/${encodeURIComponent(q)}` : '#/';
+  });
+
+  const suggest = debounce(() => {
+    const q = input.value.trim().toLowerCase();
+    if (!q) { suggestBox.hidden = true; return; }
+    const hits = ALL
+      .filter((v) => v.title.toLowerCase().includes(q) || v.channelObj.name.toLowerCase().includes(q))
+      .slice(0, 8);
+    if (!hits.length) { suggestBox.hidden = true; return; }
+    suggestBox.innerHTML = '';
+    hits.forEach((v) => {
+      suggestBox.append(el('button', {
+        class: 'suggestion',
+        type: 'button',
+        html: `${icon('search', 20)}<span>${v.title}</span>`,
+        onclick: () => {
+          input.value = v.title;
+          suggestBox.hidden = true;
+          location.hash = `#/watch/${v.id}`;
+        },
+      }));
+    });
+    suggestBox.hidden = false;
+  }, 90);
+
+  input.addEventListener('input', suggest);
+  input.addEventListener('focus', suggest);
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-wrap')) suggestBox.hidden = true;
+  });
+
+  document.getElementById('theme-btn').addEventListener('click', () => {
+    const dark = !document.documentElement.classList.contains('light');
+    document.documentElement.classList.toggle('light', dark);
+    localStorage.setItem('mt:theme', dark ? 'light' : 'dark');
+    document.getElementById('theme-btn').innerHTML = icon(dark ? 'sun' : 'moon');
+  });
+
+  document.getElementById('scrim').addEventListener('click', () => {
+    document.body.classList.remove('drawer-open');
+  });
+
+  buildSidebar();
+}
+
+function toggleSidebar() {
+  if (window.innerWidth < 1000 || document.body.classList.contains('watch-mode')) {
+    document.body.classList.toggle('drawer-open');
+  } else {
+    document.body.classList.toggle('rail');
+  }
+}
+
+function buildSidebar() {
+  const nav = document.getElementById('sidebar');
+  const main = [
+    ['home', '首頁', '#/'],
+    ['shorts', 'Shorts', '#/results/搞笑'],
+    ['subs', '訂閱內容', '#/subscriptions'],
+  ];
+  const you = [
+    ['library', '你的媒體庫', '#/library'],
+    ['history', '觀看紀錄', '#/history'],
+    ['clock', '稍後觀看', '#/library'],
+    ['like', '喜歡的影片', '#/library'],
+  ];
+  const explore = [
+    ['trending', '發燒影片', '#/results/紅石'],
+    ['gaming', '遊戲', '#/results/遊戲'],
+    ['live', '直播', '#/results/直播中'],
+  ];
+
+  const section = (items, title) => el('div', { class: 'side-section' }, [
+    title ? el('h3', { class: 'side-title', text: title }) : null,
+    ...items.map(([ic, label, href]) => el('a', {
+      class: 'side-link',
+      href,
+      html: `${icon(ic)}<span>${label}</span>`,
+    })),
+  ]);
+
+  nav.append(section(main));
+  nav.append(section(you, '你'));
+  nav.append(section(explore, '探索'));
+
+  const subsSection = el('div', { class: 'side-section' }, [
+    el('h3', { class: 'side-title', text: '訂閱內容' }),
+    ...Object.values(CHANNELS).map((c) => el('a', {
+      class: 'side-link',
+      href: `#/channel/${c.id}`,
+      html: `<span class="avatar tiny" style="--c:${c.color}">${c.name[0]}</span><span>${c.name}</span>`,
+    })),
+  ]);
+  nav.append(subsSection);
+  nav.append(el('div', { class: 'side-foot' }, [
+    el('p', { text: '關於  新聞  版權  聯絡我們' }),
+    el('p', { text: '條款  隱私權  政策與安全' }),
+    el('p', { class: 'side-copy', text: '© 2026 MineTube — 全部內容皆為虛構示範' }),
+  ]));
+}
+
+/* ------------------------------------------------------------------- cards */
+
+/* Thumbnails paint on demand and only start animating on hover, so a grid of
+   24 canvases doesn't melt the CPU. */
+function thumbCanvas(video, w = 336, h = 189) {
+  const canvas = el('canvas', { class: 'thumb-canvas', width: w * 2, height: h * 2 });
+  requestAnimationFrame(() => drawThumbnail(canvas, { ...video, seed: video.seed }));
+  return canvas;
+}
+
+function attachHoverPreview(card, canvas, video) {
+  let raf = 0;
+  let t0 = 0;
+  const stop = () => {
+    cancelAnimationFrame(raf);
+    raf = 0;
+    drawThumbnail(canvas, video);
+    card.classList.remove('previewing');
+  };
+  card.addEventListener('pointerenter', () => {
+    if (raf) return;
+    card.classList.add('previewing');
+    t0 = performance.now();
+    const step = (now) => {
+      const t = 20 + (now - t0) / 1000;
+      drawScene(canvas.getContext('2d'), canvas.width, canvas.height, t, video.seed, video.style);
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+  });
+  card.addEventListener('pointerleave', stop);
+}
+
+function videoCard(video, variant = 'grid') {
+  const c = video.channelObj;
+  const canvas = thumbCanvas(video, variant === 'list' ? 360 : 336, variant === 'list' ? 202 : 189);
+  const stats = el('div', {
+    class: 'card-sub',
+    text: `${formatViews(video.views)}${video.live ? '人正在觀看' : '次觀看'}・${video.live ? '' : formatAgo(video.days)}`,
+  });
+  const channelLine = el('div', { class: 'card-sub card-channel-line' }, [
+    // The grid card puts the avatar beside the whole block; the list card
+    // tucks a small one next to the channel name, like search results do.
+    variant === 'list' ? el('span', { class: 'avatar tiny', style: `--c:${c.color}`, text: c.name[0] }) : null,
+    el('span', {
+      class: 'card-channel',
+      html: `${c.name}${c.verified ? `<span class="verified">${icon('check', 12)}</span>` : ''}`,
+    }),
+  ]);
+
+  const card = el('a', { class: `card card-${variant}`, href: `#/watch/${video.id}` }, [
+    el('div', { class: 'thumb' }, [
+      canvas,
+      el('span', {
+        class: `badge ${video.live ? 'badge-live' : ''}`,
+        text: video.live ? '直播中' : formatDuration(video.duration),
+      }),
+      el('span', { class: 'thumb-progress' }),
+    ]),
+    el('div', { class: 'card-body' }, [
+      variant === 'grid'
+        ? el('span', { class: 'avatar', style: `--c:${c.color}`, text: c.name[0] })
+        : null,
+      el('div', { class: 'card-meta' }, [
+        el('h3', { class: 'card-title', text: video.title }),
+        ...(variant === 'list'
+          ? [stats, channelLine, el('p', { class: 'card-desc', text: video.desc?.split('\n')[0] || '' })]
+          : [channelLine, stats]),
+      ]),
+      el('button', {
+        class: 'card-more',
+        'aria-label': '更多選項',
+        html: icon('more', 20),
+        onclick: (e) => { e.preventDefault(); e.stopPropagation(); toast('已加入「稍後觀看」'); },
+      }),
+    ]),
+  ]);
+  attachHoverPreview(card, canvas, video);
+  return card;
+}
+
+function toast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) {
+    t = el('div', { id: 'toast', class: 'toast' });
+    document.body.append(t);
+  }
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._id);
+  toast._id = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ------------------------------------------------------------------- views */
+
+function renderHome(filterCategory) {
+  document.body.classList.remove('watch-mode');
+  state.category = filterCategory || state.category;
+
+  const chips = el('div', { class: 'chips' },
+    CATEGORIES.map((cat) => el('button', {
+      class: `chip ${cat === state.category ? 'active' : ''}`,
+      text: cat,
+      onclick: () => renderHome(cat),
+    })));
+
+  const list = state.category === '全部'
+    ? ALL
+    : ALL.filter((v) => (v.tags || []).includes(state.category));
+
+  view.innerHTML = '';
+  view.append(chips);
+  view.append(el('div', { class: 'grid' },
+    list.length ? list.map((v) => videoCard(v)) : [emptyState('這個分類還沒有影片')]));
+}
+
+function emptyState(msg) {
+  return el('div', { class: 'empty' }, [
+    el('div', { class: 'empty-icon', html: icon('shorts', 48) }),
+    el('p', { text: msg }),
+  ]);
+}
+
+function renderResults(query) {
+  document.body.classList.remove('watch-mode');
+  const q = query.toLowerCase();
+  const hits = ALL.filter((v) =>
+    v.title.toLowerCase().includes(q) ||
+    v.channelObj.name.toLowerCase().includes(q) ||
+    (v.tags || []).some((t) => t.toLowerCase().includes(q)));
+
+  view.innerHTML = '';
+  view.append(el('div', { class: 'results-head' }, [
+    el('button', { class: 'filter-btn', html: `${icon('sort', 20)}<span>篩選器</span>` }),
+    el('span', { class: 'results-count', text: `約 ${hits.length} 個結果` }),
+  ]));
+  view.append(el('div', { class: 'results' },
+    hits.length ? hits.map((v) => videoCard(v, 'list')) : [emptyState(`找不到「${query}」的結果`)]));
+}
+
+function renderChannel(id) {
+  document.body.classList.remove('watch-mode');
+  const c = CHANNELS[id];
+  if (!c) return renderHome();
+  const vids = ALL.filter((v) => v.channel === id);
+  const subbed = state.subs.has(id);
+
+  view.innerHTML = '';
+  view.append(el('div', { class: 'channel' }, [
+    el('div', { class: 'channel-banner', style: `--c:${c.color}` }),
+    el('div', { class: 'channel-head' }, [
+      el('span', { class: 'avatar xl', style: `--c:${c.color}`, text: c.name[0] }),
+      el('div', { class: 'channel-info' }, [
+        el('h1', { text: c.name }),
+        el('div', { class: 'channel-sub', text: `${c.handle}・${formatSubs(c.subs)}・${vids.length} 部影片` }),
+        el('p', { class: 'channel-desc', text: '每週更新方塊世界的各種實驗與挑戰。' }),
+      ]),
+      el('button', {
+        class: `subscribe ${subbed ? 'subscribed' : ''}`,
+        text: subbed ? '已訂閱' : '訂閱',
+        onclick: (e) => {
+          const on = state.subs.has(id);
+          on ? state.subs.delete(id) : state.subs.add(id);
+          persist();
+          e.target.textContent = on ? '訂閱' : '已訂閱';
+          e.target.classList.toggle('subscribed', !on);
+          toast(on ? `已取消訂閱 ${c.name}` : `已訂閱 ${c.name}`);
+        },
+      }),
+    ]),
+    el('div', { class: 'channel-tabs' }, ['影片', '播放清單', '社群', '關於'].map((t, i) =>
+      el('button', { class: `channel-tab ${i === 0 ? 'active' : ''}`, text: t }))),
+  ]));
+  view.append(el('div', { class: 'grid' }, vids.map((v) => videoCard(v))));
+}
+
+function renderCollection(title, list, emptyMsg) {
+  document.body.classList.remove('watch-mode');
+  view.innerHTML = '';
+  view.append(el('h1', { class: 'page-title', text: title }));
+  view.append(el('div', { class: 'grid' },
+    list.length ? list.map((v) => videoCard(v)) : [emptyState(emptyMsg)]));
+}
+
+/* ------------------------------------------------------------------- watch */
+
+function renderWatch(id) {
+  const video = VIDEO_MAP[id];
+  if (!video) return renderHome();
+  document.body.classList.add('watch-mode');
+  document.body.classList.remove('drawer-open');
+
+  state.history = [id, ...state.history.filter((h) => h !== id)];
+  persist();
+
+  const c = video.channelObj;
+  const related = ALL.filter((v) => v.id !== id)
+    .sort((a, b) => {
+      const sa = (a.channel === video.channel ? 2 : 0) + (a.tags || []).filter((t) => (video.tags || []).includes(t)).length;
+      const sb = (b.channel === video.channel ? 2 : 0) + (b.tags || []).filter((t) => (video.tags || []).includes(t)).length;
+      return sb - sa;
+    });
+
+  const playerBox = el('div', { class: 'player-box' });
+  const liked = state.likes[id];
+
+  const likeBtn = el('button', {
+    class: `pill-btn ${liked === 1 ? 'on' : ''}`,
+    html: `${icon('like', 22)}<span>${formatCount(video.likes + (liked === 1 ? 1 : 0))}</span>`,
+  });
+  const dislikeBtn = el('button', {
+    class: `pill-btn ${liked === -1 ? 'on' : ''}`,
+    html: `${icon('dislike', 22)}`,
+    'aria-label': '不喜歡',
+  });
+  likeBtn.addEventListener('click', () => {
+    state.likes[id] = liked === 1 ? 0 : 1;
+    persist();
+    renderWatch(id);
+    toast(state.likes[id] === 1 ? '已加入「喜歡的影片」' : '已移除');
+  });
+  dislikeBtn.addEventListener('click', () => {
+    state.likes[id] = liked === -1 ? 0 : -1;
+    persist();
+    renderWatch(id);
+  });
+
+  const subbed = state.subs.has(video.channel);
+  const saved = state.saved.has(id);
+
+  const descBox = el('div', { class: 'desc' }, [
+    el('div', { class: 'desc-head', text: `${formatViews(video.views)}次觀看・${formatAgo(video.days)}` }),
+    el('div', { class: 'desc-body', text: video.desc || '' }),
+    el('button', {
+      class: 'desc-toggle',
+      text: '顯示更多',
+      onclick: (e) => {
+        const open = descBox.classList.toggle('open');
+        e.target.textContent = open ? '顯示較少' : '顯示更多';
+      },
+    }),
+  ]);
+
+  const comments = commentsFor(id, 8);
+  const commentList = el('div', { class: 'comment-list' }, comments.map(renderComment));
+
+  const commentInput = el('div', { class: 'comment-add' }, [
+    el('span', { class: 'avatar', style: '--c:#7a5cff', text: '你' }),
+    el('div', { class: 'comment-add-body' }, [
+      el('input', { class: 'comment-input', placeholder: '新增留言…', 'aria-label': '新增留言' }),
+      el('div', { class: 'comment-actions' }, [
+        el('button', { class: 'text-btn', text: '取消', onclick: (e) => { e.target.closest('.comment-add').querySelector('input').value = ''; } }),
+        el('button', {
+          class: 'primary-btn',
+          text: '留言',
+          onclick: (e) => {
+            const input = e.target.closest('.comment-add').querySelector('input');
+            const text = input.value.trim();
+            if (!text) return;
+            commentList.prepend(renderComment({ author: '你', text, likes: 0, hours: 0, replies: 0, color: '#7a5cff' }));
+            input.value = '';
+            toast('留言已發布');
+          },
+        }),
+      ]),
+    ]),
+  ]);
+
+  view.innerHTML = '';
+  const primary = el('div', { class: 'watch-primary' }, [
+    playerBox,
+    el('h1', { class: 'watch-title', text: video.title }),
+    el('div', { class: 'watch-actions' }, [
+      el('a', { class: 'channel-row', href: `#/channel/${c.id}` }, [
+        el('span', { class: 'avatar lg', style: `--c:${c.color}`, text: c.name[0] }),
+        el('div', {}, [
+          el('div', {
+            class: 'channel-name',
+            html: `${c.name}${c.verified ? `<span class="verified">${icon('check', 12)}</span>` : ''}`,
+          }),
+          el('div', { class: 'channel-subs', text: formatSubs(c.subs) }),
+        ]),
+      ]),
+      el('button', {
+        class: `subscribe ${subbed ? 'subscribed' : ''}`,
+        text: subbed ? '已訂閱' : '訂閱',
+        onclick: (e) => {
+          const on = state.subs.has(video.channel);
+          on ? state.subs.delete(video.channel) : state.subs.add(video.channel);
+          persist();
+          e.target.textContent = on ? '訂閱' : '已訂閱';
+          e.target.classList.toggle('subscribed', !on);
+        },
+      }),
+      el('div', { class: 'action-row' }, [
+        el('div', { class: 'pill-group' }, [likeBtn, dislikeBtn]),
+        el('button', { class: 'pill-btn', html: `${icon('share', 22)}<span>分享</span>`, onclick: () => toast('連結已複製到剪貼簿') }),
+        el('button', { class: 'pill-btn', html: `${icon('download', 22)}<span>下載</span>`, onclick: () => toast('離線下載需要 Premium') }),
+        el('button', {
+          class: `pill-btn ${saved ? 'on' : ''}`,
+          html: `${icon('save', 22)}<span>儲存</span>`,
+          onclick: (e) => {
+            const on = state.saved.has(id);
+            on ? state.saved.delete(id) : state.saved.add(id);
+            persist();
+            e.currentTarget.classList.toggle('on', !on);
+            toast(on ? '已從播放清單移除' : '已儲存到播放清單');
+          },
+        }),
+        el('button', { class: 'pill-btn icon-only', html: icon('more', 22), 'aria-label': '更多' }),
+      ]),
+    ]),
+    descBox,
+    el('div', { class: 'comments' }, [
+      el('div', { class: 'comments-head' }, [
+        el('h2', { text: `${comments.length * 137} 則留言` }),
+        el('button', { class: 'text-btn', html: `${icon('sort', 20)}<span>排序依據</span>` }),
+      ]),
+      commentInput,
+      commentList,
+    ]),
+  ]);
+
+  const upNextToggle = el('label', { class: 'autoplay' }, [
+    el('span', { text: '自動播放' }),
+    el('span', { class: 'switch' }, [el('input', { type: 'checkbox', checked: true }), el('span', { class: 'knob' })]),
+  ]);
+
+  const secondary = el('div', { class: 'watch-secondary' }, [
+    el('div', { class: 'up-next-head' }, [el('span', { text: '接下來播放' }), upNextToggle]),
+    ...related.map((v) => videoCard(v, 'compact')),
+  ]);
+
+  view.append(el('div', { class: 'watch' }, [primary, secondary]));
+
+  state.player?.destroy();
+  state.player = new Player(playerBox, video, {
+    theater: state.theater,
+    onTheater: (on) => {
+      state.theater = on;
+      document.body.classList.toggle('theater', on);
+    },
+    onEnded: () => {
+      const auto = upNextToggle.querySelector('input').checked;
+      if (auto && related[0]) location.hash = `#/watch/${related[0].id}`;
+    },
+  });
+  document.body.classList.toggle('theater', state.theater);
+  window.scrollTo(0, 0);
+}
+
+function renderComment(cm) {
+  const likeBtn = el('button', {
+    class: 'cm-btn',
+    html: `${icon('like', 18)}<span>${cm.likes ? formatCount(cm.likes) : ''}</span>`,
+  });
+  likeBtn.addEventListener('click', () => {
+    const on = likeBtn.classList.toggle('on');
+    likeBtn.querySelector('span').textContent = formatCount(cm.likes + (on ? 1 : 0));
+  });
+  return el('div', { class: 'comment' }, [
+    el('span', { class: 'avatar', style: `--c:${cm.color}`, text: cm.author[0] }),
+    el('div', { class: 'comment-body' }, [
+      el('div', { class: 'comment-head' }, [
+        el('span', { class: 'cm-author', text: cm.author }),
+        el('span', { class: 'cm-time', text: formatHours(cm.hours) }),
+      ]),
+      el('p', { class: 'cm-text', text: cm.text }),
+      el('div', { class: 'cm-actions' }, [
+        likeBtn,
+        el('button', { class: 'cm-btn', html: icon('dislike', 18), 'aria-label': '不喜歡' }),
+        el('button', { class: 'cm-btn text', text: '回覆' }),
+      ]),
+      cm.replies
+        ? el('button', { class: 'cm-replies', text: `▾ ${cm.replies} 則回覆`, onclick: (e) => { e.target.textContent = `▾ ${cm.replies} 則回覆`; toast('回覆已收合'); } })
+        : null,
+    ]),
+  ]);
+}
+
+/* ------------------------------------------------------------------ router */
+
+function route() {
+  const hash = location.hash.replace(/^#\/?/, '');
+  const [head, ...rest] = hash.split('/');
+  const arg = decodeURIComponent(rest.join('/') || '');
+
+  if (head !== 'watch') {
+    state.player?.destroy();
+    state.player = null;
+    document.body.classList.remove('theater');
+  }
+
+  switch (head) {
+    case 'watch': return renderWatch(arg);
+    case 'results': return renderResults(arg);
+    case 'channel': return renderChannel(arg);
+    case 'history':
+      return renderCollection('觀看紀錄', state.history.map((h) => VIDEO_MAP[h]).filter(Boolean), '還沒有觀看紀錄');
+    case 'library':
+      return renderCollection('你的媒體庫', [...state.saved].map((s) => VIDEO_MAP[s]).filter(Boolean), '媒體庫是空的，去首頁儲存幾部影片吧');
+    case 'subscriptions':
+      return renderCollection('訂閱內容', ALL.filter((v) => state.subs.has(v.channel)), '你還沒有訂閱任何頻道');
+    default: return renderHome();
+  }
+}
+
+/* -------------------------------------------------------------------- boot */
+
+if (localStorage.getItem('mt:theme') === 'light') {
+  document.documentElement.classList.add('light');
+}
+document.getElementById('theme-btn').innerHTML =
+  icon(document.documentElement.classList.contains('light') ? 'sun' : 'moon');
+
+initChrome();
+window.addEventListener('hashchange', route);
+route();
+})();
+</script>
