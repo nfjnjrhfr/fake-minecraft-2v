@@ -121,6 +121,36 @@ func (c *Client) DialPacket(ctx context.Context) (proxy.PacketSession, error) {
 	return newRoutedPacketSession(ctx, c), nil
 }
 
+// Probe opens a tunnel connection, completes the TLS handshake and closes it,
+// reporting how long that took.
+//
+// It is a real handshake rather than a bare TCP connect, so it verifies what
+// actually matters: that the server is reachable, is speaking TLS, and
+// presents a certificate this client accepts. It stops short of sending the
+// request header, so it never opens a connection to any destination.
+func (c *Client) Probe(ctx context.Context) (time.Duration, error) {
+	if c.dialTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.dialTimeout)
+		defer cancel()
+	}
+
+	start := time.Now()
+	raw, err := c.netDialer.DialContext(ctx, "tcp", c.remote.Address)
+	if err != nil {
+		return 0, fmt.Errorf("dial server %s: %w", c.remote.Address, err)
+	}
+	defer raw.Close()
+
+	tlsConn := utls.UClient(raw, c.tlsConfig.Clone(), c.helloID)
+	if err := tlsConn.HandshakeContext(ctx); err != nil {
+		return 0, fmt.Errorf("tls handshake with %s: %w", c.remote.Address, err)
+	}
+	tlsConn.Close()
+
+	return time.Since(start), nil
+}
+
 // dialTunnel opens a TLS connection to the server and prepares the request
 // header.
 //

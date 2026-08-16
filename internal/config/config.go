@@ -101,6 +101,17 @@ type Server struct {
 
 // Remote describes the server a client connects to.
 type Remote struct {
+	// ID identifies this server in the web console and in API calls. It is
+	// derived from the name when left empty.
+	ID string `json:"id"`
+
+	// Name is what the console shows, e.g. "Japan - Tokyo".
+	Name string `json:"name"`
+
+	// Country is an ISO 3166-1 alpha-2 code used only to pick a flag in the
+	// console. It has no effect on routing.
+	Country string `json:"country"`
+
 	Address  string `json:"address"`
 	Password string `json:"password"`
 
@@ -153,14 +164,52 @@ type Client struct {
 	// on loopback unless you intend to share the tunnel with your whole LAN.
 	Listen string `json:"listen"`
 
+	// Remote is a single server, the original one-server form. Prefer Servers;
+	// this is still accepted so existing configs keep working, and is treated
+	// as a one-entry server list.
 	Remote Remote `json:"server"`
-	Route  Route  `json:"route"`
+
+	// Servers is the list the console offers. Exactly one is active at a time.
+	Servers []Remote `json:"servers"`
+
+	// AutoConnect names the server to connect to at startup. Empty means start
+	// disconnected and wait for the console.
+	AutoConnect string `json:"auto_connect"`
+
+	// WhenDisconnected decides what happens to traffic while no server is
+	// connected: "block" refuses it, "direct" sends it out untunnelled.
+	//
+	// The default is block. A proxy that silently falls back to direct while
+	// the user believes the tunnel is up is worse than one that fails: the
+	// failure is visible, the leak is not.
+	WhenDisconnected string `json:"when_disconnected"`
+
+	Web   Web   `json:"web"`
+	Route Route `json:"route"`
 
 	// UDP enables SOCKS5 UDP association, which is what DNS and QUIC need.
 	UDP *bool `json:"udp"`
 
 	IdleTimeout Duration `json:"idle_timeout"`
 	LogLevel    string   `json:"log_level"`
+}
+
+// Web configures the local control console.
+type Web struct {
+	// Enabled turns the console on. It is on by default.
+	Enabled *bool `json:"enabled"`
+
+	// Listen is where the console is served. Keep it on loopback: the console
+	// can switch servers and read connection statistics, and it has no login.
+	Listen string `json:"listen"`
+}
+
+// EnabledOr reports whether the console should run.
+func (w Web) EnabledOr(def bool) bool {
+	if w.Enabled == nil {
+		return def
+	}
+	return *w.Enabled
 }
 
 // Load reads and validates a JSON config into dst, which must be *Server or
@@ -179,18 +228,25 @@ func Load(path string, dst any) error {
 		return fmt.Errorf("%s: %w", path, err)
 	}
 
-	switch c := dst.(type) {
-	case *Server:
-		err = c.validate()
-	case *Client:
-		err = c.validate()
-	default:
-		err = errors.New("config: unsupported target type")
-	}
-	if err != nil {
+	if err := Validate(dst); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
 	return nil
+}
+
+// Validate checks and fills in defaults for a *Server or *Client that was
+// built in memory rather than read from a file. Load applies it too, so both
+// paths get the same defaults -- a config assembled in code cannot end up with
+// settings that a file-based one would never have.
+func Validate(dst any) error {
+	switch c := dst.(type) {
+	case *Server:
+		return c.validate()
+	case *Client:
+		return c.validate()
+	default:
+		return errors.New("config: unsupported target type")
+	}
 }
 
 func (s *Server) validate() error {
@@ -236,25 +292,66 @@ func (c *Client) validate() error {
 	if c.Listen == "" {
 		c.Listen = "127.0.0.1:1080"
 	}
-	if c.Remote.Address == "" {
-		return errors.New("server.address is required")
+	if c.Web.Listen == "" {
+		c.Web.Listen = "127.0.0.1:8088"
 	}
-	host, _, err := net.SplitHostPort(c.Remote.Address)
-	if err != nil {
-		return fmt.Errorf("server.address must be host:port: %w", err)
+
+	// The single-server form is the one-entry case of the list, so fold it in
+	// and validate one shape from here on.
+	if c.Remote.Address != "" {
+		c.Servers = append([]Remote{c.Remote}, c.Servers...)
+		c.Remote = Remote{}
 	}
-	if c.Remote.Password == "" {
-		return errors.New("server.password is required")
+	if len(c.Servers) == 0 {
+		return errors.New("no servers configured: set \"servers\" (or the single-server \"server\")")
 	}
-	if c.Remote.SNI == "" {
-		c.Remote.SNI = host
+
+	seenID := make(map[string]bool, len(c.Servers))
+	for i := range c.Servers {
+		s := &c.Servers[i]
+		if s.Address == "" {
+			return fmt.Errorf("servers[%d]: address is required", i)
+		}
+		host, _, err := net.SplitHostPort(s.Address)
+		if err != nil {
+			return fmt.Errorf("servers[%d]: address must be host:port: %w", i, err)
+		}
+		if s.Password == "" {
+			return fmt.Errorf("servers[%d]: password is required", i)
+		}
+		if s.SNI == "" {
+			s.SNI = host
+		}
+		if s.Fingerprint == "" {
+			s.Fingerprint = "chrome"
+		}
+		if s.AllowInsecure && s.Pin != "" {
+			return fmt.Errorf("servers[%d]: allow_insecure and pin are mutually exclusive", i)
+		}
+		if s.Name == "" {
+			s.Name = host
+		}
+		if s.ID == "" {
+			s.ID = slug(s.Name)
+		}
+		if seenID[s.ID] {
+			return fmt.Errorf("servers[%d]: duplicate id %q", i, s.ID)
+		}
+		seenID[s.ID] = true
 	}
-	if c.Remote.Fingerprint == "" {
-		c.Remote.Fingerprint = "chrome"
+
+	if c.AutoConnect != "" && !seenID[c.AutoConnect] {
+		return fmt.Errorf("auto_connect names %q, which is not one of the configured servers", c.AutoConnect)
 	}
-	if c.Remote.AllowInsecure && c.Remote.Pin != "" {
-		return errors.New("server.allow_insecure and server.pin are mutually exclusive")
+	switch strings.ToLower(c.WhenDisconnected) {
+	case "", "block":
+		c.WhenDisconnected = "block"
+	case "direct":
+		c.WhenDisconnected = "direct"
+	default:
+		return fmt.Errorf("when_disconnected must be \"block\" or \"direct\", got %q", c.WhenDisconnected)
 	}
+
 	switch strings.ToLower(c.Route.Final) {
 	case "", "proxy":
 		c.Route.Final = "proxy"
@@ -272,6 +369,25 @@ func (r Route) BypassPrivateOr(def bool) bool {
 		return def
 	}
 	return *r.BypassPrivate
+}
+
+// slug turns a display name into an identifier usable in a URL.
+func slug(name string) string {
+	var b strings.Builder
+	lastDash := true // leading dashes are dropped
+	for _, r := range strings.ToLower(name) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+			lastDash = false
+		default:
+			if !lastDash {
+				b.WriteByte('-')
+				lastDash = true
+			}
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 // UDPEnabled reports whether SOCKS5 UDP association is offered.

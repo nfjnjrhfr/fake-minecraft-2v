@@ -7,6 +7,8 @@
 正確憑證的，會被原封不動地交給一個真的網站。
 
 ```
+                    ┌──── 網頁控制台 127.0.0.1:8088（開關／選節點／看狀態）
+                    │
 應用程式 ──SOCKS5/HTTP──> veil-client ══TLS 1.3══> veil-server ────> 目標網站
   瀏覽器                     本機 1080          看起來是 HTTPS        伺服器代為解析 DNS
                                                        │
@@ -19,7 +21,7 @@
 
 | | |
 |---|---|
-| **是** | 應用層加密代理。瀏覽器與任何支援 SOCKS5/HTTP 代理的程式，流量全程加密。 |
+| **是** | 應用層加密代理，附一個網頁控制台。瀏覽器與任何支援 SOCKS5/HTTP 代理的程式，流量全程加密。 |
 | **不是** | 傳統的全裝置 VPN（不建立 TUN 虛擬網卡、不接管整台機器的路由）。 |
 
 會做這個取捨是刻意的。WireGuard、OpenVPN 那類的 L3 VPN 在協定層有固定的握手特徵，
@@ -29,11 +31,14 @@ veil 走的是另一條路：**不去發明一個難以辨識的協定，而是�
 如果你要的是「整台機器所有流量都走通道」，把 veil-client 搭配 tun2socks 這類工具即可，
 但那不在這個 repo 的範圍內。
 
+**關於網頁介面：** 控制台是本機的操作面板，不是「在網頁裡翻牆」——瀏覽器分頁沒有辦法
+接管系統流量。實際傳輸的是背景執行的 `veil-client`，網頁負責開關、切節點、看狀態。
+
 ---
 
 ## 快速開始
 
-需要：一個**你自己的網域**、一台境外 VPS、Go 1.24+。
+需要：一個**你自己的網域**、一台境外 VPS、Go 1.25+。
 
 ### 伺服器端
 
@@ -81,20 +86,46 @@ docker compose up -d
 ```bash
 make build
 cp examples/client.json .
-vim client.json                          # 填入伺服器位址與密碼
+vim client.json                          # 填入節點位址與密碼
 ./bin/veil-client -c client.json
 ```
 
-本機的 `127.0.0.1:1080` 會同時提供 **SOCKS5 與 HTTP 代理**（自動辨識），
-所以不管程式要哪一種，填同一個位址就行。
+啟動後會開兩個本機埠：
 
-瀏覽器建議用 SwitchyOmega 之類的擴充功能指向它。系統層設定：
+| 位址 | 用途 |
+|---|---|
+| `127.0.0.1:1080` | 代理埠。**SOCKS5 與 HTTP 同一個埠**，自動辨識。 |
+| `127.0.0.1:8088` | **網頁控制台**。用瀏覽器打開它。 |
+
+瀏覽器打開 <http://127.0.0.1:8088> 就是控制台：
+
+- 中間一顆大按鈕，點一下連線／再點一下斷線
+- 下方是節點列表，帶國旗、延遲，點任一個就切換過去
+- 「測速」會逐一測試所有節點的握手延遲
+- 連線時間、上傳／下載即時更新
+
+想讓程式走通道，把它的代理指向 `127.0.0.1:1080`：
 
 ```bash
 export https_proxy=http://127.0.0.1:1080
 export http_proxy=http://127.0.0.1:1080
 export all_proxy=socks5://127.0.0.1:1080
 ```
+
+瀏覽器建議用 SwitchyOmega 之類的擴充功能指向同一個位址。
+
+#### 未連線時會怎樣
+
+`when_disconnected` 決定沒有連線時經過代理的流量下場，預設 `block`：
+
+| 設定 | 行為 |
+|---|---|
+| `block`（預設） | **拒絕**。程式會看到連線失敗。 |
+| `direct` | 直接送出，不經通道也未加密。 |
+
+預設選 `block` 是刻意的：如果斷線時默默改走直連，應用程式看到的是「成功」，
+使用者以為自己在通道裡——洩漏就是這樣發生的。失敗看得見，洩漏看不見。
+控制台在未連線時也會明講當下是哪一種。
 
 ---
 
@@ -224,15 +255,59 @@ if !bytes.Equal(throughVeil, throughDecoy) { /* 可被辨識，測試失敗 */ }
 | 欄位 | 預設 | 說明 |
 |---|---|---|
 | `listen` | `127.0.0.1:1080` | 本機 SOCKS5 + HTTP 代理。非 loopback 會警告。 |
-| `server.address` | 必填 | 伺服器 `host:port`。 |
-| `server.password` | 必填 | 密碼。 |
-| `server.sni` | 取自 address | TLS SNI。 |
-| `server.fingerprint` | `chrome` | TLS 指紋偽裝對象。 |
-| `server.pin` | — | 憑證 SHA-256（hex 或 base64）。自簽憑證時使用。 |
-| `server.allow_insecure` | `false` | 關閉憑證驗證。**不要用。** |
+| `web.enabled` | `true` | 是否啟用網頁控制台。 |
+| `web.listen` | `127.0.0.1:8088` | 控制台位址。**沒有登入機制**，請留在 loopback。 |
+| `servers[]` | 必填 | 節點列表，見下。也接受舊的單一 `server` 物件。 |
+| `auto_connect` | — | 啟動時自動連線的節點 `id`。留空則等控制台指示。 |
+| `when_disconnected` | `block` | 未連線時的流量處置：`block` 或 `direct`。 |
 | `udp` | `true` | SOCKS5 UDP association（DNS、QUIC 需要）。 |
 
+每個 `servers[]` 項目：
+
+| 欄位 | 預設 | 說明 |
+|---|---|---|
+| `id` | 由名稱推導 | 控制台與 API 使用的識別碼。 |
+| `name` | 取自位址 | 控制台顯示的名稱。 |
+| `country` | — | ISO 兩碼國碼，**只用來顯示國旗**，不影響路由。 |
+| `address` | 必填 | 伺服器 `host:port`。 |
+| `password` | 必填 | 密碼。 |
+| `sni` | 取自 address | TLS SNI。 |
+| `fingerprint` | `chrome` | TLS 指紋偽裝對象。 |
+| `pin` | — | 憑證 SHA-256（hex 或 base64）。自簽憑證時使用。 |
+| `allow_insecure` | `false` | 關閉憑證驗證。**不要用。** |
+
 設定檔不接受未知欄位——設定打錯字會直接報錯，而不是被無聲忽略採用預設值。
+
+---
+
+## 控制台的 API
+
+控制台自己就是用這組 API 畫出來的，所以腳本能做的事跟網頁一樣多。
+
+| 端點 | 說明 |
+|---|---|
+| `GET /api/status` | 目前狀態、流量統計、連線時間 |
+| `GET /api/servers` | 節點列表與最近一次測得的延遲 |
+| `POST /api/connect` | `{"server_id":"jp"}`，會**實際完成一次握手**才回報成功 |
+| `POST /api/disconnect` | 斷線；代理埠仍然在聽 |
+| `POST /api/ping` | 測速。`{}` 測全部，`{"server_id":"jp"}` 測單一節點 |
+
+```bash
+curl -H 'X-Veil-Console: 1' http://127.0.0.1:8088/api/status
+curl -H 'X-Veil-Console: 1' -H 'Content-Type: application/json' \
+     -d '{"server_id":"jp"}' http://127.0.0.1:8088/api/connect
+```
+
+### 為什麼需要 `X-Veil-Console` 這個標頭
+
+控制台沒有登入——它在 loopback 上，誰能連是作業系統在管。但有一個威脅是真的：
+**使用者瀏覽器裡任何一個分頁都能對 127.0.0.1 發請求**。沒有防護的話，
+一個惡意網頁可以在背後把你的節點切走或直接斷線。
+
+所以每個 API 呼叫都必須帶這個自訂標頭。跨來源的請求要帶自訂標頭，
+瀏覽器會先送 CORS preflight，而這個伺服器一律不批准——於是惡意網頁碰得到這個埠，
+卻叫不動這個 API。另外還會檢查 `Origin`，擋掉真的拿到 preflight 的情況。
+兩項檢查都有測試覆蓋。
 
 ---
 
@@ -273,6 +348,8 @@ internal/protocol      線路格式：認證、請求標頭、資料包框架
 internal/server        TLS 終結、認證、fallback、轉發
 internal/client        撥號、uTLS 指紋、憑證釘選、分流
 internal/proxy         本機入口：SOCKS5 + HTTP（同一個埠）
+internal/manager       連線狀態機：連線、斷線、切節點、流量統計
+internal/webui         網頁控制台與 JSON API（單一 HTML 以 go:embed 內嵌）
 internal/route         目的地比對規則
 internal/relay         雙向轉發與閒置逾時
 internal/e2e           端對端測試：完整的伺服器 + 客戶端 + TLS

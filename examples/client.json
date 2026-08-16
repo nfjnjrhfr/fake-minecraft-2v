@@ -1,13 +1,32 @@
 {
   "listen": "127.0.0.1:1080",
 
-  "server": {
-    "address": "example.com:443",
-    "password": "REPLACE-ME-WITH-A-LONG-RANDOM-PASSWORD",
-    "sni": "example.com",
-    "fingerprint": "chrome",
-    "connect_timeout": "10s"
+  "web": {
+    "enabled": true,
+    "listen": "127.0.0.1:8088"
   },
+
+  "servers": [
+    {
+      "id": "jp",
+      "name": "Japan - Tokyo",
+      "country": "JP",
+      "address": "jp.example.com:443",
+      "password": "REPLACE-ME-WITH-A-LONG-RANDOM-PASSWORD",
+      "fingerprint": "chrome"
+    },
+    {
+      "id": "us",
+      "name": "United States - Los Angeles",
+      "country": "US",
+      "address": "us.example.com:443",
+      "password": "REPLACE-ME-WITH-A-LONG-RANDOM-PASSWORD",
+      "fingerprint": "chrome"
+    }
+  ],
+
+  "auto_connect": "jp",
+  "when_disconnected": "block",
 
   "route": {
     "bypass_private": true,
