@@ -1,0 +1,49 @@
+{
+  "listen": "127.0.0.1:1080",
+
+  "server": {
+    "address": "example.com:443",
+    "password": "REPLACE-ME-WITH-A-LONG-RANDOM-PASSWORD",
+    "sni": "example.com",
+    "fingerprint": "chrome",
+    "connect_timeout": "10s"
+  },
+
+  "route": {
+    "bypass_private": true,
+    "final": "proxy",
+
+    "direct": [
+      "cn",
+      "baidu.com",
+      "bilibili.com",
+      "qq.com",
+      "taobao.com",
+      "tmall.com",
+      "jd.com",
+      "weibo.com",
+      "zhihu.com",
+      "douban.com",
+      "163.com",
+      "126.net",
+      "sina.com.cn",
+      "aliyun.com",
+      "alicdn.com",
+      "qpic.cn",
+      "qlogo.cn",
+      "gtimg.com",
+      "bdstatic.com",
+      "hdslb.com"
+    ],
+
+    "block": [
+      "doubleclick.net",
+      "googlesyndication.com",
+      "googleadservices.com"
+    ]
+  },
+
+  "udp": true,
+  "idle_timeout": "5m",
+  "log_level": "info"
+}
