@@ -7,7 +7,7 @@ GOFLAGS := -trimpath
 BIN := bin
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 
-.PHONY: all build test race vet fmt lint clean release install-server help
+.PHONY: all build test race vet fmt lint clean console release install-server help
 
 all: build
 
@@ -50,6 +50,14 @@ release:
 		done; \
 	done
 	@echo "release binaries are in $(BIN)/"
+
+## console: copy the console out as a standalone file you can open directly
+console:
+	@mkdir -p $(BIN)
+	@cp internal/webui/assets/index.html $(BIN)/veil-console.html
+	@echo "$(BIN)/veil-console.html -- open it in a browser."
+	@echo "With veil-client running it drives the real tunnel; on its own it"
+	@echo "runs in a clearly labelled demo mode against simulated data."
 
 ## clean: remove build output
 clean:
