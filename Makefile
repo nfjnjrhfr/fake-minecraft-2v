@@ -7,7 +7,7 @@ GOFLAGS := -trimpath
 BIN := bin
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 
-.PHONY: all build test race vet fmt lint clean console release install-server help
+.PHONY: all build test race vet fmt lint clean console demo release install-server help
 
 all: build
 
@@ -15,6 +15,7 @@ all: build
 build:
 	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BIN)/veil-server ./cmd/veil-server
 	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BIN)/veil-client ./cmd/veil-client
+	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BIN)/veil-decoy ./cmd/veil-decoy
 	@echo "built $(VERSION) into $(BIN)/"
 
 ## test: run the test suite
@@ -42,7 +43,7 @@ release:
 	@for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; arch=$${platform#*/}; ext=""; \
 		if [ "$$os" = "windows" ]; then ext=".exe"; fi; \
-		for cmd in veil-server veil-client; do \
+		for cmd in veil-server veil-client veil-decoy; do \
 			echo "  $$os/$$arch  $$cmd"; \
 			GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 go build $(GOFLAGS) \
 				-ldflags "$(LDFLAGS)" \
@@ -50,6 +51,10 @@ release:
 		done; \
 	done
 	@echo "release binaries are in $(BIN)/"
+
+## demo: run a complete, real deployment locally (server + client + console)
+demo:
+	@./scripts/demo.sh
 
 ## console: copy the console out as a standalone file you can open directly
 console:

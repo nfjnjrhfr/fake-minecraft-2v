@@ -33,6 +33,7 @@ import (
 
 	"github.com/nfjnjrhfr/fake-minecraft-2v/internal/client"
 	"github.com/nfjnjrhfr/fake-minecraft-2v/internal/config"
+	"github.com/nfjnjrhfr/fake-minecraft-2v/internal/manager"
 	"github.com/nfjnjrhfr/fake-minecraft-2v/internal/protocol"
 	"github.com/nfjnjrhfr/fake-minecraft-2v/internal/proxy"
 	"github.com/nfjnjrhfr/fake-minecraft-2v/internal/server"
@@ -723,4 +724,67 @@ func truncate(b []byte, n int) string {
 		return string(b)
 	}
 	return string(b[:n]) + "..."
+}
+
+// TestManagerCountsRealTraffic covers the path the shipped client actually
+// uses: the proxy front end dialling through the connection manager rather
+// than through a client directly. The console reports what this records, so a
+// counter stuck at zero means the console tells the user nothing.
+func TestManagerCountsRealTraffic(t *testing.T) {
+	h := newHarness(t, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	bypass := false
+	cfg := &config.Client{
+		Listen: "127.0.0.1:0",
+		Servers: []config.Remote{{
+			ID: "test", Name: "Test", Address: h.serverAddr,
+			Password: testPassword, SNI: testSNI, Fingerprint: "chrome", Pin: h.certPin,
+		}},
+		Route:    config.Route{BypassPrivate: &bypass, Final: "proxy"},
+		LogLevel: "error",
+	}
+	if err := config.Validate(cfg); err != nil {
+		t.Fatal(err)
+	}
+	mgr, err := manager.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mgr.Connect(ctx, cfg, "test"); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+
+	ln, err := net.Listen("tcp", cfg.Listen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go proxy.New(mgr, proxy.Options{IdleTimeout: time.Minute, UDP: true}).Serve(ctx, ln)
+	waitForListener(t, ln.Addr().String())
+
+	dialer, err := xproxy.SOCKS5("tcp", ln.Addr().String(), nil, xproxy.Direct)
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpClient := &http.Client{
+		Transport: &http.Transport{DialContext: dialer.(xproxy.ContextDialer).DialContext},
+		Timeout:   shortDeadline,
+	}
+	if body := get(t, httpClient, "http://"+h.targetAddr+"/"); body != targetBody {
+		t.Fatalf("body = %q, want %q", body, targetBody)
+	}
+
+	st := mgr.Status()
+	if st.TotalConns == 0 {
+		t.Error("total_conns is 0 after a request that succeeded")
+	}
+	if st.BytesDown == 0 {
+		t.Errorf("bytes_down is 0 after receiving %d bytes of body", len(targetBody))
+	}
+	if st.BytesUp == 0 {
+		t.Error("bytes_up is 0 after sending a request")
+	}
 }

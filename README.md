@@ -105,19 +105,41 @@ vim client.json                          # 填入節點位址與密碼
 - 連線時間、上傳／下載即時更新，下方是吞吐量走勢
 - 右上角可切換深／淺色
 
-#### 想先看看介面
+#### 一鍵跑起真實環境
 
-控制台就是**單一一個 HTML 檔**，沒有任何外部資源。可以直接打開來看：
+想確認軟體真的能動，不用先租 VPS：
+
+```bash
+make demo
+```
+
+它會就地起一套**完整而且真實**的部署——誘餌站、有自己憑證的 `veil-server`、
+`veil-client` 與控制台，然後自己驗證兩件事：
+
+```
+==> fetched the real example.com through the tunnel (559 bytes, tunnel connections 0 -> 1)
+==> an unauthenticated probe of the server received the decoy site
+```
+
+沒有任何一步是模擬的：真的 TLS 1.3 握手、真的協定、真的連到 example.com。
+第一項刻意去讀通道自己的連線計數（`0 -> 1`）而不是只看「請求有沒有成功」——
+**一個繞過通道的請求也會成功**，只看結果會把壞掉的設定誤判成正常。
+
+跑起來後打開 <http://127.0.0.1:8088>，控制台上的數字是真實流量。
+
+它唯一做不到的是「人在別的國家」：兩端都在你自己機器上。要真的跨國，
+伺服器就得放在境外——那部分看 `scripts/install-server.sh`。
+
+#### 只想看介面
+
+控制台是**單一一個 HTML 檔**，沒有任何外部資源：
 
 ```bash
 make console          # 產生 bin/veil-console.html
 ```
 
-雙擊那個檔案就會開。偵測不到本機的 `veil-client` 時，它會切到**示範模式**，
-用模擬資料讓你實際點按操作，並在頂端明講「這不是真實連線」——
-會標出來是因為看起來像真的、其實是假的數字，比沒有數字更糟。
-
-同一個檔案被 `veil-client` 提供時就是真的控制台，走真實 API。
+雙擊即可開啟。偵測不到本機的 `veil-client` 時會切到**示範模式**，用模擬資料讓你操作，
+並在頂端明講「這不是真實連線」。同一個檔案被 `veil-client` 提供時就是真的控制台。
 
 想讓程式走通道，把它的代理指向 `127.0.0.1:1080`：
 
@@ -359,6 +381,7 @@ make release    # 交叉編譯 linux/darwin/windows × amd64/arm64
 ```
 cmd/veil-server        伺服器進入點
 cmd/veil-client        客戶端進入點
+cmd/veil-decoy         最小誘餌站（本機測試用；正式部署請用真的網站）
 internal/protocol      線路格式：認證、請求標頭、資料包框架
 internal/server        TLS 終結、認證、fallback、轉發
 internal/client        撥號、uTLS 指紋、憑證釘選、分流
