@@ -121,14 +121,14 @@ html, body {
 .progress { width: 70px; height: 12px; background: rgba(0,0,0,.4); border-radius: 2px; }
 .progress i { display: block; height: 100%; background: linear-gradient(90deg,#cfcfd8,#fff); border-radius: 2px; }
 
-.menu { min-width: 340px; display: flex; flex-direction: column; gap: 8px; text-align: center; }
-.menu button {
+.panel.menu { min-width: 340px; display: flex; flex-direction: column; gap: 8px; text-align: center; }
+.panel.menu button {
   font: inherit; font-size: 15px; padding: 10px 16px; border-radius: 5px; cursor: pointer;
   background: #4a4a58; color: #fff; border: 2px solid #1c1c22;
 }
-.menu button:hover { background: #5c5c6e; }
-.menu .controls { margin-top: 10px; font-size: 12px; line-height: 1.8; opacity: .8; text-align: left; }
-.menu.death .panel-title { color: #ff6a6a; }
+.panel.menu button:hover { background: #5c5c6e; }
+.panel.menu .controls { margin-top: 10px; font-size: 12px; line-height: 1.8; opacity: .8; text-align: left; }
+.panel.menu.death .panel-title { color: #ff6a6a; }
 
 #cursorItem { position: absolute; transform: translate(-50%,-50%); z-index: 50; pointer-events: none; }
 
@@ -139,6 +139,52 @@ html, body {
 #loading .logo { font-size: 40px; font-weight: 800; letter-spacing: .3em; }
 #loading .sub { font-size: 14px; opacity: .6; }
 #loading .err { color: #ff8080; font-family: monospace; padding: 20px; text-align: center; }
+
+/* --- touch controls (tablets / phones) --- */
+body.touch { touch-action: none; overscroll-behavior: none; -webkit-user-select: none; }
+body.touch #gl { cursor: default; touch-action: none; }
+
+#touchUI { position: absolute; inset: 0; pointer-events: none; }
+#touchUI .stick {
+  position: absolute; width: 132px; height: 132px; margin: -66px 0 0 -66px;
+  border-radius: 50%; border: 2px solid rgba(255,255,255,.28); background: rgba(0,0,0,.20);
+  opacity: 0; transition: opacity .12s;
+}
+#touchUI .stick.active { opacity: 1; }
+#touchUI .stick i {
+  position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%;
+  background: rgba(255,255,255,.42); box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.tbtn {
+  position: absolute; pointer-events: auto; font: inherit; font-size: 17px; color: #fff;
+  background: rgba(20,22,28,.5); border: 2px solid rgba(255,255,255,.3); border-radius: 50%;
+  width: 68px; height: 68px; display: none; align-items: center; justify-content: center;
+  backdrop-filter: blur(3px); -webkit-tap-highlight-color: transparent;
+}
+.tbtn:active { background: rgba(255,255,255,.3); }
+body.touch .tbtn { display: flex; }
+.tbtn.jump { right: max(24px, env(safe-area-inset-right)); bottom: 152px; }
+.tbtn.sneak { right: max(108px, calc(env(safe-area-inset-right) + 84px)); bottom: 122px; width: 58px; height: 58px; }
+.tbtn.inv { right: max(24px, env(safe-area-inset-right)); bottom: 236px; width: 58px; height: 58px; font-size: 14px; }
+.tbtn.menu {
+  top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
+  width: 48px; height: 48px; font-size: 20px;
+}
+#touchUI .thint {
+  position: absolute; left: 50%; bottom: 108px; transform: translateX(-50%);
+  font-size: 13px; background: rgba(0,0,0,.45); padding: 6px 14px; border-radius: 20px;
+  white-space: nowrap; transition: opacity .6s;
+}
+#touchUI .thint.gone { opacity: 0; }
+
+/* Bigger touch targets and no hover-only affordances on tablets */
+body.touch .slot.hot { width: 54px; height: 54px; }
+body.touch .slot.hot .icon { transform: scale(1.18); }
+body.touch #hud { bottom: max(14px, env(safe-area-inset-bottom)); }
+body.touch #crosshair { opacity: .8; }
+body.touch .panel { padding: 14px; }
+body.touch .hint { font-size: 13px; }
+body.touch .panel.menu button { padding: 14px 18px; }
 </style>
 <canvas id="gl"></canvas>
   <div id="ui"></div>
@@ -3844,7 +3890,7 @@ class Renderer {
   }
 
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, this.maxDpr || 2);
     const w = Math.floor(this.canvas.clientWidth * dpr);
     const h = Math.floor(this.canvas.clientHeight * dpr);
     if (this.canvas.width !== w || this.canvas.height !== h) {
@@ -4448,7 +4494,7 @@ class UI {
       s.className = 'slot hot';
       s.dataset.index = i;
       s.innerHTML = '<div class="icon"></div><span class="count"></span><div class="durability"><i></i></div>';
-      s.addEventListener('mousedown', (e) => {
+      s.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         this.game.player.inventory.selected = i;
         this.showHeldLabel();
@@ -4651,7 +4697,9 @@ class UI {
       <div class="sub">物品欄</div>
       <div class="grid inv" style="grid-template-columns:repeat(9,44px)">${main}</div>
       <div class="grid inv hotrow" style="grid-template-columns:repeat(9,44px)">${hot}</div>
-      <div class="hint">左鍵拿取／放下 · 右鍵取半／放一個 · E 或 Esc 關閉</div>
+      <div class="hint">${this.game.touch
+        ? '點一下拿取／放下物品 · 點右側「可合成」清單可直接製作 · 按「合成」鈕關閉'
+        : '左鍵拿取／放下 · 右鍵取半／放一個 · E 或 Esc 關閉'}</div>
     </div>`;
   }
 
@@ -4691,9 +4739,14 @@ class UI {
       <button data-action="newworld">新世界</button>
       <div class="controls">
         <b>操作</b>
+        ${this.game.touch ? `
+        <div>左半邊拖曳 = 移動（推到底＝疾跑）· 右半邊拖曳 = 環顧四周</div>
+        <div>長按畫面 = 挖掘／攻擊 · 輕點畫面 = 放置方塊、開工作台或熔爐</div>
+        <div>▲ 跳躍（創造模式連點兩下＝飛行）· ▼ 潛行／下降 · 合成 = 物品欄</div>
+        <div>點下方快捷欄可切換手持物品</div>` : `
         <div>WASD 移動 · 空白鍵 跳躍 · Shift 潛行 · Ctrl 疾跑</div>
         <div>滑鼠左鍵 挖掘／攻擊 · 右鍵 放置／使用 · 滾輪 或 1-9 切換物品</div>
-        <div>E 物品欄 · F 食用 · Q 丟棄 · F3 除錯資訊 · 雙擊空白鍵 飛行（創造）</div>
+        <div>E 物品欄 · F 食用 · Q 丟棄 · F3 除錯資訊 · 雙擊空白鍵 飛行（創造）</div>`}
       </div>
     </div>`;
   }
@@ -4711,13 +4764,13 @@ class UI {
       b.addEventListener('click', () => this.game.menuAction(b.dataset.action));
     });
     el.querySelectorAll('.recipe').forEach((r) => {
-      r.addEventListener('mousedown', (e) => {
+      r.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         this.craftFromBook(+r.dataset.recipe, e.shiftKey ? 8 : 1);
       });
     });
     el.querySelectorAll('.slot[data-kind]').forEach((s) => {
-      s.addEventListener('mousedown', (e) => {
+      s.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         this.slotClick(s.dataset.kind, +s.dataset.index, e.button, e.shiftKey);
       });
@@ -4900,6 +4953,181 @@ function tickFurnace(f, dt) {
 return { tickFurnace, UI };
 };
 
+__mods['touch.js'] = function () {
+// Touch controls for tablets and phones: floating movement stick on the left,
+// drag-to-look on the right, hold to mine, tap to place.
+
+const TAP_MS = 190;        // shorter than this (and barely moved) counts as a tap
+const TAP_SLOP = 14;       // pixels of movement still considered a tap
+const STICK_RADIUS = 52;
+
+function isTouchDevice() {
+  const forced = new URLSearchParams(location.search).get('touch');
+  if (forced === '1') return true;
+  if (forced === '0') return false;
+  const hasTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  if (!hasTouch) return false;
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+  // iPadOS reports itself as a Mac; a paired trackpad makes the pointer "fine",
+  // but the on-screen controls are still the right call there.
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return coarse || ios;
+}
+
+class TouchControls {
+  constructor(game) {
+    this.game = game;
+    this.moveId = null;
+    this.lookId = null;
+    this.lastJump = 0;
+    this.build();
+    this.bind();
+  }
+
+  build() {
+    const root = document.createElement('div');
+    root.id = 'touchUI';
+    root.innerHTML = `
+      <div class="stick"><i></i></div>
+      <button class="tbtn jump" aria-label="跳躍">▲</button>
+      <button class="tbtn sneak" aria-label="潛行／下降">▼</button>
+      <button class="tbtn inv" aria-label="物品欄">合成</button>
+      <button class="tbtn menu" aria-label="選單">☰</button>
+      <div class="thint">左側拖曳＝移動　右側拖曳＝環顧　長按＝挖掘　輕點＝放置</div>
+    `;
+    document.getElementById('ui').appendChild(root);
+    this.root = root;
+    this.stick = root.querySelector('.stick');
+    this.knob = root.querySelector('.stick i');
+    setTimeout(() => root.querySelector('.thint').classList.add('gone'), 9000);
+
+    const hold = (sel, on, off) => {
+      const el = root.querySelector(sel);
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); on(); }, { passive: false });
+      for (const ev of ['touchend', 'touchcancel']) {
+        el.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); off && off(); }, { passive: false });
+      }
+    };
+    hold('.jump', () => {
+      this.game.input.jump = true;
+      const now = performance.now();
+      if (now - this.lastJump < 340 && this.game.player.mode === 'creative') {
+        this.game.player.flying = !this.game.player.flying;
+        this.game.player.vel.y = 0;
+      }
+      this.lastJump = now;
+    }, () => { this.game.input.jump = false; });
+    hold('.sneak', () => { this.game.input.sneak = true; }, () => { this.game.input.sneak = false; });
+    hold('.inv', () => {
+      const ui = this.game.ui;
+      if (ui.screen) ui.close(); else ui.open('inventory');
+    });
+    hold('.menu', () => {
+      const ui = this.game.ui;
+      if (ui.screen) ui.close(); else ui.open('pause');
+    });
+  }
+
+  bind() {
+    const canvas = this.game.canvas;
+    const opts = { passive: false };
+    canvas.addEventListener('touchstart', (e) => this.onStart(e), opts);
+    canvas.addEventListener('touchmove', (e) => this.onMove(e), opts);
+    canvas.addEventListener('touchend', (e) => this.onEnd(e), opts);
+    canvas.addEventListener('touchcancel', (e) => this.onEnd(e), opts);
+    // Stop the page itself from scrolling or zooming under the game.
+    document.addEventListener('touchmove', (e) => {
+      if (!this.game.ui.screen) e.preventDefault();
+    }, opts);
+    document.addEventListener('gesturestart', (e) => e.preventDefault(), opts);
+  }
+
+  onStart(e) {
+    e.preventDefault();
+    this.game.sound.ensure();
+    if (this.game.ui.screen) return;
+    const split = window.innerWidth * 0.44;
+    for (const t of e.changedTouches) {
+      if (t.clientX < split && this.moveId === null) {
+        this.moveId = t.identifier;
+        this.moveOrigin = { x: t.clientX, y: t.clientY };
+        this.stick.classList.add('active');
+        this.stick.style.left = t.clientX + 'px';
+        this.stick.style.top = t.clientY + 'px';
+        this.knob.style.transform = 'translate(-50%,-50%)';
+      } else if (this.lookId === null) {
+        this.lookId = t.identifier;
+        this.lookStart = { x: t.clientX, y: t.clientY, t: performance.now() };
+        this.lookLast = { x: t.clientX, y: t.clientY };
+        this.lookMoved = 0;
+        this.mineTimer = setTimeout(() => {
+          this.game.input.mine = true;
+          this.game.onAttack();
+        }, TAP_MS);
+      }
+    }
+  }
+
+  onMove(e) {
+    e.preventDefault();
+    if (this.game.ui.screen) return;
+    for (const t of e.changedTouches) {
+      if (t.identifier === this.moveId) {
+        const dx = t.clientX - this.moveOrigin.x;
+        const dy = t.clientY - this.moveOrigin.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const clamp = Math.min(d, STICK_RADIUS) / d;
+        this.knob.style.transform =
+          `translate(calc(-50% + ${dx * clamp}px), calc(-50% + ${dy * clamp}px))`;
+        const nx = dx / STICK_RADIUS, ny = dy / STICK_RADIUS;
+        const dead = 0.22;
+        const i = this.game.input;
+        i.forward = ny < -dead;
+        i.back = ny > dead;
+        i.left = nx < -dead;
+        i.right = nx > dead;
+        i.sprint = Math.hypot(nx, ny) > 0.92;
+      } else if (t.identifier === this.lookId) {
+        const dx = t.clientX - this.lookLast.x;
+        const dy = t.clientY - this.lookLast.y;
+        this.lookLast = { x: t.clientX, y: t.clientY };
+        this.lookMoved += Math.hypot(dx, dy);
+        const s = 0.0055;
+        const p = this.game.player;
+        p.yaw -= dx * s;
+        p.pitch -= dy * s;
+        const lim = Math.PI / 2 - 0.001;
+        p.pitch = Math.max(-lim, Math.min(lim, p.pitch));
+      }
+    }
+  }
+
+  onEnd(e) {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier === this.moveId) {
+        this.moveId = null;
+        this.stick.classList.remove('active');
+        const i = this.game.input;
+        i.forward = i.back = i.left = i.right = i.sprint = false;
+      } else if (t.identifier === this.lookId) {
+        this.lookId = null;
+        clearTimeout(this.mineTimer);
+        const quick = performance.now() - this.lookStart.t < TAP_MS;
+        if (quick && this.lookMoved < TAP_SLOP && !this.game.ui.screen) {
+          this.game.onUse();
+        }
+        this.game.input.mine = false;
+        this.game.player.breakProgress = 0;
+      }
+    }
+  }
+}
+
+return { isTouchDevice, TouchControls };
+};
+
 __mods['main.js'] = function () {
 // Game bootstrap: input, main loop, saving and glue between systems.
 
@@ -4911,6 +5139,7 @@ const { Renderer } = __req('renderer.js');
 const { UI, tickFurnace } = __req('ui.js');
 const { Mob, ItemEntity, trySpawn, despawnFar } = __req('entities.js');
 const { Furnace, stack } = __req('inventory.js');
+const { TouchControls, isTouchDevice } = __req('touch.js');
 
 const SAVE_KEY = 'voxelcraft.save.v1';
 
@@ -5053,14 +5282,26 @@ class Game {
       this.player.inventory.add(stack(B.TORCH, 8));
     }
     this.ui = new UI(this, this.atlas.canvas);
+    this.touch = isTouchDevice();
+    if (this.touch) {
+      document.body.classList.add('touch');
+      this.renderer.renderDistance = 5;      // tablets have far less fill rate
+      this.renderer.maxDpr = 1.25;
+      this.renderer.meshBudgetMs = 4;
+      this.touchControls = new TouchControls(this);
+    }
     this.world.updateChunks(this.player.pos.x, this.player.pos.z, 3, 64);
     this.bindInput();
-    this.ui.toast('點擊畫面開始遊玩 · WASD 移動 · E 開物品欄');
-    // Embedded frames often disallow pointer lock; say so instead of leaving
-    // the player wondering why the mouse does nothing.
-    setTimeout(() => {
-      if (!this.locked) this.ui.toast('若滑鼠無法轉視角：按住左鍵拖曳畫面即可環顧四周');
-    }, 4000);
+    if (this.touch) {
+      this.ui.toast('左側拖曳移動 · 右側拖曳環顧 · 長按挖掘 · 輕點放置');
+    } else {
+      this.ui.toast('點擊畫面開始遊玩 · WASD 移動 · E 開物品欄');
+      // Embedded frames often disallow pointer lock; say so instead of leaving
+      // the player wondering why the mouse does nothing.
+      setTimeout(() => {
+        if (!this.locked) this.ui.toast('若滑鼠無法轉視角：按住左鍵拖曳畫面即可環顧四周');
+      }, 4000);
+    }
     this.lastTime = performance.now();
     requestAnimationFrame(this.loop);
   }
@@ -5068,7 +5309,7 @@ class Game {
   bindInput() {
     const canvas = this.canvas;
     canvas.addEventListener('click', () => {
-      if (!this.ui.screen) this.lockPointer();
+      if (!this.ui.screen && !this.touch) this.lockPointer();
       this.sound.ensure();
     });
     // Pointer lock is unavailable in some embedded frames; fall back to
@@ -5079,6 +5320,7 @@ class Game {
       if (!this.locked && !this.lockBlocked && !this.ui.screen) this.ui.open('pause');
     });
     document.addEventListener('mousemove', (e) => {
+      if (this.touch) return;
       if (!this.locked && !(this.dragging && !this.ui.screen)) return;
       const s = 0.0022;
       let mx = e.movementX, my = e.movementY;
@@ -5093,7 +5335,7 @@ class Game {
       this.player.pitch = Math.max(-lim, Math.min(lim, this.player.pitch));
     });
     document.addEventListener('mousedown', (e) => {
-      if (this.ui.screen) return;
+      if (this.touch || this.ui.screen) return;
       if (!this.locked) {
         if (e.target !== canvas) return;
         this.dragging = true;
@@ -5103,6 +5345,7 @@ class Game {
       if (e.button === 2) { this.input.use = true; this.onUse(); }
     });
     document.addEventListener('mouseup', (e) => {
+      if (this.touch) return;
       this.dragging = false;
       this.lastMouse = null;
       if (e.button === 0) { this.input.mine = false; this.player.breakProgress = 0; }

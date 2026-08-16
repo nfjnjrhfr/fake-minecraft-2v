@@ -8,6 +8,7 @@ import { Renderer } from './renderer.js';
 import { UI, tickFurnace } from './ui.js';
 import { Mob, ItemEntity, trySpawn, despawnFar } from './entities.js';
 import { Furnace, stack } from './inventory.js';
+import { TouchControls, isTouchDevice } from './touch.js';
 
 const SAVE_KEY = 'voxelcraft.save.v1';
 
@@ -150,14 +151,26 @@ class Game {
       this.player.inventory.add(stack(B.TORCH, 8));
     }
     this.ui = new UI(this, this.atlas.canvas);
+    this.touch = isTouchDevice();
+    if (this.touch) {
+      document.body.classList.add('touch');
+      this.renderer.renderDistance = 5;      // tablets have far less fill rate
+      this.renderer.maxDpr = 1.25;
+      this.renderer.meshBudgetMs = 4;
+      this.touchControls = new TouchControls(this);
+    }
     this.world.updateChunks(this.player.pos.x, this.player.pos.z, 3, 64);
     this.bindInput();
-    this.ui.toast('點擊畫面開始遊玩 · WASD 移動 · E 開物品欄');
-    // Embedded frames often disallow pointer lock; say so instead of leaving
-    // the player wondering why the mouse does nothing.
-    setTimeout(() => {
-      if (!this.locked) this.ui.toast('若滑鼠無法轉視角：按住左鍵拖曳畫面即可環顧四周');
-    }, 4000);
+    if (this.touch) {
+      this.ui.toast('左側拖曳移動 · 右側拖曳環顧 · 長按挖掘 · 輕點放置');
+    } else {
+      this.ui.toast('點擊畫面開始遊玩 · WASD 移動 · E 開物品欄');
+      // Embedded frames often disallow pointer lock; say so instead of leaving
+      // the player wondering why the mouse does nothing.
+      setTimeout(() => {
+        if (!this.locked) this.ui.toast('若滑鼠無法轉視角：按住左鍵拖曳畫面即可環顧四周');
+      }, 4000);
+    }
     this.lastTime = performance.now();
     requestAnimationFrame(this.loop);
   }
@@ -165,7 +178,7 @@ class Game {
   bindInput() {
     const canvas = this.canvas;
     canvas.addEventListener('click', () => {
-      if (!this.ui.screen) this.lockPointer();
+      if (!this.ui.screen && !this.touch) this.lockPointer();
       this.sound.ensure();
     });
     // Pointer lock is unavailable in some embedded frames; fall back to
@@ -176,6 +189,7 @@ class Game {
       if (!this.locked && !this.lockBlocked && !this.ui.screen) this.ui.open('pause');
     });
     document.addEventListener('mousemove', (e) => {
+      if (this.touch) return;
       if (!this.locked && !(this.dragging && !this.ui.screen)) return;
       const s = 0.0022;
       let mx = e.movementX, my = e.movementY;
@@ -190,7 +204,7 @@ class Game {
       this.player.pitch = Math.max(-lim, Math.min(lim, this.player.pitch));
     });
     document.addEventListener('mousedown', (e) => {
-      if (this.ui.screen) return;
+      if (this.touch || this.ui.screen) return;
       if (!this.locked) {
         if (e.target !== canvas) return;
         this.dragging = true;
@@ -200,6 +214,7 @@ class Game {
       if (e.button === 2) { this.input.use = true; this.onUse(); }
     });
     document.addEventListener('mouseup', (e) => {
+      if (this.touch) return;
       this.dragging = false;
       this.lastMouse = null;
       if (e.button === 0) { this.input.mine = false; this.player.breakProgress = 0; }

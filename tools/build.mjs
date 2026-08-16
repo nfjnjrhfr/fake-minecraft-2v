@@ -102,7 +102,7 @@ writeFileSync(resolve(ROOT, 'dist/voxel-world.html'),
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 ${fragment.split('\n').slice(0, 1).join('')}
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2360a03e'/><rect y='6' width='16' height='10' fill='%23866044'/></svg>">
 <style>

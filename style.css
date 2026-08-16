@@ -119,14 +119,14 @@ html, body {
 .progress { width: 70px; height: 12px; background: rgba(0,0,0,.4); border-radius: 2px; }
 .progress i { display: block; height: 100%; background: linear-gradient(90deg,#cfcfd8,#fff); border-radius: 2px; }
 
-.menu { min-width: 340px; display: flex; flex-direction: column; gap: 8px; text-align: center; }
-.menu button {
+.panel.menu { min-width: 340px; display: flex; flex-direction: column; gap: 8px; text-align: center; }
+.panel.menu button {
   font: inherit; font-size: 15px; padding: 10px 16px; border-radius: 5px; cursor: pointer;
   background: #4a4a58; color: #fff; border: 2px solid #1c1c22;
 }
-.menu button:hover { background: #5c5c6e; }
-.menu .controls { margin-top: 10px; font-size: 12px; line-height: 1.8; opacity: .8; text-align: left; }
-.menu.death .panel-title { color: #ff6a6a; }
+.panel.menu button:hover { background: #5c5c6e; }
+.panel.menu .controls { margin-top: 10px; font-size: 12px; line-height: 1.8; opacity: .8; text-align: left; }
+.panel.menu.death .panel-title { color: #ff6a6a; }
 
 #cursorItem { position: absolute; transform: translate(-50%,-50%); z-index: 50; pointer-events: none; }
 
@@ -137,3 +137,49 @@ html, body {
 #loading .logo { font-size: 40px; font-weight: 800; letter-spacing: .3em; }
 #loading .sub { font-size: 14px; opacity: .6; }
 #loading .err { color: #ff8080; font-family: monospace; padding: 20px; text-align: center; }
+
+/* --- touch controls (tablets / phones) --- */
+body.touch { touch-action: none; overscroll-behavior: none; -webkit-user-select: none; }
+body.touch #gl { cursor: default; touch-action: none; }
+
+#touchUI { position: absolute; inset: 0; pointer-events: none; }
+#touchUI .stick {
+  position: absolute; width: 132px; height: 132px; margin: -66px 0 0 -66px;
+  border-radius: 50%; border: 2px solid rgba(255,255,255,.28); background: rgba(0,0,0,.20);
+  opacity: 0; transition: opacity .12s;
+}
+#touchUI .stick.active { opacity: 1; }
+#touchUI .stick i {
+  position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%;
+  background: rgba(255,255,255,.42); box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.tbtn {
+  position: absolute; pointer-events: auto; font: inherit; font-size: 17px; color: #fff;
+  background: rgba(20,22,28,.5); border: 2px solid rgba(255,255,255,.3); border-radius: 50%;
+  width: 68px; height: 68px; display: none; align-items: center; justify-content: center;
+  backdrop-filter: blur(3px); -webkit-tap-highlight-color: transparent;
+}
+.tbtn:active { background: rgba(255,255,255,.3); }
+body.touch .tbtn { display: flex; }
+.tbtn.jump { right: max(24px, env(safe-area-inset-right)); bottom: 152px; }
+.tbtn.sneak { right: max(108px, calc(env(safe-area-inset-right) + 84px)); bottom: 122px; width: 58px; height: 58px; }
+.tbtn.inv { right: max(24px, env(safe-area-inset-right)); bottom: 236px; width: 58px; height: 58px; font-size: 14px; }
+.tbtn.menu {
+  top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
+  width: 48px; height: 48px; font-size: 20px;
+}
+#touchUI .thint {
+  position: absolute; left: 50%; bottom: 108px; transform: translateX(-50%);
+  font-size: 13px; background: rgba(0,0,0,.45); padding: 6px 14px; border-radius: 20px;
+  white-space: nowrap; transition: opacity .6s;
+}
+#touchUI .thint.gone { opacity: 0; }
+
+/* Bigger touch targets and no hover-only affordances on tablets */
+body.touch .slot.hot { width: 54px; height: 54px; }
+body.touch .slot.hot .icon { transform: scale(1.18); }
+body.touch #hud { bottom: max(14px, env(safe-area-inset-bottom)); }
+body.touch #crosshair { opacity: .8; }
+body.touch .panel { padding: 14px; }
+body.touch .hint { font-size: 13px; }
+body.touch .panel.menu button { padding: 14px 18px; }

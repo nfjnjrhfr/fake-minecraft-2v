@@ -59,7 +59,7 @@ export class UI {
       s.className = 'slot hot';
       s.dataset.index = i;
       s.innerHTML = '<div class="icon"></div><span class="count"></span><div class="durability"><i></i></div>';
-      s.addEventListener('mousedown', (e) => {
+      s.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         this.game.player.inventory.selected = i;
         this.showHeldLabel();
@@ -262,7 +262,9 @@ export class UI {
       <div class="sub">物品欄</div>
       <div class="grid inv" style="grid-template-columns:repeat(9,44px)">${main}</div>
       <div class="grid inv hotrow" style="grid-template-columns:repeat(9,44px)">${hot}</div>
-      <div class="hint">左鍵拿取／放下 · 右鍵取半／放一個 · E 或 Esc 關閉</div>
+      <div class="hint">${this.game.touch
+        ? '點一下拿取／放下物品 · 點右側「可合成」清單可直接製作 · 按「合成」鈕關閉'
+        : '左鍵拿取／放下 · 右鍵取半／放一個 · E 或 Esc 關閉'}</div>
     </div>`;
   }
 
@@ -302,9 +304,14 @@ export class UI {
       <button data-action="newworld">新世界</button>
       <div class="controls">
         <b>操作</b>
+        ${this.game.touch ? `
+        <div>左半邊拖曳 = 移動（推到底＝疾跑）· 右半邊拖曳 = 環顧四周</div>
+        <div>長按畫面 = 挖掘／攻擊 · 輕點畫面 = 放置方塊、開工作台或熔爐</div>
+        <div>▲ 跳躍（創造模式連點兩下＝飛行）· ▼ 潛行／下降 · 合成 = 物品欄</div>
+        <div>點下方快捷欄可切換手持物品</div>` : `
         <div>WASD 移動 · 空白鍵 跳躍 · Shift 潛行 · Ctrl 疾跑</div>
         <div>滑鼠左鍵 挖掘／攻擊 · 右鍵 放置／使用 · 滾輪 或 1-9 切換物品</div>
-        <div>E 物品欄 · F 食用 · Q 丟棄 · F3 除錯資訊 · 雙擊空白鍵 飛行（創造）</div>
+        <div>E 物品欄 · F 食用 · Q 丟棄 · F3 除錯資訊 · 雙擊空白鍵 飛行（創造）</div>`}
       </div>
     </div>`;
   }
@@ -322,13 +329,13 @@ export class UI {
       b.addEventListener('click', () => this.game.menuAction(b.dataset.action));
     });
     el.querySelectorAll('.recipe').forEach((r) => {
-      r.addEventListener('mousedown', (e) => {
+      r.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         this.craftFromBook(+r.dataset.recipe, e.shiftKey ? 8 : 1);
       });
     });
     el.querySelectorAll('.slot[data-kind]').forEach((s) => {
-      s.addEventListener('mousedown', (e) => {
+      s.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         this.slotClick(s.dataset.kind, +s.dataset.index, e.button, e.shiftKey);
       });
