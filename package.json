@@ -1,0 +1,10 @@
+{
+  "name": "voxel-world",
+  "version": "1.0.0",
+  "description": "A playable voxel sandbox game in vanilla JavaScript + WebGL2",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8000"
+  },
+  "license": "MIT"
+}

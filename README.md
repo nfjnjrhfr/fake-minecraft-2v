@@ -1,2 +1,95 @@
-# fake-minecraft-2v
-u8ujujujujujujujujujuujuujujujujuujujujujujjujjujujujuujjunjerivcfv dnds xdfbdehbhebhbdehbhbhrhbehebhderbhrvrdfgvfrfrevefvfegfhdevegdervgedryegehwrwehgerhwhrbhdbhdbdhbedbdiuheiuhur4ury4yeeyurheu4u44uyy56t4rueyrjdhjddbhdjebbhjejbhdwehjhejrhjedhjdjdndejndjnsdsjndsjndsjkkd.                                                                             67
+# 方塊世界 (Voxel World)
+
+一個**真正能玩**的方塊沙盒遊戲：純 JavaScript + WebGL2，從零手寫的體素引擎，
+沒有任何外部函式庫、沒有任何圖片檔（所有材質都是程式在載入時逐像素生成的）。
+
+> 這是原創實作，並非 Minecraft 的複製或反編譯版本，與 Mojang / Microsoft 無關。
+> 玩法概念屬於同類型沙盒遊戲，程式碼、材質、音效全部是本專案自行產生的。
+
+## 執行方式
+
+需要用 HTTP 提供檔案（ES 模組不能用 `file://` 開啟）：
+
+```bash
+python3 -m http.server 8000
+# 然後開啟 http://localhost:8000
+```
+
+或：
+
+```bash
+npx serve .
+```
+
+指定世界種子：`http://localhost:8000/?seed=hello`
+
+## 操作
+
+| 按鍵 | 功能 |
+| --- | --- |
+| `W` `A` `S` `D` | 移動 |
+| 滑鼠 | 視角（點擊畫面鎖定游標） |
+| 空白鍵 | 跳躍／游泳上浮；創造模式連按兩下＝飛行 |
+| `Shift` | 潛行（不會走下方塊邊緣）／飛行下降 |
+| `Ctrl` | 疾跑 |
+| 滑鼠左鍵 | 挖掘（長按）／攻擊生物 |
+| 滑鼠右鍵 | 放置方塊／使用工作台、熔爐／進食 |
+| `1`–`9`、滾輪 | 切換快捷欄 |
+| `E` | 物品欄（含 2×2 合成與配方書） |
+| `F` | 吃手上的食物 · `Q` 丟棄 |
+| `F3` | 除錯資訊 · `Esc` 暫停選單（切換生存／創造、存檔） |
+
+## 已實作的內容
+
+**世界生成**
+- 無限地形串流（以區塊為單位動態載入／卸載），高度 128
+- 大陸、丘陵、山脈脊線疊加噪聲；海洋、沙灘、平原、森林、沙漠、山地、雪原共 7 種生態域
+- 3D 噪聲洞穴系統（蟲洞式隧道 + 深層空腔）、依深度分佈的煤／鐵／金／鑽石礦脈
+- 橡樹、雲杉、仙人掌、花草等裝飾，且能跨區塊邊界正確生成
+- 世界種子可指定，同一種子永遠產生同一個世界
+
+**渲染**
+- 自製區塊網格化器：面剔除、環境光遮蔽（AO）、平滑光照插值、透明／不透明分離
+- 泛光式光照引擎：天空光垂直直射 + 六向 BFS 擴散、方塊光（火把 14、螢石 15），破壞／放置時做正確的移除與回填傳播
+- 程序化天空：日夜循環（約 20 分鐘一天）、太陽月亮、星空、體積感雲層、依時間變化的霧色
+- 水面下色調、視錐剔除、每幀網格重建預算控制
+
+**玩法**
+- 生存模式：生命、飢餓、飽和度、氧氣、摔落傷害、溺水、仙人掌傷害、自然回血
+- 依方塊硬度與工具等級計算的挖掘時間（沿用經典公式），破壞裂痕動畫
+- 掉落物實體、拾取、堆疊；工具耐久度與損壞
+- 合成：2×2 隨身合成 + 3×3 工作台，形狀／無序配方，並附「可合成清單」一鍵製作
+- 熔爐：燃料、燃燒進度、冶煉進度，運作時方塊會變成點燃狀態並發光
+- 生物：豬、牛、羊、雞（被動遊蕩）與殭屍、骷髏（夜晚生成、追擊玩家、白天日照燃燒），有走路動畫與掉落物
+- 重力方塊（沙、沙礫）、樹葉掉落樹苗、草地蔓延、樹苗長成樹
+- 自動存檔至 localStorage（只記錄玩家改動過的方塊，所以存檔很小）
+
+**其他**
+- 所有材質（方塊、工具圖示、破壞裂痕）都是程式生成的 16×16 像素圖
+- 所有音效由 WebAudio 即時合成（挖掘、放置、腳步、受傷、拾取）
+
+## 程式結構
+
+```
+index.html          入口
+style.css           HUD / 介面樣式
+src/
+  main.js           啟動、輸入、主迴圈、存檔、音效、粒子
+  world.js          區塊儲存、方塊存取、光照引擎、串流、排程更新
+  worldgen.js       地形、生態域、洞穴、礦脈、植被
+  mesher.js         體素 → GPU 幾何（AO + 平滑光照）
+  renderer.js       WebGL2 渲染管線（天空／地形／生物／手持物）
+  blocks.js         方塊與物品登錄表、硬度、掉落、工具規則
+  player.js         移動、碰撞、生存數值、挖掘與放置
+  entities.js       生物模型／AI、掉落物實體、生成規則
+  inventory.js      物品堆疊、物品欄、熔爐狀態
+  recipes.js        合成與冶煉配方及比對器
+  ui.js             HUD、物品欄／工作台／熔爐介面
+  atlas.js          程序化材質圖集
+  gl.js             WebGL 輔助（著色器、緩衝區、材質）
+  math.js           矩陣、視錐
+  noise.js          種子亂數與 Perlin 噪聲
+  physics.js        AABB 與體素世界的碰撞
+```
+
+需要 WebGL2（Chrome / Edge / Firefox / Safari 15+）。
