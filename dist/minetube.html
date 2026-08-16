@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MineTube — 方塊世界影音平台</title>
+<title>MineTube</title>
 <meta name="description" content="MineTube：一個用純 HTML / CSS / JavaScript 做的仿 YouTube 影音平台示範，所有影片畫面都是即時運算產生的。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23ff0033'/%3E%3Cpath d='M13 10l10 6-10 6z' fill='%23fff'/%3E%3C/svg%3E">
 <style>
@@ -2511,7 +2511,14 @@ function route() {
 
 /* -------------------------------------------------------------------- boot */
 
-if (localStorage.getItem('mt:theme') === 'light') {
+// Saved choice wins; otherwise follow the host page / OS preference, falling
+// back to dark the way a video site normally does.
+const savedTheme = localStorage.getItem('mt:theme');
+const hostTheme = document.documentElement.dataset.theme;
+const prefersLight = hostTheme
+  ? hostTheme === 'light'
+  : window.matchMedia?.('(prefers-color-scheme: light)').matches;
+if (savedTheme ? savedTheme === 'light' : prefersLight) {
   document.documentElement.classList.add('light');
 }
 document.getElementById('theme-btn').innerHTML =

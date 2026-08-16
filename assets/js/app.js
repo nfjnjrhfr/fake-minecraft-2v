@@ -560,7 +560,14 @@ function route() {
 
 /* -------------------------------------------------------------------- boot */
 
-if (localStorage.getItem('mt:theme') === 'light') {
+// Saved choice wins; otherwise follow the host page / OS preference, falling
+// back to dark the way a video site normally does.
+const savedTheme = localStorage.getItem('mt:theme');
+const hostTheme = document.documentElement.dataset.theme;
+const prefersLight = hostTheme
+  ? hostTheme === 'light'
+  : window.matchMedia?.('(prefers-color-scheme: light)').matches;
+if (savedTheme ? savedTheme === 'light' : prefersLight) {
   document.documentElement.classList.add('light');
 }
 document.getElementById('theme-btn').innerHTML =
