@@ -3,6 +3,8 @@
    scrubbing, speed changes and looping all fall out for free. */
 
 import { drawScene } from './scene.js';
+import { scriptFor, BEATS } from './beats.js';
+import { playBeat, playFuse, playHurt, resumeAudio, setVolume } from './sfx.js';
 import { formatDuration, icon } from './util.js';
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -23,6 +25,8 @@ export class Player {
     this.theater = opts.theater || false;
     this._lastFrame = 0;
     this._hideTimer = 0;
+    this.script = scriptFor(video);
+    this._sfxTime = 0;
     this.root = root;
     this._build();
     this._bind();
@@ -116,6 +120,7 @@ export class Player {
       this.muted = this.volume === 0;
       localStorage.setItem('mt:volume', String(this.volume));
       localStorage.setItem('mt:muted', this.muted ? '1' : '0');
+      setVolume(this.muted ? 0 : this.volume);
       this._syncVolumeIcon();
     });
 
@@ -205,6 +210,7 @@ export class Player {
     this.muted = this.volume === 0;
     this.volSlider.value = this.volume;
     localStorage.setItem('mt:volume', String(this.volume));
+    setVolume(this.muted ? 0 : this.volume);
     this._syncVolumeIcon();
     this._toast(`音量 ${Math.round(this.volume * 100)}%`);
   }
@@ -279,7 +285,7 @@ export class Player {
     this.preview.hidden = false;
     this.preview.style.left = `${Math.max(84, Math.min(r.width - 84, p * r.width))}px`;
     this.previewLabel.textContent = formatDuration(t);
-    drawScene(this.previewCanvas.getContext('2d'), 160, 90, t, this.video.seed, this.video.style);
+    drawScene(this.previewCanvas.getContext('2d'), 160, 90, t, this.video.seed, this.video.style, { video: this.video });
   }
 
   _wake() {
@@ -310,7 +316,9 @@ export class Player {
     const dt = this._lastFrame ? (now - this._lastFrame) / 1000 : 0;
     this._lastFrame = now;
     if (this.playing) {
+      const prev = this.time;
       this.time += dt * this.speed;
+      this._fireSfx(prev, this.time);
       if (this.time >= this.duration) {
         this.time = this.duration;
         this.playing = false;
@@ -324,8 +332,28 @@ export class Player {
     this._raf = requestAnimationFrame(this._loop);
   }
 
+  /* Plays the sounds for any beat crossed since the last frame. Skipped when
+     the jump is large, so scrubbing doesn't dump every explosion at once. */
+  _fireSfx(prev, now) {
+    this._sfxTime = now;
+    if (this.muted || now - prev > 1.5 || now <= prev) return;
+    for (const b of this.script) {
+      const def = BEATS[b.kind];
+      if (!def) continue;
+      if (b.t > prev && b.t <= now) {
+        playBeat(b.kind);
+        if (def.damage) setTimeout(playHurt, 120);
+      }
+      if (b.kind === 'creeper') {
+        const fuse = b.t - 1.1;
+        if (fuse > prev && fuse <= now) playFuse();
+      }
+    }
+  }
+
   render() {
-    drawScene(this.ctx, this.canvas.width, this.canvas.height, this.time, this.video.seed, this.video.style);
+    drawScene(this.ctx, this.canvas.width, this.canvas.height, this.time,
+      this.video.seed, this.video.style, { video: this.video, hud: true });
   }
 
   _syncProgress() {
@@ -345,6 +373,9 @@ export class Player {
 
   play() {
     if (this.time >= this.duration) this.time = 0;
+    // the click that started playback is the gesture that unlocks audio
+    resumeAudio();
+    setVolume(this.muted ? 0 : this.volume);
     this.playing = true;
     this._syncPlayIcon();
     this._wake();
@@ -372,6 +403,7 @@ export class Player {
     if (!m && this.volume === 0) this.volume = 0.5;
     this.volSlider.value = m ? 0 : this.volume;
     localStorage.setItem('mt:muted', m ? '1' : '0');
+    setVolume(m ? 0 : this.volume);
     this._syncVolumeIcon();
     this._toast(m ? '靜音' : `音量 ${Math.round(this.volume * 100)}%`);
   }

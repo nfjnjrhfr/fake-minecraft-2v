@@ -2,6 +2,7 @@
 
 import { ALL, VIDEO_MAP, CHANNELS, CATEGORIES, commentsFor } from './data.js';
 import { drawThumbnail, drawScene } from './scene.js';
+import { peakTime } from './beats.js';
 import { Player } from './player.js';
 import {
   el, icon, formatViews, formatSubs, formatAgo, formatHours, formatDuration, formatCount, debounce,
@@ -174,9 +175,12 @@ function attachHoverPreview(card, canvas, video) {
     if (raf) return;
     card.classList.add('previewing');
     t0 = performance.now();
+    // start a few seconds before the headline moment, so the preview shows the
+    // build-up and then the thing itself
+    const from = Math.max(0, peakTime(video) - 3.5);
     const step = (now) => {
-      const t = 20 + (now - t0) / 1000;
-      drawScene(canvas.getContext('2d'), canvas.width, canvas.height, t, video.seed, video.style);
+      const t = from + (now - t0) / 1000;
+      drawScene(canvas.getContext('2d'), canvas.width, canvas.height, t, video.seed, video.style, { video });
       raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);

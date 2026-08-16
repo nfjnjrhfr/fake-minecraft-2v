@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
 
-const ORDER = ['rng.js', 'util.js', 'scene.js', 'data.js', 'player.js', 'app.js'];
+const ORDER = ['rng.js', 'blocks.js', 'util.js', 'beats.js', 'hud.js', 'sfx.js', 'scene.js', 'data.js', 'player.js', 'app.js'];
 
 const stripped = ORDER.map((f) => {
   const src = read(`assets/js/${f}`);

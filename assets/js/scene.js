@@ -4,38 +4,11 @@
    0:42 just draws frame t=42, no buffering, no video files in the repo. */
 
 import { makeRng, noise1d } from './rng.js';
+import { block, speckle, mixHex, clamp } from './blocks.js';
+import { scriptFor, stateAt, drawEvents, drawOverlays, peakTime } from './beats.js';
+import { drawHud } from './hud.js';
 
 const BLOCKS_ACROSS = 40;
-
-function lerp(a, b, t) { return a + (b - a) * t; }
-function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
-
-function mixHex(a, b, t) {
-  const pa = [parseInt(a.slice(1, 3), 16), parseInt(a.slice(3, 5), 16), parseInt(a.slice(5, 7), 16)];
-  const pb = [parseInt(b.slice(1, 3), 16), parseInt(b.slice(3, 5), 16), parseInt(b.slice(5, 7), 16)];
-  const out = pa.map((c, i) => Math.round(lerp(c, pb[i], clamp(t, 0, 1))));
-  return `rgb(${out[0]},${out[1]},${out[2]})`;
-}
-
-/* Blocks are drawn with a lighter top face and a darker right face so the flat
-   rectangles read as cubes without any real 3-D maths. */
-function block(ctx, x, y, s, color, shade = 0.18) {
-  ctx.fillStyle = color;
-  ctx.fillRect(x, y, s, s);
-  ctx.fillStyle = `rgba(255,255,255,${shade})`;
-  ctx.fillRect(x, y, s, Math.max(1, s * 0.18));
-  ctx.fillStyle = `rgba(0,0,0,${shade * 0.9})`;
-  ctx.fillRect(x + s - Math.max(1, s * 0.18), y, Math.max(1, s * 0.18), s);
-}
-
-function speckle(ctx, x, y, s, rng, color, n = 3) {
-  ctx.fillStyle = color;
-  for (let i = 0; i < n; i++) {
-    const px = x + Math.floor(rng() * 4) * (s / 4);
-    const py = y + Math.floor(rng() * 4) * (s / 4);
-    ctx.fillRect(px, py, s / 4, s / 4);
-  }
-}
 
 /* ---------------------------------------------------------------- overworld */
 
@@ -491,21 +464,43 @@ function ocean(ctx, w, h, t, seed) {
 
 export const SCENES = { overworld, nether, cave, redstone, build, ocean };
 
+/* Ground line per style, so explosions and mobs land on the surface the scene
+   actually drew rather than floating over it. */
+const GROUND = { overworld: 0.72, nether: 0.74, cave: 0.86, redstone: 0.6, build: 0.78, ocean: 0.88 };
+
 export function drawScene(ctx, w, h, t, seed, style, opts = {}) {
   const fn = SCENES[style] || overworld;
+  const time = Math.max(0, t);
+  const script = opts.video ? scriptFor(opts.video) : null;
+  const st = script ? stateAt(script, time, opts.video) : null;
+
   ctx.save();
-  fn(ctx, w, h, Math.max(0, t), seed, opts);
+  if (st && st.shake > 0.01) {
+    // camera kick, seeded off the time so it stays the same on replay
+    const k = st.shake * w * 0.012;
+    ctx.translate(Math.sin(time * 61) * k, Math.cos(time * 47) * k);
+  }
+  fn(ctx, w, h, time, seed, opts);
+  if (script) drawEvents(ctx, w, h, time, script, { ground: GROUND[style] ?? 0.72 });
   ctx.restore();
+
+  if (st) {
+    drawOverlays(ctx, w, h, st);
+    if (opts.hud) drawHud(ctx, w, h, time, opts.video, st);
+  }
 }
 
-/* Thumbnails are just frame 0-ish of the same scene, plus the big blocky
-   caption every Minecraft thumbnail on the internet seems to be legally
-   required to have. */
+/* Thumbnails freeze the clip on its headline moment — the frame with the
+   explosion in it — plus the big blocky caption every Minecraft thumbnail on
+   the internet seems to be legally required to have. */
 export function drawThumbnail(canvas, video) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
   const h = canvas.height;
-  drawScene(ctx, w, h, video.thumbTime ?? 12, video.seed, video.style, { static: false });
+  let t = video.thumbTime ?? peakTime(video) + 0.22;
+  // the castle assembles on a 30s cycle — land near the end of one
+  if (video.style === 'build') t = Math.floor(t / 30) * 30 + 22;
+  drawScene(ctx, w, h, t, video.seed, video.style, { video });
 
   if (video.overlay) {
     const fs = Math.round(h * 0.19);

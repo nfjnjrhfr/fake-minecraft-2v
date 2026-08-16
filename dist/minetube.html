@@ -712,6 +712,51 @@ function pick(rng, list) {
   return list[Math.floor(rng() * list.length) % list.length];
 }
 
+/* ==== blocks.js ==== */
+/* Shared blocky drawing primitives, used by the scenes, the event layer and
+   the HUD. Kept in its own module so those three can't form an import cycle. */
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+
+function mixHex(a, b, t) {
+  const pa = [parseInt(a.slice(1, 3), 16), parseInt(a.slice(3, 5), 16), parseInt(a.slice(5, 7), 16)];
+  const pb = [parseInt(b.slice(1, 3), 16), parseInt(b.slice(3, 5), 16), parseInt(b.slice(5, 7), 16)];
+  const out = pa.map((c, i) => Math.round(lerp(c, pb[i], clamp(t, 0, 1))));
+  return `rgb(${out[0]},${out[1]},${out[2]})`;
+}
+
+/* A lighter top face and a darker right face turn a flat rect into a cube. */
+function block(ctx, x, y, s, color, shade = 0.18) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, s, s);
+  ctx.fillStyle = `rgba(255,255,255,${shade})`;
+  ctx.fillRect(x, y, s, Math.max(1, s * 0.18));
+  ctx.fillStyle = `rgba(0,0,0,${shade * 0.9})`;
+  ctx.fillRect(x + s - Math.max(1, s * 0.18), y, Math.max(1, s * 0.18), s);
+}
+
+function speckle(ctx, x, y, s, rng, color, n = 3) {
+  ctx.fillStyle = color;
+  for (let i = 0; i < n; i++) {
+    const px = x + Math.floor(rng() * 4) * (s / 4);
+    const py = y + Math.floor(rng() * 4) * (s / 4);
+    ctx.fillRect(px, py, s / 4, s / 4);
+  }
+}
+
+/* Minecraft's UI is drawn with a hard drop shadow rather than an outline. */
+function shadowText(ctx, text, x, y, size, color = '#ffffff', align = 'left') {
+  ctx.font = `600 ${size}px "Segoe UI", system-ui, sans-serif`;
+  ctx.textAlign = align;
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  ctx.fillText(text, x + size * 0.09, y + size * 0.09);
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+}
+
 /* ==== util.js ==== */
 /* Formatting + the icon set. Icons are inline SVG paths so the page has zero
    network requests. */
@@ -828,6 +873,674 @@ function debounce(fn, ms) {
   };
 }
 
+/* ==== beats.js ==== */
+/* What turns a looping background into a clip you'd actually watch: a script
+   of timed events. Every beat is derived from the video's seed, so the same
+   video always plays the same way — scrubbing back to 12:04 shows the same
+   creeper going off — while different videos get different runs of luck. */
+
+
+
+/* damage is in half-hearts; heavy beats also shake the camera. */
+const BEATS = {
+  creeper:  { damage: 7, shake: 1.0, flash: 0.3, lead: 3.2, chat: '苦力怕從背後貼上來了', toast: null },
+  tnt:      { damage: 6, shake: 1.0, flash: 0.34, lead: 2.4, chat: 'TNT 點下去了', toast: null },
+  fireball: { damage: 5, shake: 0.8, flash: 0.28, lead: 1.4, chat: '地獄幽靈發射火球', toast: null },
+  lightning:{ damage: 0, shake: 0.55, flash: 0.7, lead: 0.6, chat: '雷打在旁邊那棵樹上', toast: null },
+  arrow:    { damage: 3, shake: 0.25, flash: 0, lead: 1.0, chat: '骷髏射過來了', toast: null },
+  lava:     { damage: 4, shake: 0.2, flash: 0.2, lead: 0.5, chat: '腳滑掉進岩漿', toast: null, tint: '#ff7a18' },
+  drown:    { damage: 2, shake: 0, flash: 0, lead: 0.5, chat: '氧氣快沒了', toast: null, tint: '#1b6fa8' },
+  ore:      { damage: 0, shake: 0.15, flash: 0, lead: 0.8, chat: null, toast: '挖到鑽石礦脈 ×3' },
+  treasure: { damage: 0, shake: 0, flash: 0.2, lead: 1.0, chat: null, toast: '寶箱：附魔金蘋果 ×1' },
+  place:    { damage: 0, shake: 0.1, flash: 0, lead: 0.6, chat: null, toast: null },
+  signal:   { damage: 0, shake: 0.2, flash: 0.25, lead: 1.2, chat: '訊號通了！', toast: '電路測試通過' },
+  levelup:  { damage: 0, shake: 0, flash: 0.15, lead: 0.4, chat: null, toast: null },
+};
+
+const STYLE_BEATS = {
+  overworld: ['creeper', 'lightning', 'arrow', 'ore', 'levelup', 'tnt', 'place'],
+  nether: ['fireball', 'lava', 'tnt', 'ore', 'levelup'],
+  cave: ['ore', 'creeper', 'arrow', 'levelup', 'lava'],
+  redstone: ['signal', 'place', 'tnt', 'levelup'],
+  build: ['place', 'levelup', 'lightning', 'ore'],
+  ocean: ['treasure', 'drown', 'ore', 'levelup'],
+};
+
+const CHAT_FILLER = [
+  '這個地形我從來沒看過',
+  '等一下，那邊有東西在動',
+  '先回去補一下裝備',
+  '我覺得這裡可以蓋個小屋',
+  '天要黑了，趕快',
+  '座標記一下，等等要回來',
+  '這波真的很險',
+  '好，冷靜，慢慢來',
+];
+
+const ACHIEVEMENTS = [
+  '進度已達成！ 挖得更深',
+  '進度已達成！ 鑽石！',
+  '進度已達成！ 熱力四射',
+  '進度已達成！ 這不是派對嗎',
+  '進度已達成！ 甜蜜的家',
+];
+
+const scripts = new Map();
+
+/* One beat every ~20-35s, plus a guaranteed headline moment placed where the
+   video's own description says the interesting thing happens. */
+function scriptFor(video) {
+  if (scripts.has(video.id)) return scripts.get(video.id);
+  const rng = makeRng(video.id + ':script');
+  const kinds = STYLE_BEATS[video.style] || STYLE_BEATS.overworld;
+  const out = [];
+
+  const peakAt = clamp((video.peak ?? 0.62) * video.duration, 8, video.duration - 6);
+  const peakKind = video.peakKind || kinds[0];
+  out.push({ t: peakAt, kind: peakKind, headline: true });
+
+  // a compilation ("爆炸 100 次") wants beats stacked much closer together
+  const gap = video.dense ? 7 : 18;
+  const spread = video.dense ? 9 : 26;
+  let t = 6 + rng() * 14;
+  while (t < video.duration - 5) {
+    if (Math.abs(t - peakAt) > 10) {
+      out.push({ t, kind: kinds[Math.floor(rng() * kinds.length)] });
+    }
+    t += gap + rng() * spread;
+  }
+  // chatter between the action so the clip is never silent for long
+  let c = 4 + rng() * 8;
+  while (c < video.duration - 4) {
+    out.push({ t: c, kind: 'chatter', text: CHAT_FILLER[Math.floor(rng() * CHAT_FILLER.length)] });
+    c += 12 + rng() * 22;
+  }
+
+  out.sort((a, b) => a.t - b.t);
+  out.forEach((b, i) => {
+    b.i = i;
+    b.rng = makeRng(`${video.id}:${i}`)();
+  });
+  scripts.set(video.id, out);
+  return out;
+}
+
+function peakTime(video) {
+  return scriptFor(video).find((b) => b.headline)?.t ?? video.duration * 0.5;
+}
+
+/* Everything the HUD and the overlays need, replayed from the start of the
+   clip so any seek lands on a consistent state. */
+function stateAt(script, t, video) {
+  let hearts = 20;          // half-hearts
+  let lastDamage = -99;
+  let level = 0;
+  let shake = 0;
+  let flash = 0;
+  let tint = null;
+  let tintAmount = 0;
+  const chat = [];
+  let toast = null;
+
+  for (const b of script) {
+    if (b.t > t) break;
+    const age = t - b.t;
+    if (b.kind === 'chatter') {
+      chat.push({ text: b.text, age });
+      continue;
+    }
+    const def = BEATS[b.kind];
+    if (!def) continue;
+
+    if (def.damage) {
+      // regen since the previous hit, then take the new one
+      hearts = Math.min(20, hearts + Math.max(0, (b.t - lastDamage - 4)) * 0.35);
+      hearts = Math.max(1, hearts - def.damage);
+      lastDamage = b.t;
+    }
+    if (b.kind === 'levelup' || b.kind === 'ore') level += b.kind === 'ore' ? 3 : 1;
+    if (def.chat) chat.push({ text: def.chat, age });
+    if (def.toast) toast = { text: def.toast, age };
+    if (b.kind === 'levelup') toast = { text: ACHIEVEMENTS[Math.floor(b.rng * ACHIEVEMENTS.length)], age };
+
+    if (age < 1.2) {
+      shake = Math.max(shake, def.shake * (1 - age / 1.2));
+      flash = Math.max(flash, def.flash * Math.max(0, 1 - age / 0.3));
+    }
+    if (def.tint && age < 2.5) {
+      tint = def.tint;
+      tintAmount = Math.max(tintAmount, 0.35 * (1 - age / 2.5));
+    }
+  }
+
+  hearts = Math.min(20, hearts + Math.max(0, (t - lastDamage - 4)) * 0.35);
+  const hurt = clamp(1 - (t - lastDamage) / 0.7, 0, 1);
+
+  return {
+    hearts,
+    level,
+    shake,
+    flash,
+    tint,
+    tintAmount,
+    hurt,
+    chat: chat.filter((c) => c.age < 11).slice(-5),
+    toast: toast && toast.age < 4.5 ? toast : null,
+  };
+}
+
+/* ------------------------------------------------------------- event props */
+
+function explosion(ctx, w, h, cx, cy, age, s, rngv) {
+  const p = clamp(age / 0.85, 0, 1);
+  const r = s * (1 + p * 12);
+
+  // hot core, only for the first instants
+  if (p < 0.4) {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 1.1);
+    g.addColorStop(0, `rgba(255,240,190,${0.95 - p * 2})`);
+    g.addColorStop(0.45, `rgba(255,140,40,${0.7 - p * 1.5})`);
+    g.addColorStop(1, 'rgba(255,80,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - r * 1.2, cy - r * 1.2, r * 2.4, r * 2.4);
+  }
+
+  ctx.globalAlpha = 1 - p;
+  // blocky fireball: rings of squares rather than a smooth circle
+  for (let i = 0; i < 30; i++) {
+    const a = (i / 30) * Math.PI * 2 + rngv * 6;
+    const rr = r * (0.5 + ((i * 37 + rngv * 100) % 55) / 100);
+    const bx = cx + Math.cos(a) * rr;
+    const by = cy + Math.sin(a) * rr * 0.75;
+    const sz = s * (1.5 - p) * (0.6 + ((i * 13) % 40) / 60);
+    const shade = i % 5;
+    ctx.fillStyle = shade === 0 ? '#fff3c4' : shade === 1 ? '#ffb03d'
+      : shade === 2 ? '#ff6a1a' : shade === 3 ? '#a83a12' : '#59524d';
+    ctx.fillRect(bx - sz / 2, by - sz / 2, sz, sz);
+  }
+  ctx.globalAlpha = 1;
+  // debris arcing out and falling
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    const d = s * (2 + i % 5) * age * 6;
+    const bx = cx + Math.cos(a) * d;
+    const by = cy + Math.sin(a) * d * 0.6 + age * age * s * 26;
+    if (by > h) continue;
+    ctx.fillStyle = i % 2 ? '#6b4a24' : '#5aa832';
+    ctx.fillRect(bx, by, s * 0.5, s * 0.5);
+  }
+}
+
+function creeperSprite(ctx, x, y, s, flashAmt) {
+  const green = flashAmt > 0 ? `rgba(255,255,255,${flashAmt})` : null;
+  ctx.fillStyle = '#4f9e46';
+  ctx.fillRect(x, y, s * 2, s * 2);       // head
+  ctx.fillRect(x + s * 0.35, y + s * 2, s * 1.3, s * 2.4); // body
+  ctx.fillStyle = '#0d1a0d';
+  ctx.fillRect(x + s * 0.3, y + s * 0.5, s * 0.5, s * 0.5);
+  ctx.fillRect(x + s * 1.2, y + s * 0.5, s * 0.5, s * 0.5);
+  ctx.fillRect(x + s * 0.7, y + s * 1.1, s * 0.6, s * 0.8);
+  ctx.fillStyle = '#3d7a36';
+  ctx.fillRect(x + s * 0.35, y + s * 4.4, s * 0.5, s * 0.6);
+  ctx.fillRect(x + s * 1.15, y + s * 4.4, s * 0.5, s * 0.6);
+  if (green) {
+    ctx.fillStyle = green;
+    ctx.fillRect(x, y, s * 2, s * 5);
+  }
+}
+
+function lightningBolt(ctx, w, h, x, age, s) {
+  if (age > 0.28) return;
+  ctx.globalAlpha = 1 - age / 0.28;
+  ctx.fillStyle = '#eaf0ff';
+  let bx = x;
+  for (let y = 0; y < h * 0.72; y += s) {
+    bx += ((y / s) % 3 === 0 ? 1 : -1) * s * 0.5;
+    ctx.fillRect(bx, y, s * 0.7, s);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* Draws whatever is happening right now on top of the scene. */
+function drawEvents(ctx, w, h, t, script, opts = {}) {
+  const s = w / 40;
+  const ground = h * (opts.ground ?? 0.72);
+
+  for (const b of script) {
+    const age = t - b.t;
+    const def = BEATS[b.kind];
+    if (!def) continue;
+    if (age < -def.lead || age > 1.6) continue;
+
+    const cx = w * (0.2 + b.rng * 0.6);
+
+    if (b.kind === 'creeper') {
+      if (age < 0) {
+        // walks in from the right, flashing white just before it blows
+        const p = 1 + age / def.lead;
+        const x = w * 0.95 - (w * 0.95 - cx) * p;
+        const hop = Math.abs(Math.sin(age * 7)) * s * 0.3;
+        const fl = age > -1.1 ? Math.abs(Math.sin(age * 16)) * 0.85 : 0;
+        creeperSprite(ctx, x, ground - s * 5 - hop, s, fl);
+      } else {
+        explosion(ctx, w, h, cx, ground - s * 2, age, s, b.rng);
+      }
+    } else if (b.kind === 'tnt') {
+      if (age < 0) {
+        const blink = Math.sin(age * 18) > 0;
+        block(ctx, cx, ground - s, s * 1.4, blink ? '#ffffff' : '#c73b2b', 0.14);
+        ctx.fillStyle = blink ? '#c73b2b' : '#ffffff';
+        ctx.fillRect(cx, ground - s * 0.7, s * 1.4, s * 0.35);
+      } else {
+        explosion(ctx, w, h, cx + s * 0.7, ground - s, age, s * 1.2, b.rng);
+      }
+    } else if (b.kind === 'fireball') {
+      if (age < 0) {
+        const p = 1 + age / def.lead;
+        const fx = w * 0.15 + (cx - w * 0.15) * p;
+        const fy = h * 0.3 + (ground - s * 2 - h * 0.3) * p * p;
+        ctx.fillStyle = '#ffd27a';
+        ctx.fillRect(fx, fy, s, s);
+        ctx.fillStyle = '#ff7a18';
+        ctx.fillRect(fx - s * 0.3, fy - s * 0.3, s * 0.5, s * 0.5);
+        ctx.fillRect(fx + s * 0.8, fy + s * 0.8, s * 0.5, s * 0.5);
+      } else {
+        explosion(ctx, w, h, cx, ground - s * 2, age, s, b.rng);
+      }
+    } else if (b.kind === 'lightning') {
+      lightningBolt(ctx, w, h, cx, age, s);
+    } else if (b.kind === 'arrow') {
+      const p = clamp(1 + age / def.lead, 0, 1.3);
+      const ax = w * 1.02 - w * 0.9 * p;
+      const ay = h * 0.42 + p * p * s * 3;
+      ctx.fillStyle = '#d8d8d8';
+      ctx.fillRect(ax, ay, s * 1.1, s * 0.2);
+      ctx.fillStyle = '#8a8a8a';
+      ctx.fillRect(ax - s * 0.25, ay - s * 0.1, s * 0.3, s * 0.4);
+    } else if (b.kind === 'ore') {
+      // sparkles popping off a freshly broken vein
+      const p = clamp((age + def.lead) / (def.lead + 1.2), 0, 1);
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        const d = s * 3 * p;
+        ctx.globalAlpha = 1 - p;
+        ctx.fillStyle = i % 2 ? '#5ad7d7' : '#ffffff';
+        ctx.fillRect(cx + Math.cos(a) * d, ground - s * 3 + Math.sin(a) * d, s * 0.35, s * 0.35);
+      }
+      ctx.globalAlpha = 1;
+    } else if (b.kind === 'treasure') {
+      const p = clamp((age + def.lead) / (def.lead + 1.4), 0, 1);
+      block(ctx, cx, ground - s * 1.2, s * 1.6, '#8a5a33', 0.14);
+      ctx.fillStyle = '#f2c14e';
+      for (let i = 0; i < 10; i++) {
+        const gy = ground - s * 1.4 - p * s * (2 + i % 4);
+        ctx.globalAlpha = 1 - p;
+        ctx.fillRect(cx + s * (0.2 + (i % 5) * 0.3), gy, s * 0.28, s * 0.28);
+      }
+      ctx.globalAlpha = 1;
+    } else if (b.kind === 'place' || b.kind === 'signal') {
+      const p = clamp((age + def.lead) / (def.lead + 0.9), 0, 1);
+      ctx.globalAlpha = 1 - p;
+      ctx.fillStyle = b.kind === 'signal' ? '#ff4d4d' : '#ffffff';
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        ctx.fillRect(cx + Math.cos(a) * s * 2 * p, ground - s * 2 + Math.sin(a) * s * 2 * p, s * 0.3, s * 0.3);
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+/* Full-frame overlays: hit flash, damage vignette, element tint. */
+function drawOverlays(ctx, w, h, st) {
+  if (st.tint && st.tintAmount > 0.01) {
+    ctx.fillStyle = st.tint;
+    ctx.globalAlpha = st.tintAmount;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 1;
+  }
+  if (st.hurt > 0.01) {
+    const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.25, w / 2, h / 2, Math.max(w, h) * 0.62);
+    g.addColorStop(0, 'rgba(180,0,0,0)');
+    g.addColorStop(1, `rgba(170,0,0,${0.55 * st.hurt})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  }
+  if (st.flash > 0.01) {
+    ctx.fillStyle = `rgba(255,250,235,${st.flash})`;
+    ctx.fillRect(0, 0, w, h);
+  }
+}
+
+/* A caption burned into the peak frame, the way a highlight clip would. */
+function drawPeakCaption(ctx, w, h, text) {
+  const size = h * 0.075;
+  ctx.save();
+  shadowText(ctx, text, w / 2, h * 0.9, size, '#ffe14d', 'center');
+  ctx.restore();
+}
+
+/* ==== hud.js ==== */
+/* The in-game HUD. This is what makes a canvas animation read as recorded
+   gameplay rather than as a wallpaper: a hotbar, hearts that actually drop
+   when something explodes, chat, and an achievement toast. */
+
+
+const ITEMS = [
+  { name: 'pick', count: null },
+  { name: 'sword', count: null },
+  { name: 'torch', count: 46 },
+  { name: 'stone', count: 64 },
+  { name: 'dirt', count: 38 },
+  { name: 'bread', count: 12 },
+  { name: 'bucket', count: null },
+  { name: 'tnt', count: 7 },
+  { name: 'bow', count: null },
+];
+
+function itemIcon(ctx, kind, x, y, u) {
+  const px = (cx, cy, cw, ch, color) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(x + cx * u, y + cy * u, cw * u, ch * u);
+  };
+  switch (kind) {
+    case 'pick':
+      px(6, 16, 10, 3, '#8a5a33');
+      px(4, 6, 14, 4, '#5ad7d7');
+      px(2, 9, 4, 3, '#5ad7d7');
+      px(16, 9, 4, 3, '#5ad7d7');
+      break;
+    case 'sword':
+      px(9, 4, 4, 12, '#d8e6ea');
+      px(6, 15, 10, 3, '#8a5a33');
+      px(9, 18, 4, 4, '#6b4a24');
+      break;
+    case 'torch':
+      px(9, 10, 4, 12, '#8a5a33');
+      px(8, 5, 6, 6, '#ffcf5c');
+      break;
+    case 'stone':
+      px(4, 5, 15, 15, '#8d8d95');
+      px(6, 8, 4, 4, '#6f6f77');
+      px(12, 13, 4, 4, '#a2a2aa');
+      break;
+    case 'dirt':
+      px(4, 5, 15, 15, '#8a5a33');
+      px(4, 5, 15, 4, '#5aa832');
+      break;
+    case 'bread':
+      px(4, 8, 15, 9, '#c98d63');
+      px(7, 6, 3, 3, '#b07a52');
+      px(13, 6, 3, 3, '#b07a52');
+      break;
+    case 'bucket':
+      px(6, 8, 11, 12, '#b9c0c7');
+      px(7, 10, 9, 5, '#2f6fb0');
+      break;
+    case 'tnt':
+      px(4, 6, 15, 13, '#c73b2b');
+      px(4, 10, 15, 4, '#f0f0f0');
+      px(10, 3, 3, 4, '#8a8a8a');
+      break;
+    case 'bow':
+      px(6, 4, 3, 16, '#8a5a33');
+      px(9, 3, 3, 3, '#8a5a33');
+      px(9, 18, 3, 3, '#8a5a33');
+      px(12, 6, 2, 12, '#e8e8e8');
+      break;
+  }
+}
+
+function heart(ctx, x, y, u, fill) {
+  // 0 = empty container, 0.5 = half, 1 = full
+  const draw = (color, half) => {
+    ctx.fillStyle = color;
+    const w = half ? 4 : 8;
+    ctx.fillRect(x + u, y, w * u, 6 * u);
+    ctx.fillRect(x, y + u, Math.min(w, 3) * u, 4 * u);
+    if (!half) ctx.fillRect(x + 6 * u, y + u, 3 * u, 4 * u);
+    ctx.fillRect(x + 2 * u, y + 6 * u, Math.min(w, 5) * u, 2 * u);
+  };
+  draw('rgba(20,10,10,0.75)', false);
+  if (fill >= 1) draw('#ff3b3b', false);
+  else if (fill >= 0.5) draw('#ff3b3b', true);
+}
+
+function drumstick(ctx, x, y, u, full) {
+  ctx.fillStyle = full ? '#c98d63' : 'rgba(20,10,10,0.7)';
+  ctx.fillRect(x + 2 * u, y, 5 * u, 5 * u);
+  ctx.fillRect(x, y + 4 * u, 7 * u, 3 * u);
+  ctx.fillStyle = full ? '#f0e0c0' : 'rgba(20,10,10,0.7)';
+  ctx.fillRect(x + 6 * u, y + 5 * u, 3 * u, 2 * u);
+}
+
+function drawHud(ctx, w, h, t, video, st) {
+  const u = h / 260;              // one "GUI pixel"
+  const slot = u * 22;
+  const barW = slot * 9;
+  const barX = (w - barW) / 2;
+  const barY = h - slot - u * 26;   // clear of the player's control bar
+
+  ctx.save();
+
+  // crosshair
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillRect(w / 2 - u * 5, h / 2 - u, u * 10, u * 2);
+  ctx.fillRect(w / 2 - u, h / 2 - u * 5, u * 2, u * 10);
+
+  // hotbar
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(barX, barY, barW, slot);
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = Math.max(1, u);
+  ctx.strokeRect(barX, barY, barW, slot);
+  const selected = Math.floor(t / 7) % 9;
+  ITEMS.forEach((item, i) => {
+    const sx = barX + i * slot;
+    itemIcon(ctx, item.name, sx + slot * 0.14, barY + slot * 0.14, (slot * 0.72) / 24);
+    if (item.count) {
+      shadowText(ctx, String(item.count), sx + slot * 0.92, barY + slot * 0.92, u * 8, '#ffffff', 'right');
+    }
+  });
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(2, u * 1.6);
+  ctx.strokeRect(barX + selected * slot - u, barY - u, slot + u * 2, slot + u * 2);
+
+  // hearts + hunger sit on the row above the hotbar
+  const rowY = barY - u * 13;
+  for (let i = 0; i < 10; i++) {
+    heart(ctx, barX + i * u * 9, rowY, u, clamp(st.hearts / 2 - i, 0, 1));
+  }
+  const hunger = clamp(10 - Math.floor(t / 90), 4, 10);
+  for (let i = 0; i < 10; i++) {
+    drumstick(ctx, barX + barW - u * 9 - i * u * 9, rowY, u, i < hunger);
+  }
+
+  // xp bar + level
+  const xpY = barY - u * 4;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(barX, xpY, barW, u * 2.6);
+  ctx.fillStyle = '#7ddc3a';
+  ctx.fillRect(barX, xpY, barW * ((t / 24) % 1), u * 2.6);
+  shadowText(ctx, String(st.level), w / 2, xpY - u * 1.5, u * 9, '#7ddc3a', 'center');
+
+  // chat log, fading out with age
+  st.chat.forEach((line, i) => {
+    const alpha = clamp(1 - (line.age - 8) / 3, 0, 1);
+    const y = rowY - u * 16 - (st.chat.length - 1 - i) * u * 11;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    const text = `<${video.channelObj?.name || 'Steve'}> ${line.text}`;
+    ctx.font = `600 ${u * 9}px "Segoe UI", system-ui, sans-serif`;
+    const tw = ctx.measureText(text).width;
+    ctx.fillRect(u * 6, y - u * 9, tw + u * 8, u * 12);
+    shadowText(ctx, text, u * 10, y, u * 9, '#ffffff');
+    ctx.globalAlpha = 1;
+  });
+
+  // achievement toast slides in from the top-right
+  if (st.toast) {
+    const p = clamp(st.toast.age / 0.4, 0, 1) * clamp((4.5 - st.toast.age) / 0.5, 0, 1);
+    const tw = u * 120;
+    const tx = w - tw - u * 8;
+    const ty = u * 8 - (1 - p) * u * 30;
+    ctx.globalAlpha = p;
+    ctx.fillStyle = 'rgba(12,12,12,0.9)';
+    ctx.fillRect(tx, ty, tw, u * 26);
+    ctx.strokeStyle = '#ffe14d';
+    ctx.lineWidth = Math.max(1, u * 1.4);
+    ctx.strokeRect(tx, ty, tw, u * 26);
+    shadowText(ctx, st.toast.text, tx + u * 8, ty + u * 17, u * 10, '#ffe14d');
+    ctx.globalAlpha = 1;
+  }
+
+  // speedruns get a timer; everything else gets the F3 coordinate line
+  if (video.channel === 'sp') {
+    shadowText(ctx, formatTimer(t), u * 10, u * 20, u * 16, '#ffffff');
+  } else {
+    const x = (120 + t * 1.6).toFixed(1);
+    const z = (-204 + Math.sin(t / 9) * 12).toFixed(1);
+    shadowText(ctx, `XYZ: ${x} / 63 / ${z}`, u * 10, u * 16, u * 9, 'rgba(255,255,255,0.85)');
+    shadowText(ctx, `${Math.round(58 + Math.sin(t) * 4)} fps`, u * 10, u * 28, u * 9, 'rgba(255,255,255,0.85)');
+  }
+
+  ctx.restore();
+}
+
+function formatTimer(t) {
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60);
+  const cs = Math.floor((t % 1) * 100);
+  return `${m}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+}
+
+/* ==== sfx.js ==== */
+/* Event sounds, synthesised on the fly with WebAudio — no audio files, same as
+   the picture. Nothing plays until the viewer presses play, which also gives
+   the AudioContext the user gesture browsers require. */
+
+let ctx = null;
+let master = null;
+
+function ensure() {
+  if (ctx) return ctx;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  ctx = new AC();
+  master = ctx.createGain();
+  master.gain.value = 0.5;
+  master.connect(ctx.destination);
+  return ctx;
+}
+
+function resumeAudio() {
+  const c = ensure();
+  if (c && c.state === 'suspended') c.resume();
+}
+
+function setVolume(v) {
+  if (master) master.gain.value = Math.max(0, Math.min(1, v)) * 0.5;
+}
+
+function env(node, t0, attack, decay, peak = 1) {
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(peak, t0 + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + decay);
+  node.connect(g);
+  g.connect(master);
+  return g;
+}
+
+function noiseBuffer(seconds) {
+  const len = Math.floor(ctx.sampleRate * seconds);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  return buf;
+}
+
+function boom(power = 1) {
+  const t0 = ctx.currentTime;
+  const src = ctx.createBufferSource();
+  src.buffer = noiseBuffer(1.2);
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(900 * power, t0);
+  lp.frequency.exponentialRampToValueAtTime(90, t0 + 0.8);
+  src.connect(lp);
+  env(lp, t0, 0.01, 1.0, 0.9 * power);
+  src.start(t0);
+  src.stop(t0 + 1.2);
+
+  // the low thump underneath
+  const osc = ctx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(120 * power, t0);
+  osc.frequency.exponentialRampToValueAtTime(32, t0 + 0.5);
+  env(osc, t0, 0.01, 0.6, 0.7 * power);
+  osc.start(t0);
+  osc.stop(t0 + 0.7);
+}
+
+function blip(freq, dur, type = 'square', peak = 0.25) {
+  const t0 = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  env(osc, t0, 0.005, dur, peak);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.05);
+}
+
+function chime(notes, gap = 0.09) {
+  notes.forEach((f, i) => setTimeout(() => blip(f, 0.22, 'triangle', 0.22), i * gap * 1000));
+}
+
+function hiss() {
+  const t0 = ctx.currentTime;
+  const src = ctx.createBufferSource();
+  src.buffer = noiseBuffer(0.55);
+  const hp = ctx.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 2200;
+  src.connect(hp);
+  env(hp, t0, 0.06, 0.5, 0.35);
+  src.start(t0);
+  src.stop(t0 + 0.6);
+}
+
+/* Maps a scripted beat to a sound. Unknown beats stay silent on purpose. */
+function playBeat(kind) {
+  if (!ensure() || ctx.state !== 'running') return;
+  switch (kind) {
+    case 'creeper': boom(1); break;
+    case 'tnt': boom(1.15); break;
+    case 'fireball': boom(0.8); break;
+    case 'lightning': boom(1.3); break;
+    case 'arrow': blip(880, 0.08, 'sawtooth', 0.18); break;
+    case 'lava': blip(160, 0.35, 'sawtooth', 0.2); break;
+    case 'drown': blip(300, 0.2, 'sine', 0.18); break;
+    case 'ore': chime([880, 1175]); break;
+    case 'treasure': chime([659, 880, 1319]); break;
+    case 'levelup': chime([784, 988, 1319]); break;
+    case 'signal': blip(1046, 0.1, 'square', 0.2); break;
+    case 'place': blip(220, 0.06, 'square', 0.14); break;
+    default: break;
+  }
+}
+
+/* The creeper's fuse, played during the lead-in rather than on the beat. */
+function playFuse() {
+  if (!ensure() || ctx.state !== 'running') return;
+  hiss();
+}
+
+function playHurt() {
+  if (!ensure() || ctx.state !== 'running') return;
+  blip(180, 0.16, 'square', 0.22);
+}
+
 /* ==== scene.js ==== */
 /* Procedural blocky scenes.
    Every video "plays" by rendering one of these into a canvas as a pure
@@ -835,37 +1548,10 @@ function debounce(fn, ms) {
    0:42 just draws frame t=42, no buffering, no video files in the repo. */
 
 
+
+
+
 const BLOCKS_ACROSS = 40;
-
-function lerp(a, b, t) { return a + (b - a) * t; }
-function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
-
-function mixHex(a, b, t) {
-  const pa = [parseInt(a.slice(1, 3), 16), parseInt(a.slice(3, 5), 16), parseInt(a.slice(5, 7), 16)];
-  const pb = [parseInt(b.slice(1, 3), 16), parseInt(b.slice(3, 5), 16), parseInt(b.slice(5, 7), 16)];
-  const out = pa.map((c, i) => Math.round(lerp(c, pb[i], clamp(t, 0, 1))));
-  return `rgb(${out[0]},${out[1]},${out[2]})`;
-}
-
-/* Blocks are drawn with a lighter top face and a darker right face so the flat
-   rectangles read as cubes without any real 3-D maths. */
-function block(ctx, x, y, s, color, shade = 0.18) {
-  ctx.fillStyle = color;
-  ctx.fillRect(x, y, s, s);
-  ctx.fillStyle = `rgba(255,255,255,${shade})`;
-  ctx.fillRect(x, y, s, Math.max(1, s * 0.18));
-  ctx.fillStyle = `rgba(0,0,0,${shade * 0.9})`;
-  ctx.fillRect(x + s - Math.max(1, s * 0.18), y, Math.max(1, s * 0.18), s);
-}
-
-function speckle(ctx, x, y, s, rng, color, n = 3) {
-  ctx.fillStyle = color;
-  for (let i = 0; i < n; i++) {
-    const px = x + Math.floor(rng() * 4) * (s / 4);
-    const py = y + Math.floor(rng() * 4) * (s / 4);
-    ctx.fillRect(px, py, s / 4, s / 4);
-  }
-}
 
 /* ---------------------------------------------------------------- overworld */
 
@@ -1321,21 +2007,43 @@ function ocean(ctx, w, h, t, seed) {
 
 const SCENES = { overworld, nether, cave, redstone, build, ocean };
 
+/* Ground line per style, so explosions and mobs land on the surface the scene
+   actually drew rather than floating over it. */
+const GROUND = { overworld: 0.72, nether: 0.74, cave: 0.86, redstone: 0.6, build: 0.78, ocean: 0.88 };
+
 function drawScene(ctx, w, h, t, seed, style, opts = {}) {
   const fn = SCENES[style] || overworld;
+  const time = Math.max(0, t);
+  const script = opts.video ? scriptFor(opts.video) : null;
+  const st = script ? stateAt(script, time, opts.video) : null;
+
   ctx.save();
-  fn(ctx, w, h, Math.max(0, t), seed, opts);
+  if (st && st.shake > 0.01) {
+    // camera kick, seeded off the time so it stays the same on replay
+    const k = st.shake * w * 0.012;
+    ctx.translate(Math.sin(time * 61) * k, Math.cos(time * 47) * k);
+  }
+  fn(ctx, w, h, time, seed, opts);
+  if (script) drawEvents(ctx, w, h, time, script, { ground: GROUND[style] ?? 0.72 });
   ctx.restore();
+
+  if (st) {
+    drawOverlays(ctx, w, h, st);
+    if (opts.hud) drawHud(ctx, w, h, time, opts.video, st);
+  }
 }
 
-/* Thumbnails are just frame 0-ish of the same scene, plus the big blocky
-   caption every Minecraft thumbnail on the internet seems to be legally
-   required to have. */
+/* Thumbnails freeze the clip on its headline moment — the frame with the
+   explosion in it — plus the big blocky caption every Minecraft thumbnail on
+   the internet seems to be legally required to have. */
 function drawThumbnail(canvas, video) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
   const h = canvas.height;
-  drawScene(ctx, w, h, video.thumbTime ?? 12, video.seed, video.style, { static: false });
+  let t = video.thumbTime ?? peakTime(video) + 0.22;
+  // the castle assembles on a 30s cycle — land near the end of one
+  if (video.style === 'build') t = Math.floor(t / 30) * 30 + 22;
+  drawScene(ctx, w, h, t, video.seed, video.style, { video });
 
   if (video.overlay) {
     const fs = Math.round(h * 0.19);
@@ -1374,144 +2082,168 @@ const VIDEOS = [
   {
     id: 'a1x9k', title: '我在極限模式活了 100 天，第 97 天差點全毀',
     channel: 'cr', views: 4820000, days: 3, duration: 1_852, style: 'overworld',
+    peak: 0.78, peakKind: 'creeper',
     overlay: '100 天', tags: ['生存', '遊戲'], live: false,
     desc: '這是我第一次挑戰極限模式 100 天，中途遇到雷暴、女巫村莊還有一隻卡在礦車裡的苦力怕。第 97 天那段真的手抖到不行。\n\n本集重點：\n00:00 開場\n03:12 第一個家\n11:40 下礦\n24:05 第 97 天事故現場\n\n#Minecraft #生存挑戰',
   },
   {
     id: 'b7m2q', title: '全自動西瓜農場｜每小時 3200 顆，零延遲設計',
     channel: 'rs', views: 1240000, days: 8, duration: 946, style: 'redstone',
+    peak: 0.55, peakKind: 'signal',
     overlay: '3200/hr', overlayColor: '#ff5d5d', tags: ['紅石', '教學'],
     desc: '這個設計不需要觀察者鏈，也不會有卡頓問題。材料清單放在留言區置頂。',
   },
   {
     id: 'c3d8p', title: '花了 400 小時蓋的空島城市，內部全部可以走進去',
     channel: 'bd', views: 2760000, days: 14, duration: 1_320, style: 'build',
+    peak: 0.62, peakKind: 'place',
     overlay: '400 HR', overlayColor: '#7ee0ff', tags: ['建築'],
     desc: '整座城市使用約 180 萬個方塊，地圖下載連結在下方。',
   },
   {
     id: 'd5f1w', title: '地獄要塞速通紀錄！4 分 12 秒（世界紀錄）',
     channel: 'sp', views: 8930000, days: 1, duration: 268, style: 'nether',
+    peak: 0.72, peakKind: 'fireball',
     overlay: '4:12', overlayColor: '#ffe14d', tags: ['速通', '地獄'],
     desc: '種子碼在說明欄。這局的地獄門運氣好到不真實。',
   },
   {
     id: 'e9h4r', title: '礦坑深處傳來的聲音…我不敢再往下挖了',
     channel: 'sv', views: 612000, days: 5, duration: 1_105, style: 'cave',
+    peak: 0.76, peakKind: 'creeper',
     overlay: '?', overlayColor: '#ff4d4d', tags: ['生存', '搞笑'],
     desc: '戴耳機看。第 14 分鐘那個聲音到現在還沒人解釋得出來。',
   },
   {
     id: 'f2j7t', title: '海底神殿改造成透明水族館，全程無作弊',
     channel: 'oc', views: 358000, days: 11, duration: 1_640, style: 'ocean',
+    peak: 0.6, peakKind: 'treasure',
     overlay: '水族館', overlayColor: '#7ee0ff', tags: ['建築', '生存'],
     desc: '抽乾海底神殿花了三個禮拜，海綿真的不夠用。',
   },
   {
     id: 'g8k3v', title: '【直播中】和觀眾一起蓋一座村莊',
     channel: 'bd', views: 12400, days: 0, duration: 7_200, style: 'build',
+    peak: 0.5, peakKind: 'place',
     live: true, overlay: 'LIVE', overlayColor: '#ff4d4d', tags: ['直播中', '建築'],
     desc: '聊天室輸入方塊名稱就會出現在地圖上。',
   },
   {
     id: 'h4n6y', title: '用 1 格紅石做出的最小自動門（真的只有 1 格）',
     channel: 'rs', views: 2010000, days: 21, duration: 412, style: 'redstone',
+    peak: 0.5, peakKind: 'signal',
     overlay: '1 格', overlayColor: '#ff5d5d', tags: ['紅石', '教學'],
     desc: '這個設計在 1.21 依然可用。',
   },
   {
     id: 'i6p9z', title: '苦力怕爆炸 100 次的慢動作合輯',
     channel: 'cr', views: 5310000, days: 30, duration: 738, style: 'overworld',
+    peak: 0.45, peakKind: 'tnt', dense: true,
     overlay: 'BOOM', overlayColor: '#ff8a3d', tags: ['搞笑', '遊戲'],
     desc: '全部都是真的，沒有指令。第 87 次最誇張。',
   },
   {
     id: 'j1q5a', title: '在地獄蓋一座安全屋，結果被豬布林包圍',
     channel: 'nt', views: 274000, days: 6, duration: 1_490, style: 'nether',
+    peak: 0.66, peakKind: 'fireball',
     overlay: '救命', overlayColor: '#ffe14d', tags: ['地獄', '生存'],
     desc: '教訓：在地獄不要挖金磚。',
   },
   {
     id: 'k7r2b', title: '從零開始的鐵人塔教學（新手也能蓋）',
     channel: 'rs', views: 892000, days: 45, duration: 1_026, style: 'redstone',
+    peak: 0.5, peakKind: 'signal',
     tags: ['紅石', '教學'],
     desc: '一步一步慢慢講，材料很便宜。',
   },
   {
     id: 'l3s8c', title: '洞穴更新後的地底世界有多深？我挖到了世界底部',
     channel: 'sv', views: 1450000, days: 60, duration: 1_712, style: 'cave',
+    peak: 0.7, peakKind: 'ore',
     overlay: 'Y=-64', overlayColor: '#7ee0ff', tags: ['生存', '遊戲'],
     desc: '總共挖了 6 小時，剪成 28 分鐘。',
   },
   {
     id: 'm9t4d', title: '模組整合包實測：這 12 個模組讓遊戲完全變樣',
     channel: 'cr', views: 731000, days: 9, duration: 1_980, style: 'overworld',
+    peak: 0.55, peakKind: 'lightning',
     tags: ['模組', '遊戲'],
     desc: '整合包連結在說明欄，全部免費。',
   },
   {
     id: 'n5u1e', title: '海底遺跡尋寶，找到了附魔書 XVIII',
     channel: 'oc', views: 143000, days: 17, duration: 884, style: 'ocean',
+    peak: 0.58, peakKind: 'treasure',
     tags: ['生存'],
     desc: '運氣真的很好，開了 7 個箱子就中了。',
   },
   {
     id: 'o2v7f', title: '不用鑽石通關的挑戰，全程只用石頭工具',
     channel: 'sp', views: 3120000, days: 25, duration: 1_368, style: 'overworld',
+    peak: 0.8, peakKind: 'creeper',
     overlay: '無鑽石', overlayColor: '#ffe14d', tags: ['速通', '生存'],
     desc: '末影龍那段打了 40 分鐘。',
   },
   {
     id: 'p8w3g', title: '中世紀城堡建築教學 EP.1｜地基與城牆',
     channel: 'bd', views: 486000, days: 38, duration: 1_554, style: 'build',
+    peak: 0.55, peakKind: 'place',
     tags: ['建築', '教學'],
     desc: '這是系列的第一集，之後會出到內裝。',
   },
   {
     id: 'q4x9h', title: '把整個地獄改造成高速公路網（花了 200 小時）',
     channel: 'nt', views: 967000, days: 52, duration: 2_240, style: 'nether',
+    peak: 0.6, peakKind: 'lava',
     overlay: '200 HR', overlayColor: '#ff8a3d', tags: ['地獄', '建築'],
     desc: '八格一格的比例真的很好用。',
   },
   {
     id: 'r6y5i', title: '凌晨三點的礦坑直播重播｜完整版',
     channel: 'sv', views: 89400, days: 4, duration: 5_412, style: 'cave',
+    peak: 0.42, peakKind: 'ore',
     tags: ['生存', '直播中'],
     desc: '完整重播，沒有剪輯。',
   },
   {
     id: 's1z6j', title: '這個紅石音樂盒可以完整播放一首歌',
     channel: 'rs', views: 1780000, days: 70, duration: 322, style: 'redstone',
+    peak: 0.5, peakKind: 'signal',
     overlay: '♪', overlayColor: '#7ee0ff', tags: ['紅石', '音樂'],
     desc: '總共用了 340 個音符盒。',
   },
   {
     id: 't7a2k', title: '末影龍第一次挑戰就成功？新手的運氣有點誇張',
     channel: 'cr', views: 2240000, days: 12, duration: 1_142, style: 'overworld',
+    peak: 0.75, peakKind: 'arrow',
     tags: ['生存', '遊戲'],
     desc: '朋友第一次玩就打贏了，我玩三年才第一次過。',
   },
   {
     id: 'u3b8l', title: '在生存模式蓋一台會動的電梯',
     channel: 'bd', views: 542000, days: 28, duration: 968, style: 'build',
+    peak: 0.5, peakKind: 'place',
     tags: ['建築', '紅石'],
     desc: '黏性活塞 + 觀察者，材料很好取得。',
   },
   {
     id: 'v9c4m', title: '海底也能種田？全自動海帶農場設計',
     channel: 'oc', views: 226000, days: 33, duration: 754, style: 'ocean',
+    peak: 0.55, peakKind: 'drown',
     tags: ['紅石', '建築'],
     desc: '海帶其實是很不錯的燃料來源。',
   },
   {
     id: 'w5d1n', title: '地獄門連結出錯，我掉到了不存在的座標',
     channel: 'nt', views: 1330000, days: 19, duration: 626, style: 'nether',
+    peak: 0.64, peakKind: 'lava',
     overlay: 'BUG', overlayColor: '#ff4d4d', tags: ['地獄', '搞笑'],
     desc: '存檔還在，有人知道這是什麼情況嗎。',
   },
   {
     id: 'x2e7o', title: '五分鐘學會所有附魔（完整表格）',
     channel: 'sp', views: 4110000, days: 90, duration: 314, style: 'cave',
+    peak: 0.5, peakKind: 'levelup',
     overlay: '5 分鐘', overlayColor: '#ffe14d', tags: ['教學', '遊戲'],
     desc: '表格圖在說明欄，可以直接存起來。',
   },
@@ -1568,6 +2300,8 @@ const ALL = Object.values(VIDEO_MAP);
 
 
 
+
+
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const QUALITIES = ['1080p', '720p', '480p', '360p', '144p'];
 
@@ -1586,6 +2320,8 @@ class Player {
     this.theater = opts.theater || false;
     this._lastFrame = 0;
     this._hideTimer = 0;
+    this.script = scriptFor(video);
+    this._sfxTime = 0;
     this.root = root;
     this._build();
     this._bind();
@@ -1679,6 +2415,7 @@ class Player {
       this.muted = this.volume === 0;
       localStorage.setItem('mt:volume', String(this.volume));
       localStorage.setItem('mt:muted', this.muted ? '1' : '0');
+      setVolume(this.muted ? 0 : this.volume);
       this._syncVolumeIcon();
     });
 
@@ -1768,6 +2505,7 @@ class Player {
     this.muted = this.volume === 0;
     this.volSlider.value = this.volume;
     localStorage.setItem('mt:volume', String(this.volume));
+    setVolume(this.muted ? 0 : this.volume);
     this._syncVolumeIcon();
     this._toast(`音量 ${Math.round(this.volume * 100)}%`);
   }
@@ -1842,7 +2580,7 @@ class Player {
     this.preview.hidden = false;
     this.preview.style.left = `${Math.max(84, Math.min(r.width - 84, p * r.width))}px`;
     this.previewLabel.textContent = formatDuration(t);
-    drawScene(this.previewCanvas.getContext('2d'), 160, 90, t, this.video.seed, this.video.style);
+    drawScene(this.previewCanvas.getContext('2d'), 160, 90, t, this.video.seed, this.video.style, { video: this.video });
   }
 
   _wake() {
@@ -1873,7 +2611,9 @@ class Player {
     const dt = this._lastFrame ? (now - this._lastFrame) / 1000 : 0;
     this._lastFrame = now;
     if (this.playing) {
+      const prev = this.time;
       this.time += dt * this.speed;
+      this._fireSfx(prev, this.time);
       if (this.time >= this.duration) {
         this.time = this.duration;
         this.playing = false;
@@ -1887,8 +2627,28 @@ class Player {
     this._raf = requestAnimationFrame(this._loop);
   }
 
+  /* Plays the sounds for any beat crossed since the last frame. Skipped when
+     the jump is large, so scrubbing doesn't dump every explosion at once. */
+  _fireSfx(prev, now) {
+    this._sfxTime = now;
+    if (this.muted || now - prev > 1.5 || now <= prev) return;
+    for (const b of this.script) {
+      const def = BEATS[b.kind];
+      if (!def) continue;
+      if (b.t > prev && b.t <= now) {
+        playBeat(b.kind);
+        if (def.damage) setTimeout(playHurt, 120);
+      }
+      if (b.kind === 'creeper') {
+        const fuse = b.t - 1.1;
+        if (fuse > prev && fuse <= now) playFuse();
+      }
+    }
+  }
+
   render() {
-    drawScene(this.ctx, this.canvas.width, this.canvas.height, this.time, this.video.seed, this.video.style);
+    drawScene(this.ctx, this.canvas.width, this.canvas.height, this.time,
+      this.video.seed, this.video.style, { video: this.video, hud: true });
   }
 
   _syncProgress() {
@@ -1908,6 +2668,9 @@ class Player {
 
   play() {
     if (this.time >= this.duration) this.time = 0;
+    // the click that started playback is the gesture that unlocks audio
+    resumeAudio();
+    setVolume(this.muted ? 0 : this.volume);
     this.playing = true;
     this._syncPlayIcon();
     this._wake();
@@ -1935,6 +2698,7 @@ class Player {
     if (!m && this.volume === 0) this.volume = 0.5;
     this.volSlider.value = m ? 0 : this.volume;
     localStorage.setItem('mt:muted', m ? '1' : '0');
+    setVolume(m ? 0 : this.volume);
     this._syncVolumeIcon();
     this._toast(m ? '靜音' : `音量 ${Math.round(this.volume * 100)}%`);
   }
@@ -1953,6 +2717,7 @@ class Player {
 
 /* ==== app.js ==== */
 /* Router + views. Hash-based so the whole thing works from file:// too. */
+
 
 
 
@@ -2125,9 +2890,12 @@ function attachHoverPreview(card, canvas, video) {
     if (raf) return;
     card.classList.add('previewing');
     t0 = performance.now();
+    // start a few seconds before the headline moment, so the preview shows the
+    // build-up and then the thing itself
+    const from = Math.max(0, peakTime(video) - 3.5);
     const step = (now) => {
-      const t = 20 + (now - t0) / 1000;
-      drawScene(canvas.getContext('2d'), canvas.width, canvas.height, t, video.seed, video.style);
+      const t = from + (now - t0) / 1000;
+      drawScene(canvas.getContext('2d'), canvas.width, canvas.height, t, video.seed, video.style, { video });
       raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
