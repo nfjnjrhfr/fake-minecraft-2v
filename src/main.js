@@ -153,6 +153,11 @@ class Game {
     this.world.updateChunks(this.player.pos.x, this.player.pos.z, 3, 64);
     this.bindInput();
     this.ui.toast('點擊畫面開始遊玩 · WASD 移動 · E 開物品欄');
+    // Embedded frames often disallow pointer lock; say so instead of leaving
+    // the player wondering why the mouse does nothing.
+    setTimeout(() => {
+      if (!this.locked) this.ui.toast('若滑鼠無法轉視角：按住左鍵拖曳畫面即可環顧四周');
+    }, 4000);
     this.lastTime = performance.now();
     requestAnimationFrame(this.loop);
   }
@@ -160,27 +165,43 @@ class Game {
   bindInput() {
     const canvas = this.canvas;
     canvas.addEventListener('click', () => {
-      if (!this.ui.screen) canvas.requestPointerLock();
+      if (!this.ui.screen) this.lockPointer();
       this.sound.ensure();
     });
+    // Pointer lock is unavailable in some embedded frames; fall back to
+    // "hold a mouse button and drag" for looking around.
+    document.addEventListener('pointerlockerror', () => { this.lockBlocked = true; });
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === canvas;
-      if (!this.locked && !this.ui.screen) this.ui.open('pause');
+      if (!this.locked && !this.lockBlocked && !this.ui.screen) this.ui.open('pause');
     });
     document.addEventListener('mousemove', (e) => {
-      if (!this.locked) return;
+      if (!this.locked && !(this.dragging && !this.ui.screen)) return;
       const s = 0.0022;
-      this.player.yaw -= e.movementX * s;
-      this.player.pitch -= e.movementY * s;
+      let mx = e.movementX, my = e.movementY;
+      if (!this.locked) {
+        mx = e.clientX - (this.lastMouse ? this.lastMouse.x : e.clientX);
+        my = e.clientY - (this.lastMouse ? this.lastMouse.y : e.clientY);
+        this.lastMouse = { x: e.clientX, y: e.clientY };
+      }
+      this.player.yaw -= mx * s;
+      this.player.pitch -= my * s;
       const lim = Math.PI / 2 - 0.001;
       this.player.pitch = Math.max(-lim, Math.min(lim, this.player.pitch));
     });
     document.addEventListener('mousedown', (e) => {
-      if (!this.locked) return;
+      if (this.ui.screen) return;
+      if (!this.locked) {
+        if (e.target !== canvas) return;
+        this.dragging = true;
+        this.lastMouse = { x: e.clientX, y: e.clientY };
+      }
       if (e.button === 0) { this.input.mine = true; this.onAttack(); }
       if (e.button === 2) { this.input.use = true; this.onUse(); }
     });
     document.addEventListener('mouseup', (e) => {
+      this.dragging = false;
+      this.lastMouse = null;
       if (e.button === 0) { this.input.mine = false; this.player.breakProgress = 0; }
       if (e.button === 2) this.input.use = false;
     });
@@ -197,12 +218,21 @@ class Game {
     window.addEventListener('beforeunload', () => this.save());
   }
 
+  /** Requests pointer lock, tolerating frames where it is disallowed. */
+  lockPointer() {
+    if (this.lockBlocked || !this.canvas.requestPointerLock) return;
+    try {
+      const r = this.canvas.requestPointerLock();
+      if (r && r.catch) r.catch(() => { this.lockBlocked = true; });
+    } catch { this.lockBlocked = true; }
+  }
+
   onKey(e, down) {
     const i = this.input;
     const code = e.code;
     if (down && (code === 'KeyE' || code === 'Escape')) {
       if (this.ui.screen === 'death') return;
-      if (this.ui.screen) { this.ui.close(); this.canvas.requestPointerLock(); }
+      if (this.ui.screen) { this.ui.close(); this.lockPointer(); }
       else if (code === 'KeyE') this.ui.open('inventory');
       else this.ui.open('pause');
       e.preventDefault();
@@ -298,7 +328,7 @@ class Game {
     switch (action) {
       case 'resume':
         this.ui.close();
-        this.canvas.requestPointerLock();
+        this.lockPointer();
         break;
       case 'mode':
         this.player.mode = this.player.mode === 'creative' ? 'survival' : 'creative';
@@ -312,14 +342,14 @@ class Game {
         break;
       case 'newworld':
         if (confirm('建立新世界？目前的進度會被覆蓋。')) {
-          localStorage.removeItem(SAVE_KEY);
+          try { localStorage.removeItem(SAVE_KEY); } catch { /* storage may be blocked */ }
           location.reload();
         }
         break;
       case 'respawn':
         this.player.respawn(this.world);
         this.ui.close();
-        this.canvas.requestPointerLock();
+        this.lockPointer();
         break;
     }
   }
