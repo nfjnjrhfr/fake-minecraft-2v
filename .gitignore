@@ -9,3 +9,4 @@ server.json
 client.json
 !examples/*.json
 .demo/
+dist/

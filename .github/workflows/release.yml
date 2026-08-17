@@ -1,0 +1,84 @@
+name: Release
+
+# Publishing is driven by a tag rather than by a button, so that every release
+# corresponds to an exact commit and can be rebuilt from it.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and publish (must already exist)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          # Tags are what version strings are derived from, so the checkout
+          # needs the full history rather than a shallow one.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      # A release that ships a broken binary is worse than a late one.
+      - name: Test
+        run: go test -race -count=1 ./...
+
+      - name: Build every target
+        run: make release VERSION=${{ inputs.tag || github.ref_name }}
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          version="${{ inputs.tag || github.ref_name }}"
+          mkdir -p dist
+
+          for dir in bin/*/; do
+            platform=$(basename "$dir")   # e.g. linux-amd64
+            staging="dist/veil-$version-$platform"
+            mkdir -p "$staging"
+            cp "$dir"* "$staging"/
+            # The console is one self-contained file, so shipping it alongside
+            # the binaries means a download has everything it needs.
+            cp internal/webui/assets/index.html "$staging/veil-console.html"
+            cp README.md "$staging"/
+            cp -r examples "$staging"/
+
+            case "$platform" in
+              windows-*) (cd dist && zip -qr "veil-$version-$platform.zip" "veil-$version-$platform") ;;
+              *)         tar -czf "dist/veil-$version-$platform.tar.gz" -C dist "veil-$version-$platform" ;;
+            esac
+            rm -rf "$staging"
+          done
+
+          # Checksums let anyone verify a download matches what CI produced.
+          # Match the archives explicitly: the redirect creates SHA256SUMS
+          # before the glob expands, so a bare ./* would checksum it too.
+          (cd dist && sha256sum veil-* > SHA256SUMS)
+          ls -lh dist
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ inputs.tag || github.ref_name }}"
+          gh release create "$version" \
+            --title "veil $version" \
+            --generate-notes \
+            --notes "Built by CI from \`$GITHUB_SHA\`. Verify a download against \`SHA256SUMS\`.
+
+          Each archive contains \`veil-server\`, \`veil-client\`, \`veil-decoy\`, the standalone
+          console (\`veil-console.html\`), example configurations and the README.
+
+          Server setup: \`sudo ./scripts/bootstrap-vps.sh your-domain.com you@example.com\`" \
+            dist/*
