@@ -5,10 +5,13 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Dispatch builds from whatever ref is selected and creates the tag as part
+  # of publishing, so a release can be cut from the GitHub UI without anyone
+  # needing push access for tags locally.
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Tag to build and publish (must already exist)"
+      version:
+        description: "Version to publish, e.g. v0.1.0"
         required: true
 
 permissions:
@@ -20,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ github.ref }}
           # Tags are what version strings are derived from, so the checkout
           # needs the full history rather than a shallow one.
           fetch-depth: 0
@@ -35,12 +38,12 @@ jobs:
         run: go test -race -count=1 ./...
 
       - name: Build every target
-        run: make release VERSION=${{ inputs.tag || github.ref_name }}
+        run: make release VERSION=${{ inputs.version || github.ref_name }}
 
       - name: Package
         run: |
           set -euo pipefail
-          version="${{ inputs.tag || github.ref_name }}"
+          version="${{ inputs.version || github.ref_name }}"
           mkdir -p dist
 
           for dir in bin/*/; do
@@ -71,8 +74,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${{ inputs.tag || github.ref_name }}"
+          version="${{ inputs.version || github.ref_name }}"
+          # --target makes gh create the tag at this commit when it does not
+          # already exist, so a dispatched run does not need one beforehand.
           gh release create "$version" \
+            --target "$GITHUB_SHA" \
             --title "veil $version" \
             --generate-notes \
             --notes "Built by CI from \`$GITHUB_SHA\`. Verify a download against \`SHA256SUMS\`.
