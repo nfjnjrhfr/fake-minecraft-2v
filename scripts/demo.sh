@@ -34,7 +34,7 @@ cleanup() {
     printf '\n'
     info "shutting down"
     for pid in "${pids[@]:-}"; do
-        [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
+        if [[ -n "$pid" ]]; then kill "$pid" 2>/dev/null || true; fi
     done
     wait 2>/dev/null || true
     exit $status

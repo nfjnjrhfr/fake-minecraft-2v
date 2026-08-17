@@ -38,22 +38,51 @@ veil 走的是另一條路：**不去發明一個難以辨識的協定，而是�
 
 ## 快速開始
 
-需要：一個**你自己的網域**、一台境外 VPS、Go 1.25+。
+需要：一個**你自己的網域**、一台境外主機（付費 VPS 或免費方案皆可，見下）、Go 1.25+。
 
 ### 伺服器端
+
+一台**長期存在、你控制的主機**，加一個網域。
 
 ```bash
 git clone https://github.com/nfjnjrhfr/fake-minecraft-2v.git
 cd fake-minecraft-2v
-sudo ./scripts/install-server.sh
+sudo ./scripts/bootstrap-vps.sh your-domain.com you@example.com
 ```
 
-腳本會編譯、建立 `veil` 系統帳號、產生隨機密碼、寫好設定與 systemd unit，
-然後告訴你**剩下三件必須自己完成的事**：申請憑證、架好誘餌網站、啟動服務。
+在一台乾淨的 Debian/Ubuntu 上，這個腳本會做完全部：檢查網域有沒有指到這台機器、
+裝套件、編譯、申請 Let's Encrypt 憑證、架好誘餌網站、建服務帳號、裝 systemd、
+設定續期後自動 reload、開防火牆，最後**直接印出可以貼進 `client.json` 的設定**。
 
-腳本刻意不幫你做這三件事——它們都跟你的網域有關，不該由腳本替你決定。
+> 執行前先把網域的 A record 指到這台機器的公開 IP。憑證失敗最常見的原因就是這個。
 
-手動版本：
+#### 不想花錢租主機
+
+有幾個**合法而且允許跑這類服務**的免費選項：
+
+| 來源 | 內容 | 備註 |
+|---|---|---|
+| **Oracle Cloud Always Free** | 4 顆 ARM 核心 / 24 GB RAM，永久免費 | 最推薦。額度大方，機器是真的長期存在。 |
+| Google Cloud Free Tier | 一台 e2-micro，永久免費 | 區域有限制。 |
+| AWS Free Tier | t2.micro，12 個月 | 到期後開始計費。 |
+
+網域也可以免費：**DuckDNS**（`yourname.duckdns.org`）之類的動態 DNS 子網域
+Let's Encrypt 是簽得出憑證的，`bootstrap-vps.sh` 直接就能用。
+
+#### 不能拿來當伺服器的東西
+
+**GitHub Actions、Codespaces，以及各種 CI runner** 都不行，兩個獨立的原因：
+
+- GitHub 的使用條款明文禁止把它們用於網路中繼、代理或 VPN 服務。這樣做帳號會被停權。
+- 技術上也不成立：runner 幾小時就回收、每次 IP 都不同、沒有固定入口、綁不了你的網域。
+  veil 的整套偽裝——443 埠、真憑證、誘餌網站——每一項都需要一台位置固定的長期主機。
+
+同樣的道理適用於任何免費 CI、無伺服器函式或短命容器平台。
+
+#### 手動安裝
+
+`scripts/install-server.sh` 只做編譯、帳號、密碼、設定與 systemd，
+把憑證與誘餌網站留給你自己決定（它們都跟你的網域有關）。完全手動的話：
 
 ```bash
 # 1. 憑證（一定要用真憑證，理由見下方「為什麼一定要有網域」）
