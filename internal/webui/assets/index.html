@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>veil 控制台</title>
+<!-- Inlined so the page makes no request the server would have to answer with
+     a 404, and so this one file is the entire console. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23101619'/%3E%3Cpath d='M16 6l8 3v7c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V9l8-3z' fill='%2335e0a1'/%3E%3C/svg%3E">
+<style>
+/* ------------------------------------------------------------------
+   Palette. The console is an instrument for watching a link, so the
+   ground is a near-black biased toward the accent's teal rather than a
+   neutral grey, and the three state colours are semantic -- signal,
+   standby, fault -- kept separate from anything decorative.
+
+   Dark is the design's home, so :root carries the dark tokens and the
+   light palette is the override. Both directions are covered: the media
+   query for viewers on the default "system" setting, the [data-theme]
+   stamps for viewers who chose explicitly.
+   ------------------------------------------------------------------ */
+:root {
+  --ground:   #0e1417;
+  --surface:  #151d21;
+  --raised:   #1b2529;
+  --line:     #263237;
+  --line-soft:#1e292e;
+  --text:     #e7eef0;
+  --muted:    #8ca0a7;
+  --faint:    #5f7178;
+
+  --signal:   #35e0a1;
+  --signal-d: #35e0a11f;
+  --standby:  #f0b429;
+  --standby-d:#f0b4291a;
+  --fault:    #ff6b6b;
+  --fault-d:  #ff6b6b1a;
+
+  --shadow:   0 18px 40px #0009;
+  --ring:     #35e0a1;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --ground:   #eef2f1;
+    --surface:  #ffffff;
+    --raised:   #f7faf9;
+    --line:     #dce4e3;
+    --line-soft:#e7edec;
+    --text:     #101a1d;
+    --muted:    #5d7076;
+    --faint:    #8b9ca1;
+
+    --signal:   #06a97a;
+    --signal-d: #06a97a1a;
+    --standby:  #b4740a;
+    --standby-d:#b4740a14;
+    --fault:    #d33f4f;
+    --fault-d:  #d33f4f14;
+
+    --shadow:   0 14px 32px #0f232b1a;
+    --ring:     #06a97a;
+  }
+}
+:root[data-theme="light"] {
+  --ground:   #eef2f1;
+  --surface:  #ffffff;
+  --raised:   #f7faf9;
+  --line:     #dce4e3;
+  --line-soft:#e7edec;
+  --text:     #101a1d;
+  --muted:    #5d7076;
+  --faint:    #8b9ca1;
+
+  --signal:   #06a97a;
+  --signal-d: #06a97a1a;
+  --standby:  #b4740a;
+  --standby-d:#b4740a14;
+  --fault:    #d33f4f;
+  --fault-d:  #d33f4f14;
+
+  --shadow:   0 14px 32px #0f232b1a;
+  --ring:     #06a97a;
+}
+
+/* Two roles: a UI sans for prose and controls, a mono for everything
+   the operator reads as data. The split is the type system -- numbers,
+   addresses and labels are all instrument readings and all monospaced. */
+:root {
+  --sans: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "PingFang TC",
+          "Microsoft JhengHei", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  /* The host paints its own ground behind the page, so this must be
+     explicit or the page borrows the wrong theme's background. */
+  background: var(--ground);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.shell {
+  max-width: 452px;
+  margin: 0 auto;
+  padding: 22px 16px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* --- header --------------------------------------------------------- */
+.topbar { display: flex; align-items: center; gap: 11px; }
+.mark {
+  width: 32px; height: 32px; border-radius: 9px; flex: none;
+  background: var(--raised); border: 1px solid var(--line);
+  display: grid; place-items: center;
+}
+.mark svg { width: 17px; height: 17px; color: var(--signal); }
+.wordmark { font-size: 17px; font-weight: 640; letter-spacing: .01em; }
+.port {
+  margin-left: auto; font-family: var(--mono); font-size: 12px;
+  color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.themetoggle {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 8px; width: 30px; height: 30px; cursor: pointer;
+  display: grid; place-items: center; padding: 0; flex: none;
+}
+.themetoggle:hover { color: var(--text); border-color: var(--ring); }
+.themetoggle svg { width: 15px; height: 15px; }
+
+/* --- the dial ------------------------------------------------------- */
+.dial { display: grid; place-items: center; padding: 4px 0 2px; position: relative; }
+
+.power {
+  position: relative;
+  width: 180px; height: 180px; border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--faint);
+  display: grid; place-items: center; gap: 7px;
+  cursor: pointer; font: inherit;
+  box-shadow: var(--shadow);
+  transition: color .3s ease, border-color .3s ease, box-shadow .45s ease, transform .12s ease;
+}
+.power:hover:not(:disabled) { border-color: var(--ring); }
+.power:active:not(:disabled) { transform: scale(.978); }
+.power:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
+.power:disabled { cursor: default; }
+.power .glyph { width: 46px; height: 46px; }
+.power .cap {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.power[data-state="connected"] {
+  color: var(--signal); border-color: var(--signal);
+  box-shadow: 0 0 0 9px var(--signal-d), var(--shadow);
+}
+.power[data-state="connecting"] { color: var(--standby); border-color: var(--standby); }
+.power[data-state="connecting"] .glyph { animation: sweep 1.15s linear infinite; }
+@keyframes sweep { to { transform: rotate(360deg); } }
+
+/* The ring is a live readout, not decoration: it only turns while the
+   link is actually carrying bytes. */
+.pulse {
+  position: absolute; inset: -1px; border-radius: 50%;
+  border: 1px solid transparent; pointer-events: none;
+}
+.power[data-state="connected"] .pulse {
+  border-top-color: var(--signal);
+  animation: sweep 2.6s linear infinite;
+  opacity: .55;
+}
+@media (prefers-reduced-motion: reduce) {
+  .power[data-state="connecting"] .glyph,
+  .power[data-state="connected"] .pulse { animation: none; }
+}
+
+.readout { text-align: center; display: grid; gap: 3px; }
+.readout .head { font-size: 16px; font-weight: 620; }
+.readout .sub {
+  font-family: var(--mono); font-size: 12.5px; color: var(--muted);
+  min-height: 19px;
+}
+
+/* --- data strip ----------------------------------------------------- */
+.strip {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 14px; overflow: hidden;
+}
+.cells { display: grid; grid-template-columns: repeat(3, 1fr); }
+.cell { padding: 13px 8px; text-align: center; }
+.cell + .cell { border-left: 1px solid var(--line-soft); }
+.cell .v {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+.cell .k {
+  font-size: 11px; color: var(--muted); margin-top: 3px; letter-spacing: .04em;
+}
+.spark { display: block; width: 100%; height: 40px; border-top: 1px solid var(--line-soft); }
+
+/* --- notices -------------------------------------------------------- */
+.notice {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 11px 13px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--surface);
+  font-size: 13.5px; color: var(--muted);
+}
+.notice .dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 7px; flex: none; background: currentColor; }
+.notice.standby { border-color: var(--standby); background: var(--standby-d); color: var(--standby); }
+.notice.fault   { border-color: var(--fault);   background: var(--fault-d);   color: var(--fault); }
+.notice code {
+  font-family: var(--mono); font-size: 12px; color: var(--text);
+  background: var(--raised); border: 1px solid var(--line);
+  padding: 1px 6px; border-radius: 6px; white-space: nowrap;
+}
+.hidden { display: none !important; }
+
+/* --- node list ------------------------------------------------------ */
+.listbar { display: flex; align-items: center; gap: 10px; }
+.listbar h2 {
+  margin: 0; font-family: var(--mono); font-size: 11.5px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+}
+.ghost {
+  margin-left: auto; font-family: var(--mono); font-size: 12px;
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 999px; padding: 5px 13px; cursor: pointer;
+}
+.ghost:hover:not(:disabled) { color: var(--text); border-color: var(--ring); }
+.ghost:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.ghost:disabled { opacity: .5; cursor: default; }
+
+.nodes { display: grid; gap: 8px; }
+.node {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 13px;
+  width: 100%; text-align: left; font: inherit; color: inherit;
+  padding: 12px 14px; border-radius: 13px; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line);
+  transition: border-color .16s ease, background .16s ease;
+}
+.node:hover:not(:disabled) { border-color: var(--ring); }
+.node:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.node:disabled { cursor: default; opacity: .65; }
+.node[aria-current="true"] { border-color: var(--signal); background: var(--raised); }
+.node .flag { font-size: 23px; line-height: 1; }
+/* Grid rather than inline, so the name and the address stack instead of
+   running into each other, and each truncates on its own row. */
+.node .who { min-width: 0; display: grid; gap: 1px; }
+.node .nm {
+  font-weight: 570; line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.node .ad {
+  font-family: var(--mono); font-size: 11.5px; color: var(--faint); line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.node .rtt { display: grid; justify-items: end; gap: 4px; }
+.node .ms {
+  font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.node .ms.good { color: var(--signal); }
+.node .ms.fair { color: var(--standby); }
+.node .ms.poor { color: var(--fault); }
+/* Latency as a three-segment bar: the number is exact, the bar is the
+   thing you can read without looking. */
+.bars { display: flex; gap: 2px; color: var(--muted); }
+.bars.good { color: var(--signal); }
+.bars.fair { color: var(--standby); }
+.bars.poor { color: var(--fault); }
+.bars i { width: 5px; height: 8px; border-radius: 1px; background: var(--line); display: block; }
+.bars i.lit { background: currentColor; }
+
+.foot {
+  font-size: 12.5px; color: var(--faint); text-align: center;
+  border-top: 1px solid var(--line-soft); padding-top: 14px;
+}
+.foot code { font-family: var(--mono); color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="topbar">
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l8 3v7c0 5.2-3.4 8.9-8 10-4.6-1.1-8-4.8-8-10V5l8-3z"/></svg>
+    </div>
+    <span class="wordmark">veil</span>
+    <span class="port" id="port"></span>
+    <button class="themetoggle" id="themeBtn" type="button" title="切換佈景" aria-label="切換佈景">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+        <circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="notice hidden" id="demoNote">
+    <span class="dot"></span>
+    <span>示範模式：沒有偵測到本機的 <code>veil-client</code>，以下數據為模擬，不是真實連線。介面與操作和實際版本相同。</span>
+  </div>
+
+  <div class="dial">
+    <button class="power" id="power" type="button" data-state="disconnected" disabled>
+      <span class="pulse"></span>
+      <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+        <path d="M12 3.2v8.4"/>
+        <path d="M18.5 6.4a9 9 0 1 1-13 0"/>
+      </svg>
+      <span class="cap" id="powerCap">連線中</span>
+    </button>
+  </div>
+
+  <div class="readout">
+    <div class="head" id="headline">載入中…</div>
+    <div class="sub" id="subline"></div>
+  </div>
+
+  <div class="strip">
+    <div class="cells">
+      <div class="cell"><div class="v" id="cTime">--:--</div><div class="k">連線時間</div></div>
+      <div class="cell"><div class="v" id="cDown">0 B</div><div class="k">下載</div></div>
+      <div class="cell"><div class="v" id="cUp">0 B</div><div class="k">上傳</div></div>
+    </div>
+    <canvas class="spark" id="spark" aria-hidden="true"></canvas>
+  </div>
+
+  <div class="notice fault hidden" id="faultNote"><span class="dot"></span><span id="faultText"></span></div>
+  <div class="notice standby hidden" id="stateNote"><span class="dot"></span><span id="stateText"></span></div>
+
+  <div class="listbar">
+    <h2>節點</h2>
+    <button class="ghost" id="testBtn" type="button">測速</button>
+  </div>
+  <div class="nodes" id="nodes"></div>
+
+  <div class="foot">
+    把應用程式的代理指向 <code id="footPort">127.0.0.1:1080</code>，SOCKS5 與 HTTP 皆可。
+  </div>
+
+</div>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const API_HEADERS = { "Content-Type": "application/json", "X-Veil-Console": "1" };
+
+let servers = [];
+let status = null;
+let busy = false;
+let demo = false;
+
+/* ------------------------------------------------------------------
+   Theme. The page follows the viewer's system setting until they press
+   the toggle, at which point the choice is stamped on the root element
+   and remembered.
+   ------------------------------------------------------------------ */
+try {
+  const saved = localStorage.getItem("veil-theme");
+  if (saved === "dark" || saved === "light") document.documentElement.dataset.theme = saved;
+} catch (e) { /* private mode: fall back to the system setting */ }
+
+$("themeBtn").onclick = () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme
+    ? root.dataset.theme === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("veil-theme", root.dataset.theme); } catch (e) { /* ignore */ }
+  drawSpark();
+};
+
+/* ------------------------------------------------------------------
+   Simulated backend.
+   The console is one file that the client serves and that also opens
+   straight from disk. When no veil-client answers, it runs against this
+   instead so the interface can still be operated -- clearly labelled,
+   because numbers that look real but are not would be worse than none.
+   ------------------------------------------------------------------ */
+const mock = {
+  servers: [
+    { id: "jp", name: "Japan - Tokyo",      country: "JP", address: "jp.example.com:443",  latency_ms: -1, base: 38,  reachable: true  },
+    { id: "us", name: "United States - LA", country: "US", address: "us.example.com:443",  latency_ms: -1, base: 142, reachable: true  },
+    { id: "de", name: "Germany - Frankfurt",country: "DE", address: "de.example.com:443",  latency_ms: -1, base: 268, reachable: true  },
+    { id: "old",name: "Old Node",           country: "SG", address: "sg.example.com:443",  latency_ms: -1, base: 0,   reachable: false },
+  ],
+  state: "disconnected",
+  activeID: "",
+  since: 0,
+  up: 0,
+  down: 0,
+  conns: 0,
+  lastError: "",
+
+  jitter(base) { return Math.max(1, Math.round(base + (Math.random() - 0.5) * base * 0.28)); },
+
+  find(id) { return this.servers.find((s) => s.id === id); },
+
+  status() {
+    if (this.state === "connected") {
+      // Traffic accrues in bursts, the way browsing actually looks, so
+      // the sparkline shows something with shape rather than a ramp.
+      const burst = Math.random() < 0.72;
+      this.down += burst ? Math.round(Math.random() * 240000) : Math.round(Math.random() * 9000);
+      this.up += burst ? Math.round(Math.random() * 26000) : Math.round(Math.random() * 1800);
+      if (Math.random() < 0.25) this.conns += 1;
+    }
+    const s = this.find(this.activeID);
+    return {
+      state: this.state,
+      server_id: this.activeID,
+      server_name: s ? s.name : "",
+      country: s ? s.country : "",
+      connected_seconds: this.state === "connected" ? Math.floor((Date.now() - this.since) / 1000) : 0,
+      bytes_up: this.up,
+      bytes_down: this.down,
+      active_conns: this.state === "connected" ? Math.min(this.conns, 9) : 0,
+      total_conns: this.conns,
+      proxy_listen: "127.0.0.1:1080",
+      when_disconnected: "block",
+      last_error: this.lastError,
+    };
+  },
+
+  async connect(id) {
+    const s = this.find(id);
+    if (!s) throw new Error(`unknown server: ${id}`);
+    this.state = "connecting";
+    this.activeID = id;
+    this.lastError = "";
+    await new Promise((r) => setTimeout(r, 520 + Math.random() * 520));
+    if (!s.reachable) {
+      this.state = "disconnected";
+      this.activeID = "";
+      s.latency_ms = -1;
+      this.lastError = `dial server ${s.address}: connect: connection refused`;
+      throw new Error(this.lastError);
+    }
+    s.latency_ms = this.jitter(s.base);
+    this.state = "connected";
+    this.since = Date.now();
+    this.up = 0; this.down = 0; this.conns = 1;
+    return this.status();
+  },
+
+  disconnect() {
+    this.state = "disconnected";
+    this.activeID = "";
+    this.since = 0;
+    return this.status();
+  },
+
+  async pingAll() {
+    await new Promise((r) => setTimeout(r, 700));
+    for (const s of this.servers) s.latency_ms = s.reachable ? this.jitter(s.base) : -1;
+    return { servers: this.servers };
+  },
+};
+
+async function api(path, body) {
+  if (demo) {
+    if (path === "/api/status") return mock.status();
+    if (path === "/api/servers") return { servers: mock.servers };
+    if (path === "/api/connect") return mock.connect(body.server_id);
+    if (path === "/api/disconnect") return mock.disconnect();
+    if (path === "/api/ping") return mock.pingAll();
+    throw new Error("unknown endpoint");
+  }
+  const res = await fetch(path, {
+    method: body === undefined ? "GET" : "POST",
+    headers: API_HEADERS,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+/* ------------------------------------------------------------------ */
+
+// A two-letter country code maps onto regional indicator symbols, which
+// render as that country's flag. Anything else falls back to a globe.
+function flagOf(cc) {
+  if (!cc || !/^[a-zA-Z]{2}$/.test(cc)) return "🌐";
+  return String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+}
+
+function humanBytes(n) {
+  if (!n) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)), units.length - 1);
+  const v = n / Math.pow(1024, i);
+  return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+}
+
+// A connected session that is under a second old still has a duration of
+// zero, which is a real reading -- only a missing one shows as dashes.
+function humanTime(sec) {
+  if (sec == null || sec < 0) return "--:--";
+  const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, s = sec % 60;
+  const mm = String(m).padStart(2, "0"), ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function rttGrade(ms) {
+  if (ms < 0) return { cls: "poor", lit: 0 };
+  if (ms < 120) return { cls: "good", lit: 3 };
+  if (ms < 300) return { cls: "fair", lit: 2 };
+  return { cls: "poor", lit: 1 };
+}
+
+/* --- throughput sparkline ------------------------------------------- */
+const history = new Array(64).fill(0);
+let lastTotal = 0;
+
+function pushThroughput(total) {
+  const delta = lastTotal === 0 ? 0 : Math.max(0, total - lastTotal);
+  lastTotal = total;
+  history.push(delta);
+  history.shift();
+}
+
+function drawSpark() {
+  const canvas = $("spark");
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(rect.width * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, rect.width, rect.height);
+
+  const css = getComputedStyle(document.documentElement);
+  const connected = status && status.state === "connected";
+  const stroke = css.getPropertyValue(connected ? "--signal" : "--faint").trim();
+  const peak = Math.max(...history, 1);
+  const w = rect.width, h = rect.height, pad = 4;
+  const step = w / (history.length - 1);
+
+  const y = (v) => h - pad - (v / peak) * (h - pad * 2);
+
+  ctx.beginPath();
+  history.forEach((v, i) => (i ? ctx.lineTo(i * step, y(v)) : ctx.moveTo(0, y(v))));
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  ctx.fillStyle = stroke + "1f";
+  ctx.fill();
+
+  ctx.beginPath();
+  history.forEach((v, i) => (i ? ctx.lineTo(i * step, y(v)) : ctx.moveTo(0, y(v))));
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+
+  // The newest sample is the one being read, so it gets a marker.
+  if (connected) {
+    ctx.beginPath();
+    ctx.arc(w - 1, y(history[history.length - 1]), 2.4, 0, Math.PI * 2);
+    ctx.fillStyle = stroke;
+    ctx.fill();
+  }
+}
+
+/* --- rendering ------------------------------------------------------- */
+function renderNodes() {
+  const box = $("nodes");
+  box.textContent = "";
+
+  for (const s of servers) {
+    const active = status && status.state === "connected" && status.server_id === s.id;
+    const grade = rttGrade(s.latency_ms);
+
+    const btn = document.createElement("button");
+    btn.className = "node";
+    btn.type = "button";
+    btn.setAttribute("aria-current", active ? "true" : "false");
+    btn.disabled = busy;
+    btn.onclick = () => (active ? disconnect() : connect(s.id));
+
+    const flag = document.createElement("span");
+    flag.className = "flag";
+    flag.textContent = flagOf(s.country);
+
+    const who = document.createElement("span");
+    who.className = "who";
+    const nm = document.createElement("span");
+    nm.className = "nm";
+    nm.textContent = s.name;
+    const ad = document.createElement("span");
+    ad.className = "ad";
+    ad.textContent = s.address;
+    who.append(nm, ad);
+
+    const rtt = document.createElement("span");
+    rtt.className = "rtt";
+    const ms = document.createElement("span");
+    ms.className = "ms " + grade.cls;
+    ms.textContent = s.latency_ms < 0 ? "—" : `${s.latency_ms} ms`;
+    const bars = document.createElement("span");
+    bars.className = "bars " + grade.cls;
+    for (let i = 0; i < 3; i++) {
+      const bar = document.createElement("i");
+      if (i < grade.lit) bar.className = "lit";
+      bars.append(bar);
+    }
+    rtt.append(ms, bars);
+
+    btn.append(flag, who, rtt);
+    box.append(btn);
+  }
+
+  if (!servers.length) {
+    const empty = document.createElement("div");
+    empty.className = "notice";
+    empty.textContent = "設定檔裡沒有節點。";
+    box.append(empty);
+  }
+}
+
+function render() {
+  if (!status) return;
+  const state = status.state;
+
+  const power = $("power");
+  power.dataset.state = state;
+  power.disabled = busy || !servers.length;
+  $("powerCap").textContent =
+    state === "connected" ? "已連線" : state === "connecting" ? "連線中" : "未連線";
+
+  $("headline").textContent =
+    state === "connected" ? "流量正通過加密通道"
+    : state === "connecting" ? "正在建立通道"
+    : "通道未啟用";
+
+  $("subline").textContent =
+    state === "connected" && status.server_name
+      ? `${flagOf(status.country)} ${status.server_name} · ${status.active_conns} 條連線`
+      : "";
+
+  $("cTime").textContent = state === "connected" ? humanTime(status.connected_seconds) : "--:--";
+  $("cDown").textContent = humanBytes(status.bytes_down);
+  $("cUp").textContent = humanBytes(status.bytes_up);
+  $("port").textContent = status.proxy_listen || "";
+  $("footPort").textContent = status.proxy_listen || "127.0.0.1:1080";
+
+  const fault = $("faultNote");
+  fault.classList.toggle("hidden", !status.last_error);
+  if (status.last_error) $("faultText").textContent = "連線失敗：" + status.last_error;
+
+  // Say plainly what happens to traffic right now. "Disconnected" means
+  // two very different things depending on this setting, and guessing
+  // wrong is how a leak goes unnoticed.
+  const note = $("stateNote");
+  const show = state !== "connected";
+  note.classList.toggle("hidden", !show);
+  if (show) {
+    const blocking = status.when_disconnected === "block";
+    $("stateText").textContent = blocking
+      ? "未連線時，經過本機代理的流量會被拒絕，不會以未加密的方式送出。"
+      : "注意：未連線時流量會直接送出，不經過通道也未加密。";
+    note.className = "notice " + (blocking ? "standby" : "fault");
+  }
+
+  pushThroughput(status.bytes_up + status.bytes_down);
+  drawSpark();
+  renderNodes();
+}
+
+/* --- actions --------------------------------------------------------- */
+async function refresh() {
+  try {
+    status = await api("/api/status");
+    render();
+  } catch (e) {
+    $("headline").textContent = "無法連上本機服務";
+    $("subline").textContent = String(e.message || e);
+  }
+}
+
+async function loadServers() {
+  try {
+    const data = await api("/api/servers");
+    servers = data.servers || [];
+    renderNodes();
+  } catch (e) { /* the status poll surfaces the failure */ }
+}
+
+async function connect(id) {
+  if (busy) return;
+  busy = true;
+  status = { ...(status || {}), state: "connecting", server_id: id, last_error: "" };
+  render();
+  try {
+    status = await api("/api/connect", { server_id: id });
+  } catch (e) {
+    await refresh();
+    if (status) status.last_error = String(e.message || e);
+  } finally {
+    busy = false;
+    render();
+    loadServers();
+  }
+}
+
+async function disconnect() {
+  if (busy) return;
+  busy = true;
+  try {
+    status = await api("/api/disconnect", {});
+  } catch (e) { /* refreshed below */ }
+  finally {
+    busy = false;
+    await refresh();
+  }
+}
+
+$("power").onclick = () => {
+  if (!status) return;
+  if (status.state === "connected") return disconnect();
+  const target = status.server_id || (servers[0] && servers[0].id);
+  if (target) connect(target);
+};
+
+$("testBtn").onclick = async () => {
+  const btn = $("testBtn");
+  btn.disabled = true;
+  btn.textContent = "測速中";
+  try {
+    const data = await api("/api/ping", {});
+    servers = data.servers || servers;
+    renderNodes();
+  } catch (e) { /* keep the previous readings */ }
+  finally {
+    btn.disabled = false;
+    btn.textContent = "測速";
+  }
+};
+
+window.addEventListener("resize", drawSpark);
+
+/* --- boot ------------------------------------------------------------ */
+(async function start() {
+  // Detect a real backend once. Anything other than a valid answer --
+  // opened from disk, published as a static page, client not running --
+  // drops the console into the labelled simulation.
+  //
+  // A file:// page is checked by protocol rather than by attempting the
+  // request: the browser refuses it before it leaves, and the resulting
+  // CORS error would land in the console of every user who simply opened
+  // the file, looking like a fault when it is the expected case.
+  const servable = location.protocol === "http:" || location.protocol === "https:";
+  if (servable) {
+    try {
+      const res = await fetch("/api/status", { headers: API_HEADERS });
+      if (!res.ok) throw new Error("no backend");
+      await res.json();
+    } catch (e) {
+      demo = true;
+    }
+  } else {
+    demo = true;
+  }
+  if (demo) $("demoNote").classList.remove("hidden");
+
+  await loadServers();
+  await refresh();
+  setInterval(refresh, 1000);
+})();
+</script>
+</body>
+</html>

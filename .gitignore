@@ -1,0 +1,12 @@
+bin/
+certs/
+*.pem
+*.key
+*.crt
+
+# Real configuration contains passwords; only the examples belong in git.
+server.json
+client.json
+!examples/*.json
+.demo/
+dist/

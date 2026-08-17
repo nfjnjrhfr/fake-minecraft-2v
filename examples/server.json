@@ -1,0 +1,19 @@
+{
+  "listen": ":443",
+
+  "users": [
+    { "name": "me", "password": "REPLACE-ME-WITH-A-LONG-RANDOM-PASSWORD" }
+  ],
+
+  "tls": {
+    "cert": "/etc/letsencrypt/live/example.com/fullchain.pem",
+    "key": "/etc/letsencrypt/live/example.com/privkey.pem"
+  },
+
+  "fallback": "127.0.0.1:8080",
+
+  "allow_private": false,
+  "handshake_timeout": "15s",
+  "idle_timeout": "5m",
+  "log_level": "info"
+}
