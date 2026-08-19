@@ -1,2 +1,72 @@
-# fake-minecraft-2v
-u8ujujujujujujujujujuujuujujujujuujujujujujjujjujujujuujjunjerivcfv dnds xdfbdehbhebhbdehbhbhrhbehebhderbhrvrdfgvfrfrevefvfegfhdevegdervgedryegehwrwehgerhwhrbhdbhdbdhbedbdiuheiuhur4ury4yeeyurheu4u44uyy56t4rueyrjdhjddbhdjebbhjejbhdwehjhejrhjedhjdjdndejndjnsdsjndsjndsjkkd.                                                                             67
+# 網速檢測儀
+
+在瀏覽器裡量測**下載速度、上傳速度、延遲（ping）與抖動（jitter）**的測速工具。
+純前端、零相依套件，另外附一個同樣零相依的 Node 測速伺服器。
+
+## 快速開始
+
+```bash
+node server.js          # 或 npm start
+```
+
+然後開啟終端機印出的網址（預設 <http://localhost:8080>）。
+想從手機測試同一台主機，用它印出的區域網路網址即可。
+
+```bash
+PORT=3000 node server.js   # 換連接埠
+```
+
+## 兩種測速對象
+
+在頁面的「測試設定」裡切換：
+
+| 選項 | 量到的是什麼 | 需要 |
+| --- | --- | --- |
+| **本機伺服器** | 你的裝置與跑 `server.js` 的主機之間的速度（適合量 Wi‑Fi、區網、自架伺服器） | 先啟動 `server.js` |
+| **Cloudflare** | 對外網際網路速度 | 可連上網際網路 |
+
+直接用 `file://` 開啟 `index.html` 時，因為沒有本機伺服器可用，會自動改用 Cloudflare。
+
+## 量測方式
+
+- **延遲 / 抖動**：連續 12 次極小的往返請求。第一次含 DNS/TCP/TLS 建線成本所以捨棄，
+  ping 取中位數（不受單次尖峰影響），抖動取相鄰兩次延遲差的平均。
+- **下載**：多條連線同時抓隨機資料，用串流邊讀邊計數；區塊大小會依上一塊花費的時間
+  自動調整（1 MiB～128 MiB），避免快線路把時間都花在建立連線上。
+- **上傳**：多條連線同時 POST 隨機資料，靠 `XMLHttpRequest` 的上傳進度事件計數。
+  負載包成 `Blob` 送出——實測直接送 TypedArray 時瀏覽器每次都會整塊複製，
+  會讓上傳速度低估一個量級。
+- **平均值**：每個階段開頭 25%（最多 1.5 秒）不列入計算，避開 TCP 慢啟動造成的低估；
+  時間一到會中斷還在傳輸中的請求，所以階段不會拖過設定的秒數。
+- 資料內容都是隨機亂數，避免中途被壓縮而虛報速度；所有請求都帶 no-store，避免命中快取。
+
+### 幾個誠實的限制
+
+- 上傳量到的是「交給作業系統網路堆疊的位元組數」，不是對方確實收到的量——瀏覽器只提供這個資訊。
+- 測速結果會受裝置 CPU、瀏覽器、Wi‑Fi 訊號與同時使用網路的其他程式影響。
+- 選 Cloudflare 時，量到的是你到最近一個 Cloudflare 節點的速度。
+
+## 伺服器 API
+
+| 端點 | 說明 |
+| --- | --- |
+| `GET /api/ping` | 回 204，用來量往返延遲 |
+| `GET /api/download?bytes=N` | 串流 N 位元組隨機資料（上限 512 MiB） |
+| `POST /api/upload` | 接收並丟棄內容，回傳 `{"bytes":N}` |
+
+三個端點都開放 CORS，所以也可以讓別的頁面直接拿來用。
+
+## 檔案結構
+
+```
+index.html          頁面
+assets/styles.css   樣式（自動跟隨系統深／淺色）
+src/config.js       端點與預設值
+src/speedtest.js    測速核心：延遲、下載、上傳
+src/gauge.js        SVG 儀表
+src/chart.js        即時速度曲線（canvas）
+src/main.js         介面串接、設定與歷史紀錄
+server.js           本機測速伺服器（零相依）
+```
+
+需求：Node.js 18 以上；瀏覽器需支援 ES 模組與 `fetch` 串流（近年的 Chrome、Edge、Firefox、Safari 皆可）。

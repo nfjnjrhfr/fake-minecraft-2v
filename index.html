@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>網速檢測儀</title>
+<meta name="description" content="在瀏覽器裡量測下載、上傳速度與網路延遲的測速工具。">
+<link rel="stylesheet" href="assets/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>⚡</text></svg>">
+</head>
+<body>
+<main class="app">
+  <header class="app__head">
+    <h1 class="app__title">網速檢測儀</h1>
+    <p class="app__sub">量測你目前連線的下載、上傳速度與延遲</p>
+  </header>
+
+  <section class="stage" aria-live="polite">
+    <div class="gauge">
+      <svg class="gauge__svg" viewBox="0 0 300 300" role="img" aria-label="速度儀表">
+        <defs>
+          <linearGradient id="gaugeGrad" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0%" stop-color="var(--accent-2)"/>
+            <stop offset="100%" stop-color="var(--accent)"/>
+          </linearGradient>
+        </defs>
+        <path class="gauge__track" d="" fill="none" stroke-linecap="round"/>
+        <path class="gauge__value" d="" fill="none" stroke-linecap="round" stroke="url(#gaugeGrad)"/>
+        <g class="gauge__ticks"></g>
+      </svg>
+      <div class="gauge__center">
+        <div class="gauge__phase" id="phaseLabel">準備就緒</div>
+        <div class="gauge__num"><span id="liveValue">0.0</span></div>
+        <div class="gauge__unit">Mbps</div>
+      </div>
+    </div>
+
+    <button class="start" id="startBtn" type="button">開始測速</button>
+  </section>
+
+  <section class="results" id="results">
+    <div class="card" data-metric="ping">
+      <div class="card__label">延遲 Ping</div>
+      <div class="card__value"><span id="pingValue">—</span><small>ms</small></div>
+    </div>
+    <div class="card" data-metric="jitter">
+      <div class="card__label">抖動 Jitter</div>
+      <div class="card__value"><span id="jitterValue">—</span><small>ms</small></div>
+    </div>
+    <div class="card" data-metric="download">
+      <div class="card__label">下載</div>
+      <div class="card__value"><span id="downloadValue">—</span><small>Mbps</small></div>
+    </div>
+    <div class="card" data-metric="upload">
+      <div class="card__label">上傳</div>
+      <div class="card__value"><span id="uploadValue">—</span><small>Mbps</small></div>
+    </div>
+  </section>
+
+  <section class="chart-wrap">
+    <canvas id="chart" class="chart" width="1200" height="320" role="img" aria-label="即時速度曲線"></canvas>
+    <div class="legend">
+      <span class="legend__item legend__item--dl">下載</span>
+      <span class="legend__item legend__item--ul">上傳</span>
+    </div>
+  </section>
+
+  <details class="settings">
+    <summary>測試設定</summary>
+    <div class="settings__grid">
+      <label class="field">
+        <span>測速伺服器</span>
+        <select id="serverSelect">
+          <option value="local">本機伺服器（node server.js）</option>
+          <option value="cloudflare">Cloudflare（speed.cloudflare.com）</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>每階段秒數：<b id="durationOut">8</b> 秒</span>
+        <input id="durationInput" type="range" min="3" max="20" step="1" value="8">
+      </label>
+      <label class="field">
+        <span>並行連線數：<b id="streamsOut">4</b></span>
+        <input id="streamsInput" type="range" min="1" max="8" step="1" value="4">
+      </label>
+      <label class="field field--check">
+        <input id="uploadToggle" type="checkbox" checked>
+        <span>測試上傳速度</span>
+      </label>
+    </div>
+    <p class="settings__hint" id="serverHint"></p>
+  </details>
+
+  <section class="history" id="historySection" hidden>
+    <h2 class="history__title">歷史紀錄</h2>
+    <div class="history__scroll">
+      <table class="history__table">
+        <thead>
+          <tr><th>時間</th><th>下載</th><th>上傳</th><th>延遲</th><th>伺服器</th></tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+    <button class="ghost" id="clearHistory" type="button">清除紀錄</button>
+  </section>
+
+  <p class="status" id="status"></p>
+</main>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

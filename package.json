@@ -1,0 +1,13 @@
+{
+  "name": "network-speed-tester",
+  "version": "1.0.0",
+  "description": "在瀏覽器裡量測下載、上傳速度與延遲的網速檢測儀，內含零依賴的本機測速伺服器。",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
