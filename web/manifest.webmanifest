@@ -1,0 +1,15 @@
+{
+  "name": "游玩时间系统",
+  "short_name": "游玩时间",
+  "description": "学习换游玩时间：学满 30 分钟登记一次，玩 30 分钟，冷却 6 小时",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1b1b23",
+  "theme_color": "#1b1b23",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

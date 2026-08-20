@@ -126,3 +126,92 @@ body {
 }
 .link:hover { color: var(--text); }
 .dot { margin: 0 8px; }
+
+/* ------------------------------------------------------ 提示条 */
+
+.banner {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 2px solid var(--grass-dark);
+  background: #24331d;
+  color: #cfe6c0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.banner-warn {
+  border-color: #7a5f21;
+  background: #33291a;
+  color: #e8d3a0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.btn-small { padding: 6px 12px; font-size: 12px; white-space: nowrap; }
+
+/* ------------------------------------------------------ 两道门槛 */
+
+.gates { display: flex; gap: 10px; margin-top: 12px; }
+.gate {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12px;
+}
+.gate[data-passed="true"] { border-color: var(--grass-dark); }
+.gate-icon { color: var(--muted); font-size: 14px; }
+.gate[data-passed="true"] .gate-icon { color: var(--grass); }
+.gate-name { color: var(--muted); }
+.gate-value { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------ 学习卡片 */
+
+.card {
+  margin-top: 12px;
+  padding: 16px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.card-head { display: flex; align-items: baseline; justify-content: space-between; }
+.card-head h2 { margin: 0; font-size: 15px; letter-spacing: 1px; }
+.study-credits { font-size: 11px; color: var(--grass); }
+
+.study[data-running="true"] { border-color: #3f6ea8; }
+
+.study-time {
+  margin: 10px 0 8px;
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  color: #7fb2e8;
+}
+.study[data-running="true"] .study-time { color: #a8d0f5; }
+.study-need { font-size: 14px; color: var(--muted); }
+
+.progress-study { height: 10px; }
+.progress-study .progress-bar { background: #4f86c6; }
+
+.btn-study { background: #35506e; border-color: #3f6ea8; color: #e6f0fa; width: 100%; }
+.btn-study:hover:not(:disabled) { background: #3f6187; }
+.study[data-running="true"] .btn-study { background: #6e4a35; border-color: #a8703f; }
+
+.card .actions { margin: 12px 0 6px; }
+.card .hint { text-align: left; }
+
+/* ------------------------------------------------------ 其它 */
+
+.game-note { font-size: 11px !important; color: var(--muted); }
+
+.footer { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.opt { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.opt input { cursor: pointer; }
+
+.panel[data-phase="study_required"] .badge { background: #4f86c6; }
+.panel[data-phase="study_required"] .countdown { color: #7fb2e8; }
+.panel[data-phase="study_required"] .progress-bar { background: #4f86c6; }

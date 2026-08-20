@@ -1,69 +1,107 @@
 # fake-minecraft-2v · 游玩时间系统
 
-一套「**30 分钟游玩 → 6 小时冷却 → 再领 30 分钟**」的限时游玩系统。
-所有计时都基于**绝对时间戳**，页面切到后台、被浏览器节流、甚至整个关掉，时间照样在真实世界里流逝，
-下次打开会自动结算到正确的状态。
+**学习换游玩时间**：学满 30 分钟才能登记一次，登记得到 30 分钟游玩时间，玩完冷却 6 小时。
+
+计时全部基于**绝对时间戳**，所以你可以登记完就切到别的 App 去玩 —— 时间在真实世界里照走，
+到点了会**弹通知把你叫回来**，回来时状态一定是结算好的。
 
 ## 状态机
 
 ```
-        领取奖励                30 分钟用完               冷却满 6 小时
-READY ─────────────► PLAYING ─────────────► COOLDOWN ─────────────► READY
- 可领取               游玩中                  冷却中                   可领取
-                        └───── 提前结束 ────────┘
+                       ┌──────────── 冷却满 6 小时 ─────────────┐
+                       ▼                                        │
+              ┌─────────────────┐   学满 30 分钟   ┌─────────┐   │
+              │ STUDY_REQUIRED  │ ───────────────► │  READY  │   │
+              │    需要学习     │                  │ 可登记  │   │
+              └─────────────────┘                  └────┬────┘   │
+                                                        │ 登记    │
+                                                        ▼        │
+                                   ┌──────────┐    ┌─────────┐   │
+                                   │ COOLDOWN │◄───│ PLAYING │───┘
+                                   │ 冷却 6h  │    │ 玩 30分 │
+                                   └──────────┘    └─────────┘
+                                        30 分钟用完 / 提前结束
 ```
 
-| 状态 | 含义 | 能玩吗 | 能领取吗 |
-| --- | --- | --- | --- |
-| `READY` | 空闲，可以领取 30 分钟 | ❌ | ✅ |
-| `PLAYING` | 游玩中，倒计时 30 分钟 | ✅ | ❌ |
-| `COOLDOWN` | 冷却中，倒计时 6 小时 | ❌ | ❌ |
+登记要同时过**两道独立的门槛**：
 
-关键点：**冷却从「游玩实际结束的那一刻」起算，而不是从你下次打开页面被发现的那一刻起算。**
-所以玩完 30 分钟直接关掉电脑，7 小时后回来就是 `READY`，不用再等。
+| 门槛 | 条件 |
+| --- | --- |
+| 学习 | 学习时长存款 ≥ 30 分钟 |
+| 冷却 | 距上次游玩结束已满 6 小时 |
+
+两道门槛互不干扰，所以**冷却期间就可以先把下一轮的学习做掉**，冷却一结束立刻能登记。
+学习也可以提前多学，存款够几个 30 分钟，`credits` 就是几。
+
+## 后台计时：切到别的 App 会发生什么
+
+| 你在干嘛 | 计时 | 提醒 |
+| --- | --- | --- |
+| 切到游戏 App，页面还在内存里 | 照走 | ✅ 到点弹通知 |
+| 页面被手机系统冻结 | 照走 | ⚠️ 尽力而为（Service Worker 没被回收就能弹） |
+| 把 App 整个关掉 | 照走 | ❌ 弹不了，但**打开时状态一定是对的**，还会告诉你离开期间发生了什么 |
+
+三层保险：
+
+1. **页面里的定时器** —— 页面活着就一定响；
+2. **Service Worker** —— 页面关了、SW 还没被系统回收时接着响；
+3. **回来补发** —— 前两层都被杀掉了，回到页面时立刻补一条通知 + 顶部横幅说明。
+
+第 3 层一定生效，因为状态只看时间戳，不依赖任何定时器活着。
+想要 100% 准时的后台闹钟，只能上 Web Push（需要服务端）或原生 App —— 网页做不到，这是浏览器的限制，不是这里偷懒。
+
+系统时间往回拨没用：所有时间锚点会按同样差值平移，剩余时间和已学时长都不变，
+并计入 `clockAnomalies`。往前拨在纯前端治不了，把 `now` 换成服务器时间即可根治。
 
 ## 跑起来看
 
 ```bash
 npm run serve          # 打开 http://localhost:8080
-npm test               # 26 项单元测试
+npm test               # 42 项单元测试
 ```
 
-演示界面右下角有「演示模式」开关，把 30 分钟 / 6 小时压缩成 30 秒 / 1 分钟，
-一分半钟就能肉眼看完整个循环。
+界面底部有「演示模式」开关，把 30 分钟 / 6 小时压成 20 秒 / 30 秒 / 1 分钟，两分钟看完整个循环。
+
+页面是可安装的 PWA（有 manifest + Service Worker），手机上「添加到主屏幕」之后就是个独立 App，
+通知也更容易活下来。
 
 ## 在代码里用
 
 ```js
-import { PlaytimeTimer, formatDuration } from './src/index.js';
+import { PlaytimeTimer, Phase, formatDuration } from './src/index.js';
 import { createBrowserStorage } from './src/storage.js';
 
 const timer = new PlaytimeTimer({ storage: createBrowserStorage() });
 
-// 领取 30 分钟
+// 开始学习(也按真实时间走，可以锁屏去看书)
+timer.startStudy();
+// timer.pauseStudy();     // 暂停，已经学的会存进"存款"，不会白学
+
+// 登记：扣掉 30 分钟学习存款，换 30 分钟游玩
 const res = timer.claim();
 if (!res.ok) {
-  console.log(res.reason === 'cooldown' ? '还在冷却中' : '本轮还没玩完');
+  console.log({
+    'study-required': '学习时长不够',
+    cooldown: '还在冷却中',
+    playing: '本轮还没玩完',
+  }[res.reason]);
 }
 
-// 每秒刷新倒计时
 timer.startTicking(1000);
-timer.on('tick', (s) => {
-  console.log(s.phase, formatDuration(s.remainingMs));
-});
-
-// 状态迁移时的回调
+timer.on('tick', (s) => console.log(s.phase, formatDuration(s.remainingMs)));
 timer.on('session-end', () => console.log('时间到，开始冷却'));
-timer.on('cooldown-end', () => console.log('冷却结束，可以再领了'));
+timer.on('cooldown-end', () => console.log('冷却结束'));
+timer.on('study-goal', () => console.log('学习达标'));
 ```
 
 ### 构造参数
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `storage` | 内存存储 | 与 `localStorage` 同接口（`getItem`/`setItem`）。浏览器传 `createBrowserStorage()`，Node 传 `createFileStorage(路径)` |
-| `storageKey` | `'fake-minecraft:playtime:v1'` | 存储键名 |
+| `storage` | 内存存储 | 与 `localStorage` 同接口。浏览器传 `createBrowserStorage()`，Node 传 `createFileStorage(路径)` |
+| `storageKey` | `'fake-minecraft:playtime:v2'` | 存储键名 |
 | `now` | `() => Date.now()` | 时间源。**传服务器时间即可彻底防作弊** |
+| `studyRequiredMs` | 30 分钟 | 登记一次需要的学习时长，设为 `0` 就退化成"纯冷却"模式 |
 | `playDurationMs` | 30 分钟 | 单次游玩时长 |
 | `cooldownDurationMs` | 6 小时 | 冷却时长 |
 
@@ -71,57 +109,72 @@ timer.on('cooldown-end', () => console.log('冷却结束，可以再领了'));
 
 | 方法 | 说明 |
 | --- | --- |
-| `claim()` / `startSession()` | 领取并开始游玩。返回 `{ok:true, snapshot}` 或 `{ok:false, reason:'playing'\|'cooldown'}` |
-| `endSession()` | 提前结束。冷却立刻起算 6 小时，没用完的时间**不保留** |
-| `refresh()` | 结算到此刻并触发应有的状态迁移，返回快照 |
+| `startStudy()` | 开始/继续计学习时间。游玩中不能学习（`reason: 'playing'`） |
+| `pauseStudy()` | 暂停，已学时长存进存款 |
+| `claim()` / `startSession()` | 登记。失败返回 `reason: 'study-required' \| 'cooldown' \| 'playing'` |
+| `endSession()` | 提前结束。冷却立刻起算，没用完的时间**不保留** |
+| `refresh()` | 结算到此刻并触发应有的状态迁移 |
 | `getSnapshot()` | 纯读取当前状态，不触发迁移 |
 | `on(event, fn)` | 订阅事件，返回取消订阅的函数 |
 | `startTicking(ms)` / `stopTicking()` | 定时结算，只为了让 UI 秒数跳动 |
-| `reset()` | 清空全部进度 |
+| `reset()` | 清空全部进度（含学习存款） |
 
 ### 快照字段
 
 ```js
 {
-  phase,                // 'ready' | 'playing' | 'cooldown'
-  canPlay, canClaim,    // 布尔值，直接拿来控制 UI
-  remainingMs,          // 当前阶段剩余毫秒
-  remainingPlayMs,      // 本轮游玩剩余
-  remainingCooldownMs,  // 冷却剩余
-  progress,             // 当前阶段进度 0~1
-  nextClaimAt,          // 下次可领取的时间戳，READY 时为 null
-  sessionsCompleted,    // 已完成场次
-  totalPlayedMs,        // 累计游玩时长
-  clockAnomalies,       // 检测到系统时间被回拨的次数
+  phase,                // 'study_required' | 'ready' | 'playing' | 'cooldown'
+  canPlay, canClaim, canStudy,
+  remainingPlayMs, remainingCooldownMs, remainingMs, progress,
+  gates: {
+    study:    { passed, remainingMs },   // 两道门槛，UI 可以分开显示
+    cooldown: { passed, remainingMs },
+  },
+  study: {
+    running,        // 是否正在计学习时间
+    bankedMs,       // 学习存款
+    requiredMs,     // 登记一次要多少
+    remainingMs,    // 还差多久
+    progress,       // 0~1
+    passed,         // 够不够登记一次
+    credits,        // 存款够登记几次
+  },
+  sessionsCompleted, totalPlayedMs, totalStudiedMs, clockAnomalies,
 }
 ```
 
 ### 事件
 
-`tick`（每次结算）· `change`（状态变化）· `session-start` · `session-end` · `cooldown-end`
+`tick`（每次结算）· `change`（状态变化）· `study-start` · `study-pause` · `study-goal` ·
+`session-start` · `session-end` · `cooldown-end`
 
-## 为什么后台计时是准的
+### 闹钟层（浏览器）
 
-- **不累加 tick，只比较时间戳。** 状态由 `sessionEndsAt` / `cooldownEndsAt` 两个绝对时间决定，
-  浏览器把后台标签页的 `setInterval` 节流到几分钟一次也不会算少。
-- **一次结算能跨多级。** 离线 10 小时后回来，一次 `refresh()` 直接把
-  「游玩结束 → 冷却结束」两级迁移都补上。
-- **从 bfcache 恢复也会重算。** `visibilitychange` / `focus` / `pageshow` 都会触发重新结算。
-- **多标签页同步。** 监听 `storage` 事件，一个标签页领取后另一个立刻跟上。
+```js
+import { AlarmScheduler } from './src/alarms.js';
 
-## 防作弊
+const alarms = new AlarmScheduler({ storage: localStorage });
+await alarms.init();               // 注册 Service Worker
+await alarms.requestPermission();  // 必须由用户点击触发
 
-- **往回拨系统时间没用。** 检测到时钟回拨会把所有 deadline 按同样差值平移，剩余时间保持不变，
-  并累计到 `clockAnomalies`。
-- **往前拨时间**在纯客户端无法根治 —— 生产环境请把 `now` 换成服务器时间，
-  或者干脆把 `PlaytimeTimer` 跑在服务端（它不依赖任何浏览器 API）。
+alarms.set([{ id: 'play-end', at: Date.now() + 30 * 60_000, title: '时间到', body: '快回来' }]);
+alarms.checkMissed();              // 回到页面时补发错过的
+```
+
+同一条闹钟按 `id + 时间戳` 去重，通知用同 `tag`，所以页面和 Service Worker 同时响也只会看到一条。
+
+> ⚠️ **别只靠 `set()` 排的定时器。** 页面活着的时候，请直接在 `session-end` / `cooldown-end` /
+> `study-goal` 事件里调 `alarms.fire()`（`web/app.js` 就是这么做的）。
+> 因为每秒的 tick 一旦先结算出状态变化，重排闹钟会把那个还没来得及响的定时器一起清掉，通知就丢了。
 
 ## 目录
 
 ```
 src/playtime-timer.js   核心状态机（浏览器 / Node 通用，零依赖）
 src/storage.js          存储适配器：内存 / localStorage / 文件
-web/                    演示界面
-test/                   单元测试
+src/alarms.js           闹钟层：三层保险的通知调度
+web/                    可安装的 PWA 界面
+web/sw.js               Service Worker：第二层闹钟 + 离线可用
+test/                   42 项单元测试
 scripts/serve.js        静态服务器
 ```

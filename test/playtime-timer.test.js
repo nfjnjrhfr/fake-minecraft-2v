@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PlaytimeTimer, Phase, formatDuration, MINUTE, HOUR } from '../src/index.js';
+import { PlaytimeTimer, Phase, formatDuration, formatElapsed, MINUTE, HOUR } from '../src/index.js';
 import { createMemoryStorage } from '../src/storage.js';
 
 /** 可控时钟 */
@@ -14,7 +14,13 @@ function fakeClock(start = 1_700_000_000_000) {
   };
 }
 
+/** 只关心游玩/冷却逻辑时, 把学习门槛设为 0 */
 function makeTimer(clock, storage = createMemoryStorage(), extra = {}) {
+  return new PlaytimeTimer({ storage, now: clock.now, studyRequiredMs: 0, ...extra });
+}
+
+/** 带学习门槛的计时器, 默认学满 30 分钟才能登记 */
+function makeStudyTimer(clock, storage = createMemoryStorage(), extra = {}) {
   return new PlaytimeTimer({ storage, now: clock.now, ...extra });
 }
 
@@ -254,20 +260,20 @@ test('存储不可用时降级为纯内存运行', () => {
   assert.equal(timer.getSnapshot().phase, Phase.PLAYING);
 });
 
-test('nextClaimAt 指向下一次可领取的时刻', () => {
+test('cooldownReadyAt 指向冷却结束的时刻', () => {
   const clock = fakeClock();
   const timer = makeTimer(clock);
   const start = clock.now();
   timer.claim();
-  assert.equal(timer.getSnapshot().nextClaimAt, start + 30 * MINUTE + 6 * HOUR);
+  assert.equal(timer.getSnapshot().cooldownReadyAt, start + 30 * MINUTE + 6 * HOUR);
 
   clock.advance(30 * MINUTE);
   timer.refresh();
-  assert.equal(timer.getSnapshot().nextClaimAt, start + 30 * MINUTE + 6 * HOUR);
+  assert.equal(timer.getSnapshot().cooldownReadyAt, start + 30 * MINUTE + 6 * HOUR);
 
   clock.advance(6 * HOUR);
   timer.refresh();
-  assert.equal(timer.getSnapshot().nextClaimAt, null);
+  assert.equal(timer.getSnapshot().cooldownReadyAt, null);
 });
 
 test('reset 清空全部进度', () => {
@@ -315,4 +321,279 @@ test('tick 事件每次结算都触发, 供 UI 刷新秒数', () => {
   clock.advance(1000);
   timer.refresh();
   assert.equal(ticks, base + 2);
+});
+
+// ------------------------------------------------------------ 学习换游玩时间
+
+test('初始状态是 STUDY_REQUIRED, 没学习不能登记', () => {
+  const clock = fakeClock();
+  const timer = makeStudyTimer(clock);
+  const s = timer.getSnapshot();
+  assert.equal(s.phase, Phase.STUDY_REQUIRED);
+  assert.equal(s.canClaim, false);
+  assert.equal(s.canStudy, true);
+  assert.equal(s.study.remainingMs, 30 * MINUTE);
+
+  const res = timer.claim();
+  assert.equal(res.ok, false);
+  assert.equal(res.reason, 'study-required');
+});
+
+test('学满 30 分钟后才能登记, 登记扣掉这 30 分钟', () => {
+  const clock = fakeClock();
+  const timer = makeStudyTimer(clock);
+
+  timer.startStudy();
+  clock.advance(29 * MINUTE);
+  assert.equal(timer.refresh().phase, Phase.STUDY_REQUIRED, '差 1 分钟还不行');
+  assert.equal(timer.claim().ok, false);
+
+  clock.advance(1 * MINUTE);
+  const s = timer.refresh();
+  assert.equal(s.phase, Phase.READY);
+  assert.equal(s.study.passed, true);
+
+  const res = timer.claim();
+  assert.equal(res.ok, true);
+  assert.equal(res.snapshot.remainingPlayMs, 30 * MINUTE);
+  // 存款被扣光, 下一轮要重新学
+  assert.equal(res.snapshot.study.bankedMs, 0);
+  assert.equal(res.snapshot.study.running, false, '登记后自动停止学习计时');
+});
+
+test('学习时间可以分段累计, 暂停不会白学', () => {
+  const clock = fakeClock();
+  const timer = makeStudyTimer(clock);
+
+  timer.startStudy();
+  clock.advance(10 * MINUTE);
+  timer.pauseStudy();
+  assert.equal(timer.getSnapshot().study.bankedMs, 10 * MINUTE);
+
+  clock.advance(3 * HOUR);   // 中间干别的, 不计学习
+  assert.equal(timer.getSnapshot().study.bankedMs, 10 * MINUTE);
+
+  timer.startStudy();
+  clock.advance(20 * MINUTE);
+  const s = timer.refresh();
+  assert.equal(s.study.bankedMs, 30 * MINUTE);
+  assert.equal(s.phase, Phase.READY);
+});
+
+test('学习也在后台走: 开始学习后关掉页面, 重建实例照样累计', () => {
+  const clock = fakeClock();
+  const storage = createMemoryStorage();
+
+  makeStudyTimer(clock, storage).startStudy();
+  clock.advance(35 * MINUTE);
+
+  const revived = makeStudyTimer(clock, storage);
+  const s = revived.getSnapshot();
+  assert.equal(s.study.running, true, '学习状态应当保持');
+  assert.equal(s.study.bankedMs, 35 * MINUTE);
+  assert.equal(s.phase, Phase.READY);
+});
+
+test('游玩中不能学习, 避免一份时间用两次', () => {
+  const clock = fakeClock();
+  const timer = makeStudyTimer(clock);
+  timer.startStudy();
+  clock.advance(30 * MINUTE);
+  timer.claim();
+
+  assert.equal(timer.getSnapshot().canStudy, false);
+  const res = timer.startStudy();
+  assert.equal(res.ok, false);
+  assert.equal(res.reason, 'playing');
+});
+
+test('重复调用 startStudy 不会重复计时', () => {
+  const clock = fakeClock();
+  const timer = makeStudyTimer(clock);
+  timer.startStudy();
+  clock.advance(5 * MINUTE);
+  const res = timer.startStudy();
+  assert.equal(res.ok, false);
+  assert.equal(res.reason, 'already-studying');
+  clock.advance(5 * MINUTE);
+  assert.equal(timer.getSnapshot().study.bankedMs, 10 * MINUTE);
+});
+
+test('没在学习时 pauseStudy 返回 not-studying', () => {
+  const clock = fakeClock();
+  const timer = makeStudyTimer(clock);
+  assert.equal(timer.pauseStudy().reason, 'not-studying');
+});
+
+test('冷却和学习是两道独立门槛: 冷却期间可以先把学习做掉', () => {
+  const clock = fakeClock();
+  const timer = makeStudyTimer(clock);
+
+  timer.startStudy();
+  clock.advance(30 * MINUTE);
+  timer.claim();
+  clock.advance(30 * MINUTE);           // 玩完 30 分钟
+  assert.equal(timer.refresh().phase, Phase.COOLDOWN);
+
+  // 冷却中就开始学下一轮
+  timer.startStudy();
+  clock.advance(30 * MINUTE);
+  const mid = timer.refresh();
+  assert.equal(mid.phase, Phase.COOLDOWN, '学习达标了但冷却还没完');
+  assert.equal(mid.gates.study.passed, true);
+  assert.equal(mid.gates.cooldown.passed, false);
+  assert.equal(timer.claim().reason, 'cooldown');
+
+  // 冷却一结束就能立刻登记
+  clock.advance(5.5 * HOUR);
+  const s = timer.refresh();
+  assert.equal(s.phase, Phase.READY);
+  assert.equal(timer.claim().ok, true);
+});
+
+test('冷却完了但学习不够, 停在 STUDY_REQUIRED', () => {
+  const clock = fakeClock();
+  const timer = makeStudyTimer(clock);
+
+  timer.startStudy();
+  clock.advance(30 * MINUTE);
+  timer.claim();
+  clock.advance(30 * MINUTE + 6 * HOUR);
+
+  const s = timer.refresh();
+  assert.equal(s.phase, Phase.STUDY_REQUIRED);
+  assert.equal(s.gates.cooldown.passed, true);
+  assert.equal(s.gates.study.passed, false);
+  assert.equal(timer.claim().reason, 'study-required');
+});
+
+test('可以提前学出多份存款, credits 反映能登记几次', () => {
+  const clock = fakeClock();
+  const timer = makeStudyTimer(clock);
+
+  timer.startStudy();
+  clock.advance(75 * MINUTE);
+  timer.pauseStudy();
+
+  let s = timer.getSnapshot();
+  assert.equal(s.study.credits, 2);
+  assert.equal(s.study.bankedMs, 75 * MINUTE);
+
+  timer.claim();
+  s = timer.getSnapshot();
+  assert.equal(s.study.bankedMs, 45 * MINUTE);
+  assert.equal(s.study.credits, 1);
+
+  // 玩完 + 冷却结束后, 靠存款直接登记, 不用再学
+  clock.advance(30 * MINUTE + 6 * HOUR);
+  assert.equal(timer.refresh().phase, Phase.READY);
+  assert.equal(timer.claim().ok, true);
+  assert.equal(timer.getSnapshot().study.bankedMs, 15 * MINUTE);
+});
+
+test('study-goal 事件在学习达标时触发一次', () => {
+  const clock = fakeClock();
+  const timer = makeStudyTimer(clock);
+  let goals = 0;
+  timer.on('study-goal', () => { goals += 1; });
+
+  timer.startStudy();
+  clock.advance(30 * MINUTE);
+  timer.refresh();
+  assert.equal(goals, 1);
+
+  clock.advance(10 * MINUTE);
+  timer.refresh();
+  assert.equal(goals, 1, '继续学不该重复触发');
+
+  // 登记后存款清零, 再学满一次应该再触发
+  timer.claim();
+  clock.advance(30 * MINUTE);
+  timer.refresh();
+  timer.startStudy();
+  clock.advance(30 * MINUTE);
+  timer.refresh();
+  assert.equal(goals, 2);
+});
+
+test('学习时长可配置', () => {
+  const clock = fakeClock();
+  const timer = makeStudyTimer(clock, createMemoryStorage(), {
+    studyRequiredMs: 45 * MINUTE,
+    playDurationMs: 20 * MINUTE,
+  });
+  timer.startStudy();
+  clock.advance(45 * MINUTE);
+  assert.equal(timer.refresh().phase, Phase.READY);
+  assert.equal(timer.claim().snapshot.remainingPlayMs, 20 * MINUTE);
+});
+
+test('时钟回拨不会凭空多出学习时长', () => {
+  const clock = fakeClock();
+  const timer = makeStudyTimer(clock);
+  timer.startStudy();
+  clock.advance(10 * MINUTE);
+  assert.equal(timer.refresh().study.bankedMs, 10 * MINUTE);
+
+  clock.advance(-2 * HOUR);
+  const s = timer.refresh();
+  assert.equal(s.study.bankedMs, 10 * MINUTE);
+  assert.equal(s.clockAnomalies, 1);
+});
+
+test('v1 存档能平滑升级到 v2(保留冷却, 学习从零开始)', () => {
+  const clock = fakeClock();
+  const now = clock.now();
+  const v1 = JSON.stringify({
+    version: 1,
+    sessionStartedAt: null,
+    sessionEndsAt: null,
+    cooldownEndsAt: now + 2 * HOUR,
+    sessionsCompleted: 3,
+    totalPlayedMs: 90 * MINUTE,
+    lastSeenAt: now,
+    clockAnomalies: 0,
+  });
+  const storage = createMemoryStorage({ 'fake-minecraft:playtime:v2': v1 });
+  const timer = makeStudyTimer(clock, storage);
+
+  const s = timer.getSnapshot();
+  assert.equal(s.phase, Phase.COOLDOWN);
+  assert.equal(s.remainingCooldownMs, 2 * HOUR);
+  assert.equal(s.sessionsCompleted, 3);
+  assert.equal(s.study.bankedMs, 0);
+});
+
+test('完整循环: 学习 -> 登记 -> 游玩 -> 冷却 -> 再学习', () => {
+  const clock = fakeClock();
+  const timer = makeStudyTimer(clock);
+
+  for (let i = 1; i <= 3; i += 1) {
+    assert.equal(timer.getSnapshot().phase, Phase.STUDY_REQUIRED, `第 ${i} 轮应先学习`);
+
+    timer.startStudy();
+    clock.advance(30 * MINUTE);
+    assert.equal(timer.refresh().phase, Phase.READY);
+
+    assert.equal(timer.claim().ok, true);
+    clock.advance(30 * MINUTE);
+    assert.equal(timer.refresh().phase, Phase.COOLDOWN);
+
+    clock.advance(6 * HOUR);
+    assert.equal(timer.refresh().phase, Phase.STUDY_REQUIRED, '冷却完还得再学');
+    assert.equal(timer.getSnapshot().sessionsCompleted, i);
+  }
+
+  const s = timer.getSnapshot();
+  assert.equal(s.totalPlayedMs, 90 * MINUTE);
+  assert.equal(s.totalStudiedMs, 90 * MINUTE);
+});
+
+test('formatElapsed 向下取整, 和倒计时不打架', () => {
+  // 同一个 10.5 秒: 已过去显示 10 秒, 还剩显示 11 秒, 两者相加不会超过总数
+  assert.equal(formatElapsed(10_500), '00:10');
+  assert.equal(formatDuration(10_500), '00:11');
+  assert.equal(formatElapsed(0), '00:00');
+  assert.equal(formatElapsed(-5000), '00:00');
+  assert.equal(formatElapsed(90 * MINUTE), '1:30:00');
 });
