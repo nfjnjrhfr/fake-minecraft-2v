@@ -21,6 +21,10 @@ const els = {
   streams: $('streamsInput'),
   streamsOut: $('streamsOut'),
   uploadToggle: $('uploadToggle'),
+  summary: $('summary'),
+  summaryTransfer: $('summaryTransfer'),
+  estimates: $('estimates'),
+  notice: $('notice'),
   historySection: $('historySection'),
   historyBody: $('historyBody'),
   clearHistory: $('clearHistory'),
@@ -37,9 +41,15 @@ const PHASE_TEXT = {
   done: '完成',
 };
 
-const FAILURE_HINT = '請確認網路連線；若本頁是嵌在其他網站或平台裡，'
-  + '對外的測速請求可能被該站的安全政策（CSP）擋下，'
-  + '此時請把這個 HTML 檔下載到本機開啟，或放到自己的伺服器上使用。';
+const BLOCKED_NOTICE = `
+  <h2>這裡量不到你的網速</h2>
+  <p>測速必須從你的瀏覽器對測速伺服器實際傳輸資料。如果這個頁面是嵌在其他網站或平台裡
+  （例如線上預覽），對外的請求會被該站的安全政策（CSP）擋掉，測速就無法進行。</p>
+  <p>把這個 HTML 檔存到電腦上再用瀏覽器打開，就能正常測速。其他可行的做法：</p>
+  <ul>
+    <li>放到任何靜態網站空間（GitHub Pages、Netlify、Cloudflare Pages 皆可，單一檔案即可）</li>
+    <li>想量自己區網或自架主機的速度，執行 <code>node server.js</code> 後開它給的網址</li>
+  </ul>`;
 
 const SETTINGS_KEY = 'speedtest:settings';
 const HISTORY_KEY = 'speedtest:history';
@@ -69,6 +79,63 @@ const fmtSpeed = (mbps) => {
 };
 
 const fmtMs = (ms) => (Number.isFinite(ms) ? ms.toFixed(ms < 10 ? 1 : 0) : '—');
+
+const fmtBytes = (bytes) => (bytes >= 1e9
+  ? `${(bytes / 1e9).toFixed(2)} GB`
+  : `${(bytes / 1e6).toFixed(0)} MB`);
+
+/** 把秒數講成人看得懂的長度。 */
+function fmtDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '—';
+  if (seconds < 1) return '不到 1 秒';
+  if (seconds < 60) return `${seconds.toFixed(1)} 秒`;
+  if (seconds < 3600) {
+    const m = Math.floor(seconds / 60);
+    const s2 = Math.round(seconds % 60);
+    return s2 ? `${m} 分 ${s2} 秒` : `${m} 分鐘`;
+  }
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return m ? `${h} 小時 ${m} 分` : `${h} 小時`;
+}
+
+// 用大家有概念的檔案大小來換算，比單看 Mbps 直覺
+const FILE_SIZES = [
+  { label: '一首歌 5 MB', bytes: 5e6 },
+  { label: '一集影集 700 MB', bytes: 700e6 },
+  { label: '一部高畫質電影 4 GB', bytes: 4e9 },
+  { label: '一款大型遊戲 50 GB', bytes: 50e9 },
+];
+
+function renderSummary(result) {
+  const parts = [`本次下載 <b>${fmtBytes(result.downloadBytes)}</b>`
+    + `，耗時 <b>${result.downloadSeconds.toFixed(1)} 秒</b>`];
+  if (Number.isFinite(result.upload)) {
+    parts.push(`上傳 <b>${fmtBytes(result.uploadBytes)}</b>`
+      + `，耗時 <b>${result.uploadSeconds.toFixed(1)} 秒</b>`);
+  }
+  els.summaryTransfer.innerHTML = `${parts.join('；')}。`;
+
+  els.estimates.innerHTML = '';
+  for (const file of FILE_SIZES) {
+    const li = document.createElement('li');
+    const label = document.createElement('span');
+    label.className = 'estimate__label';
+    label.textContent = file.label;
+    const time = document.createElement('span');
+    time.className = 'estimate__time';
+    // 下載秒數 = 檔案位元數 ÷ 每秒可傳的位元數
+    time.textContent = fmtDuration((file.bytes * 8) / (result.download * 1e6));
+    li.append(label, time);
+    els.estimates.appendChild(li);
+  }
+  els.summary.hidden = false;
+}
+
+function showNotice(html) {
+  els.notice.innerHTML = html;
+  els.notice.hidden = false;
+}
 
 function setStatus(text, kind = '') {
   els.status.textContent = text;
@@ -175,6 +242,8 @@ els.clearHistory.addEventListener('click', () => {
 let controller = null;
 
 function resetDisplay() {
+  els.summary.hidden = true;
+  els.notice.hidden = true;
   gauge.reset();
   chart.reset();
   els.live.textContent = '0.0';
@@ -255,6 +324,7 @@ async function start() {
       + (Number.isFinite(result.upload) ? `，上傳 ${fmtSpeed(result.upload)} Mbps` : '')
       + `，延遲 ${fmtMs(result.ping)} ms（${provider.label}）`,
     );
+    renderSummary(result);
     pushHistory(result);
     finish(PHASE_TEXT.done);
   } catch (error) {
@@ -262,7 +332,8 @@ async function start() {
       setStatus('測試已取消');
       finish('已取消');
     } else {
-      setStatus(`${error.message}。${FAILURE_HINT}`, 'error');
+      setStatus(`${error.message}`, 'error');
+      showNotice(BLOCKED_NOTICE);
       finish('發生錯誤');
       gauge.reset();
     }

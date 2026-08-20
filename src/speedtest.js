@@ -259,7 +259,8 @@ async function measureThroughput(worker, { streams, durationMs, signal, onSample
   if (err) throw err;
 
   const warmup = Math.min(DEFAULTS.maxWarmupMs, durationMs * DEFAULTS.warmupRatio);
-  return { average: counter.average(warmup), peak, series, bytes: counter.total };
+  const elapsed = counter.samples[counter.samples.length - 1].t;
+  return { average: counter.average(warmup), peak, series, bytes: counter.total, elapsed };
 }
 
 /**
@@ -301,6 +302,7 @@ export async function runSpeedTest({
   result.download = toMbps(dl.average);
   result.downloadPeak = toMbps(dl.peak);
   result.downloadBytes = dl.bytes;
+  result.downloadSeconds = dl.elapsed / 1000;
   onPhaseDone?.('download', result);
 
   if (includeUpload) {
@@ -313,6 +315,7 @@ export async function runSpeedTest({
     result.upload = toMbps(ul.average);
     result.uploadPeak = toMbps(ul.peak);
     result.uploadBytes = ul.bytes;
+    result.uploadSeconds = ul.elapsed / 1000;
     onPhaseDone?.('upload', result);
   }
 
