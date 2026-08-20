@@ -1,0 +1,16 @@
+{
+  "name": "fake-minecraft-2v",
+  "version": "1.0.0",
+  "description": "30 分钟游玩时间 + 6 小时冷却的后台计时系统",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./storage": "./src/storage.js"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "serve": "node scripts/serve.js"
+  },
+  "license": "MIT"
+}
