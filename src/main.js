@@ -37,6 +37,10 @@ const PHASE_TEXT = {
   done: '完成',
 };
 
+const FAILURE_HINT = '請確認網路連線；若本頁是嵌在其他網站或平台裡，'
+  + '對外的測速請求可能被該站的安全政策（CSP）擋下，'
+  + '此時請把這個 HTML 檔下載到本機開啟，或放到自己的伺服器上使用。';
+
 const SETTINGS_KEY = 'speedtest:settings';
 const HISTORY_KEY = 'speedtest:history';
 
@@ -200,37 +204,49 @@ async function start() {
   resetDisplay();
   els.start.dataset.state = 'running';
   els.start.textContent = '停止';
-  const provider = PROVIDERS[settings.provider];
+
+  const runWith = (provider, notice = '') => runSpeedTest({
+    provider,
+    duration: settings.duration,
+    streams: settings.streams,
+    includeUpload: settings.includeUpload,
+    signal: controller.signal,
+    onPhase: (phase) => {
+      els.phase.textContent = PHASE_TEXT[phase] ?? phase;
+      setActiveCard(phase === 'ping' ? 'ping' : phase);
+      if (phase === 'ping') setStatus(`${notice}正在測量往返延遲…`);
+      if (phase === 'download') setStatus(`${notice}使用 ${settings.streams} 條連線下載測試中…`);
+      if (phase === 'upload') setStatus(`${notice}使用 ${settings.streams} 條連線上傳測試中…`);
+    },
+    onSample: (phase, mbps) => {
+      els.live.textContent = fmtSpeed(mbps);
+      gauge.set(mbps);
+      chart.push(phase, mbps);
+      els[phase].textContent = fmtSpeed(mbps);
+    },
+    onPhaseDone: (phase, partial) => {
+      if (phase === 'ping') {
+        els.ping.textContent = fmtMs(partial.ping);
+        els.jitter.textContent = fmtMs(partial.jitter);
+      }
+      if (phase === 'download') els.download.textContent = fmtSpeed(partial.download);
+      if (phase === 'upload') els.upload.textContent = fmtSpeed(partial.upload);
+    },
+  });
+
+  let provider = PROVIDERS[settings.provider];
 
   try {
-    const result = await runSpeedTest({
-      provider,
-      duration: settings.duration,
-      streams: settings.streams,
-      includeUpload: settings.includeUpload,
-      signal: controller.signal,
-      onPhase: (phase) => {
-        els.phase.textContent = PHASE_TEXT[phase] ?? phase;
-        setActiveCard(phase === 'ping' ? 'ping' : phase);
-        if (phase === 'ping') setStatus('正在測量往返延遲…');
-        if (phase === 'download') setStatus(`使用 ${settings.streams} 條連線下載測試中…`);
-        if (phase === 'upload') setStatus(`使用 ${settings.streams} 條連線上傳測試中…`);
-      },
-      onSample: (phase, mbps) => {
-        els.live.textContent = fmtSpeed(mbps);
-        gauge.set(mbps);
-        chart.push(phase, mbps);
-        els[phase].textContent = fmtSpeed(mbps);
-      },
-      onPhaseDone: (phase, partial) => {
-        if (phase === 'ping') {
-          els.ping.textContent = fmtMs(partial.ping);
-          els.jitter.textContent = fmtMs(partial.jitter);
-        }
-        if (phase === 'download') els.download.textContent = fmtSpeed(partial.download);
-        if (phase === 'upload') els.upload.textContent = fmtSpeed(partial.upload);
-      },
-    });
+    let result;
+    try {
+      result = await runWith(provider);
+    } catch (error) {
+      // 單檔版或放在沒有測速 API 的靜態主機上時，本機端點不存在，直接改用 Cloudflare。
+      if (error?.name === 'AbortError' || provider.id !== 'local') throw error;
+      provider = PROVIDERS.cloudflare;
+      resetDisplay();
+      result = await runWith(provider, '找不到本機測速伺服器，改用 Cloudflare：');
+    }
 
     gauge.set(result.download);
     els.live.textContent = fmtSpeed(result.download);
@@ -246,10 +262,7 @@ async function start() {
       setStatus('測試已取消');
       finish('已取消');
     } else {
-      const extra = settings.provider === 'local'
-        ? '請先啟動本機伺服器（node server.js），或在設定中改用 Cloudflare。'
-        : '請確認網路連線是否正常。';
-      setStatus(`${error.message}。${extra}`, 'error');
+      setStatus(`${error.message}。${FAILURE_HINT}`, 'error');
       finish('發生錯誤');
       gauge.reset();
     }
@@ -265,5 +278,32 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
+/**
+ * 使用者沒自己選過時，開頁先探測同源有沒有測速 API：
+ * 有就用本機伺服器，沒有（例如單檔放在一般靜態主機上）就直接用 Cloudflare，
+ * 免得每次測速都要先白等本機端點逾時。
+ */
+async function autoSelectProvider() {
+  if (readJSON(SETTINGS_KEY, null)) return;          // 尊重使用者存過的選擇
+  if (location.protocol === 'file:') return;         // 已在上面切成 Cloudflare
+
+  let available = false;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 1500);
+    const res = await fetch(PROVIDERS.local.ping(), { cache: 'no-store', signal: ctrl.signal });
+    clearTimeout(timer);
+    available = res.ok || res.status === 204;
+  } catch {
+    available = false;
+  }
+
+  if (!available) {
+    settings.provider = 'cloudflare';
+    applySettingsToUI();
+  }
+}
+
 applySettingsToUI();
 renderHistory();
+autoSelectProvider();

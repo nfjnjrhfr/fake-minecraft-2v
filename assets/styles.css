@@ -13,8 +13,11 @@
     "Microsoft JhengHei", sans-serif;
 }
 
+/* 檢視器有三種狀態：明確選深色、明確選淺色，以及什麼都沒設（只能靠系統偏好）。
+   深色是這個頁面的底色，淺色在系統偏好或使用者明確指定時覆蓋，三種狀態都要落到正確的一組 token。 */
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
     --bg: #f4f6fc;
     --bg-soft: #ffffff;
     --line: #dde3f2;
@@ -24,6 +27,18 @@
     --accent-2: #2f6bff;
     --up: #d97706;
   }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f6fc;
+  --bg-soft: #ffffff;
+  --line: #dde3f2;
+  --text: #101736;
+  --muted: #5b678c;
+  --accent: #12a98d;
+  --accent-2: #2f6bff;
+  --up: #d97706;
 }
 
 * { box-sizing: border-box; }

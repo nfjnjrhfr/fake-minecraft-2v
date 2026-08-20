@@ -1,0 +1,1163 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>網速檢測儀</title>
+<meta name="description" content="在瀏覽器裡量測下載、上傳速度與網路延遲的測速工具。">
+<style>
+:root {
+  color-scheme: dark light;
+  --bg: #0b1020;
+  --bg-soft: #141a30;
+  --line: #263054;
+  --text: #e8ecf8;
+  --muted: #93a0c4;
+  --accent: #4de3c1;
+  --accent-2: #4d8cff;
+  --up: #ffb454;
+  --radius: 16px;
+  --font: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "PingFang TC",
+    "Microsoft JhengHei", sans-serif;
+}
+
+/* 檢視器有三種狀態：明確選深色、明確選淺色，以及什麼都沒設（只能靠系統偏好）。
+   深色是這個頁面的底色，淺色在系統偏好或使用者明確指定時覆蓋，三種狀態都要落到正確的一組 token。 */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f4f6fc;
+    --bg-soft: #ffffff;
+    --line: #dde3f2;
+    --text: #101736;
+    --muted: #5b678c;
+    --accent: #12a98d;
+    --accent-2: #2f6bff;
+    --up: #d97706;
+  }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f6fc;
+  --bg-soft: #ffffff;
+  --line: #dde3f2;
+  --text: #101736;
+  --muted: #5b678c;
+  --accent: #12a98d;
+  --accent-2: #2f6bff;
+  --up: #d97706;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(120% 90% at 50% -10%, var(--bg-soft), var(--bg) 60%);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+.app__head { text-align: center; margin-bottom: 8px; }
+.app__title { margin: 0; font-size: clamp(24px, 5vw, 34px); letter-spacing: .02em; }
+.app__sub { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0 8px;
+}
+
+/* 儀表下緣是空白的，往上收一點讓按鈕靠近；
+   pointer-events: none 是必要的，否則這塊空白會蓋住按鈕吃掉點擊。 */
+.gauge {
+  position: relative;
+  width: min(340px, 82vw);
+  aspect-ratio: 1;
+  margin-bottom: -34px;
+  pointer-events: none;
+}
+.gauge__svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.gauge__track { stroke: var(--line); stroke-width: 16; }
+.gauge__value { stroke-width: 16; transition: stroke-dasharray .18s linear; }
+.gauge__ticks text { fill: var(--muted); font-size: 11px; text-anchor: middle; dominant-baseline: middle; }
+.gauge__ticks line { stroke: var(--line); stroke-width: 2; }
+
+.gauge__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  pointer-events: none;
+}
+.gauge__phase { color: var(--muted); font-size: 14px; letter-spacing: .08em; }
+.gauge__num { font-size: clamp(38px, 11vw, 60px); font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.05; }
+.gauge__unit { color: var(--muted); font-size: 13px; letter-spacing: .1em; }
+
+.start {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 14px 46px;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  color: #06121a;
+  background: linear-gradient(120deg, var(--accent), var(--accent-2));
+  cursor: pointer;
+  transition: transform .12s ease, filter .12s ease, opacity .12s ease;
+}
+.start:hover:not(:disabled) { filter: brightness(1.08); }
+.start:active:not(:disabled) { transform: translateY(1px); }
+.start:disabled { opacity: .55; cursor: default; }
+.start[data-state="running"] { opacity: 1; cursor: pointer; background: var(--bg-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+
+.results {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 26px;
+}
+@media (max-width: 620px) { .results { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.card {
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  transition: border-color .2s ease;
+}
+.card[data-active="true"] { border-color: var(--accent); }
+.card__label { color: var(--muted); font-size: 13px; }
+.card__value { font-size: 26px; font-weight: 640; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.card__value small { font-size: 12px; color: var(--muted); margin-left: 4px; font-weight: 400; }
+.card[data-metric="download"] .card__value { color: var(--accent); }
+.card[data-metric="upload"] .card__value { color: var(--up); }
+
+.chart-wrap {
+  margin-top: 20px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 12px 8px;
+}
+.chart { width: 100%; height: 200px; display: block; }
+.legend { display: flex; gap: 16px; justify-content: flex-end; padding: 4px 6px 2px; font-size: 12px; color: var(--muted); }
+.legend__item::before {
+  content: "";
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.legend__item--dl::before { background: var(--accent); }
+.legend__item--ul::before { background: var(--up); }
+
+.settings {
+  margin-top: 20px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+.settings summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.settings__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.field b { color: var(--text); }
+.field--check { flex-direction: row; align-items: center; gap: 8px; }
+.field select, .field input[type="range"] { width: 100%; }
+.field select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+}
+.field input[type="range"] { accent-color: var(--accent); }
+.settings__hint { margin: 12px 0 2px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+.history { margin-top: 22px; }
+.history__scroll { overflow-x: auto; }
+.history__title { font-size: 15px; color: var(--muted); font-weight: 600; margin: 0 0 10px; }
+.history__table { width: 100%; min-width: 420px; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.history__table th, .history__table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.history__table th { color: var(--muted); font-weight: 500; }
+
+.ghost {
+  margin-top: 10px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.ghost:hover { color: var(--text); }
+
+.status { text-align: center; color: var(--muted); font-size: 13px; min-height: 20px; margin-top: 18px; }
+.status[data-kind="error"] { color: #ff8080; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gauge__value { transition: none; }
+}
+</style>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>⚡</text></svg>">
+</head>
+<body>
+<main class="app">
+  <header class="app__head">
+    <h1 class="app__title">網速檢測儀</h1>
+    <p class="app__sub">量測你目前連線的下載、上傳速度與延遲</p>
+  </header>
+
+  <section class="stage" aria-live="polite">
+    <div class="gauge">
+      <svg class="gauge__svg" viewBox="0 0 300 300" role="img" aria-label="速度儀表">
+        <defs>
+          <linearGradient id="gaugeGrad" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0%" stop-color="var(--accent-2)"/>
+            <stop offset="100%" stop-color="var(--accent)"/>
+          </linearGradient>
+        </defs>
+        <path class="gauge__track" d="" fill="none" stroke-linecap="round"/>
+        <path class="gauge__value" d="" fill="none" stroke-linecap="round" stroke="url(#gaugeGrad)"/>
+        <g class="gauge__ticks"></g>
+      </svg>
+      <div class="gauge__center">
+        <div class="gauge__phase" id="phaseLabel">準備就緒</div>
+        <div class="gauge__num"><span id="liveValue">0.0</span></div>
+        <div class="gauge__unit">Mbps</div>
+      </div>
+    </div>
+
+    <button class="start" id="startBtn" type="button">開始測速</button>
+  </section>
+
+  <section class="results" id="results">
+    <div class="card" data-metric="ping">
+      <div class="card__label">延遲 Ping</div>
+      <div class="card__value"><span id="pingValue">—</span><small>ms</small></div>
+    </div>
+    <div class="card" data-metric="jitter">
+      <div class="card__label">抖動 Jitter</div>
+      <div class="card__value"><span id="jitterValue">—</span><small>ms</small></div>
+    </div>
+    <div class="card" data-metric="download">
+      <div class="card__label">下載</div>
+      <div class="card__value"><span id="downloadValue">—</span><small>Mbps</small></div>
+    </div>
+    <div class="card" data-metric="upload">
+      <div class="card__label">上傳</div>
+      <div class="card__value"><span id="uploadValue">—</span><small>Mbps</small></div>
+    </div>
+  </section>
+
+  <section class="chart-wrap">
+    <canvas id="chart" class="chart" width="1200" height="320" role="img" aria-label="即時速度曲線"></canvas>
+    <div class="legend">
+      <span class="legend__item legend__item--dl">下載</span>
+      <span class="legend__item legend__item--ul">上傳</span>
+    </div>
+  </section>
+
+  <details class="settings">
+    <summary>測試設定</summary>
+    <div class="settings__grid">
+      <label class="field">
+        <span>測速伺服器</span>
+        <select id="serverSelect">
+          <option value="local">本機伺服器（node server.js）</option>
+          <option value="cloudflare">Cloudflare（speed.cloudflare.com）</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>每階段秒數：<b id="durationOut">8</b> 秒</span>
+        <input id="durationInput" type="range" min="3" max="20" step="1" value="8">
+      </label>
+      <label class="field">
+        <span>並行連線數：<b id="streamsOut">4</b></span>
+        <input id="streamsInput" type="range" min="1" max="8" step="1" value="4">
+      </label>
+      <label class="field field--check">
+        <input id="uploadToggle" type="checkbox" checked>
+        <span>測試上傳速度</span>
+      </label>
+    </div>
+    <p class="settings__hint" id="serverHint"></p>
+  </details>
+
+  <section class="history" id="historySection" hidden>
+    <h2 class="history__title">歷史紀錄</h2>
+    <div class="history__scroll">
+      <table class="history__table">
+        <thead>
+          <tr><th>時間</th><th>下載</th><th>上傳</th><th>延遲</th><th>伺服器</th></tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+    <button class="ghost" id="clearHistory" type="button">清除紀錄</button>
+  </section>
+
+  <p class="status" id="status"></p>
+</main>
+<script type="module">
+/* ── src/config.js ───────────────────────────── */
+/**
+ * 測速端點設定。
+ *
+ * local      使用本專案內附的 Node 伺服器（server.js），量到的是與該主機之間的速度。
+ * cloudflare 使用 Cloudflare 公開的測速端點，量到的是對外網際網路速度。
+ */
+const PROVIDERS = {
+  local: {
+    id: 'local',
+    label: '本機伺服器',
+    ping: () => `/api/ping?r=${Math.random()}`,
+    download: (bytes) => `/api/download?bytes=${bytes}&r=${Math.random()}`,
+    upload: () => '/api/upload',
+    hint: '需要先執行 `node server.js`，並用它提供的網址開啟本頁面。量測的是你與該伺服器之間的速度。',
+  },
+  cloudflare: {
+    id: 'cloudflare',
+    label: 'Cloudflare',
+    ping: () => `https://speed.cloudflare.com/__down?bytes=0&r=${Math.random()}`,
+    download: (bytes) => `https://speed.cloudflare.com/__down?bytes=${bytes}&r=${Math.random()}`,
+    upload: () => 'https://speed.cloudflare.com/__up',
+    hint: '透過 Cloudflare 的公開測速端點量測對外網路速度，需要可連上網際網路。',
+  },
+};
+
+const DEFAULTS = {
+  provider: 'local',
+  duration: 8,       // 每個階段的秒數
+  streams: 4,        // 並行連線數
+  includeUpload: true,
+  pingSamples: 12,
+  pingTimeoutMs: 5000,   // 單次 ping 等多久就放棄
+  maxPingFailures: 3,    // 連續失敗幾次就判定連不上
+  sampleIntervalMs: 150,
+  // 開頭這段時間不列入平均，避開 TCP 慢啟動造成的低估
+  warmupRatio: 0.25,
+  maxWarmupMs: 1500,
+};
+
+/* ── src/speedtest.js ───────────────────────────── */
+/**
+ * 測速核心：延遲/抖動、下載、上傳。
+ * 不依賴任何外部套件，只用 fetch / XMLHttpRequest。
+ */
+
+const MiB = 1024 * 1024;
+
+const toMbps = (bytesPerSecond) => (bytesPerSecond * 8) / 1e6;
+
+/** 累積位元組計數器，並記錄取樣點以便事後計算平均值。 */
+class ByteCounter {
+  constructor() {
+    this.total = 0;
+    this.samples = [];              // {t, total}
+    this.startedAt = performance.now();
+    this.samples.push({ t: 0, total: 0 });
+  }
+
+  add(n) {
+    this.total += n;
+  }
+
+  /** 記錄一個取樣點，回傳這段期間的瞬時速度（bytes/s）。 */
+  tick() {
+    const t = performance.now() - this.startedAt;
+    const prev = this.samples[this.samples.length - 1];
+    const dt = t - prev.t;
+    this.samples.push({ t, total: this.total });
+    if (dt <= 0) return 0;
+    return ((this.total - prev.total) / dt) * 1000;
+  }
+
+  /** 忽略暖機期後的平均速度（bytes/s）。 */
+  average(warmupMs) {
+    const last = this.samples[this.samples.length - 1];
+    let base = this.samples[0];
+    for (const s of this.samples) {
+      if (s.t <= warmupMs) base = s;
+      else break;
+    }
+    const dt = last.t - base.t;
+    if (dt <= 0) return 0;
+    return ((last.total - base.total) / dt) * 1000;
+  }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function abortError(signal) {
+  return signal?.aborted ? new DOMException('測試已取消', 'AbortError') : null;
+}
+
+/** 送一次 ping，並在 timeoutMs 之後放棄，避免端點沒回應時整個測試卡住。 */
+async function pingOnce(url, signal, timeoutMs) {
+  const ctrl = new AbortController();
+  const relay = () => ctrl.abort();
+  if (signal?.aborted) ctrl.abort();
+  else signal?.addEventListener('abort', relay, { once: true });
+  const timer = setTimeout(relay, timeoutMs);
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctrl.signal });
+    if (!res.ok && res.status !== 204) throw new Error(`測速端點回應 ${res.status}`);
+    // 讀完 body 才算一次完整往返，否則量到的只是 header 抵達時間。
+    await res.arrayBuffer();
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', relay);
+  }
+}
+
+/**
+ * 量測延遲與抖動。
+ * ping   取樣中位數（比平均值更不受單次尖峰影響）
+ * jitter 相鄰兩次延遲差的平均值，即 RFC 3550 的概念
+ */
+async function measureLatency(provider, { samples = DEFAULTS.pingSamples, signal, onSample } = {}) {
+  const values = [];
+  let failures = 0;
+  for (let i = 0; i < samples; i += 1) {
+    const err = abortError(signal);
+    if (err) throw err;
+
+    const started = performance.now();
+    try {
+      await pingOnce(provider.ping(), signal, DEFAULTS.pingTimeoutMs);
+    } catch (error) {
+      // 使用者按停止才算取消，逾時造成的 AbortError 只是這次取樣失敗。
+      if (signal?.aborted) throw error;
+      failures += 1;
+      // 連續失敗代表端點根本連不上，不必把剩下的取樣跑完。
+      if (failures >= DEFAULTS.maxPingFailures) throw new Error('無法連上測速伺服器');
+      continue;
+    }
+    const rtt = performance.now() - started;
+
+    // 第一次包含 DNS / TCP / TLS 建線成本，不列入統計。
+    if (i > 0) {
+      values.push(rtt);
+      onSample?.(rtt);
+    }
+    await sleep(40);
+  }
+
+  if (!values.length) {
+    throw new Error('無法連上測速伺服器');
+  }
+
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const ping = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+
+  let jitter = 0;
+  if (values.length > 1) {
+    let sum = 0;
+    for (let i = 1; i < values.length; i += 1) sum += Math.abs(values[i] - values[i - 1]);
+    jitter = sum / (values.length - 1);
+  }
+
+  return { ping, jitter, min: sorted[0], samples: values };
+}
+
+/** 依照上一塊傳輸花費的時間調整下一塊大小，讓快線路不會卡在建線成本上。 */
+function nextChunkSize(current, elapsedMs, { min, max }) {
+  if (elapsedMs < 1500) return Math.min(current * 2, max);
+  if (elapsedMs > 6000) return Math.max(Math.floor(current / 2), min);
+  return current;
+}
+
+async function downloadWorker(provider, counter, deadline, signal) {
+  let chunk = 8 * MiB;
+  while (performance.now() < deadline && !signal.aborted) {
+    const started = performance.now();
+    const res = await fetch(provider.download(chunk), { cache: 'no-store', signal });
+    if (!res.ok) throw new Error(`下載端點回應 ${res.status}`);
+
+    if (res.body?.getReader) {
+      const reader = res.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        counter.add(value.byteLength);
+        if (performance.now() >= deadline) {
+          await reader.cancel().catch(() => {});
+          return;
+        }
+      }
+    } else {
+      // 沒有串流 API 時的退路：整塊讀完再計數。
+      const buf = await res.arrayBuffer();
+      counter.add(buf.byteLength);
+    }
+
+    chunk = nextChunkSize(chunk, performance.now() - started, { min: MiB, max: 128 * MiB });
+  }
+}
+
+/**
+ * 產生一塊隨機資料當作上傳負載。
+ * 隨機是為了避免資料被中途壓縮而虛報速度；包成 Blob 則是因為直接送
+ * TypedArray 時瀏覽器每次都會整塊複製一份，實測會讓上傳速度低估一個量級。
+ */
+function makePayload(bytes) {
+  const buf = new Uint8Array(bytes);
+  const view = new Uint8Array(65536);
+  for (let offset = 0; offset < bytes; offset += view.length) {
+    crypto.getRandomValues(view);
+    buf.set(view.subarray(0, Math.min(view.length, bytes - offset)), offset);
+  }
+  return new Blob([buf], { type: 'application/octet-stream' });
+}
+
+function uploadOnce(url, payload, counter, signal) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let lastLoaded = 0;
+
+    const onAbort = () => xhr.abort();
+    signal.addEventListener('abort', onAbort, { once: true });
+
+    const cleanup = () => signal.removeEventListener('abort', onAbort);
+
+    // 只有 XHR 能回報上傳進度，fetch 目前沒有等價的 API。
+    xhr.upload.onprogress = (event) => {
+      counter.add(event.loaded - lastLoaded);
+      lastLoaded = event.loaded;
+    };
+    xhr.onload = () => {
+      cleanup();
+      if (xhr.status >= 200 && xhr.status < 400) resolve();
+      else reject(new Error(`上傳端點回應 ${xhr.status}`));
+    };
+    xhr.onerror = () => { cleanup(); reject(new Error('上傳連線失敗')); };
+    xhr.onabort = () => { cleanup(); reject(new DOMException('測試已取消', 'AbortError')); };
+
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.send(payload);
+  });
+}
+
+async function uploadWorker(provider, counter, deadline, signal) {
+  let size = 2 * MiB;
+  let payload = makePayload(size);
+  while (performance.now() < deadline && !signal.aborted) {
+    const started = performance.now();
+    await uploadOnce(provider.upload(), payload, counter, signal);
+    const next = nextChunkSize(size, performance.now() - started, { min: MiB, max: 32 * MiB });
+    if (next !== size) {
+      size = next;
+      payload = makePayload(size);
+    }
+  }
+}
+
+/**
+ * 跑一個吞吐量階段（下載或上傳），期間持續回報瞬時速度。
+ * @returns {{average:number, peak:number, series:number[]}} 單位皆為 bytes/s
+ */
+async function measureThroughput(worker, { streams, durationMs, signal, onSample }) {
+  const counter = new ByteCounter();
+  const deadline = performance.now() + durationMs;
+  const series = [];
+  let peak = 0;
+
+  // 階段用的 signal：時間到就中斷還在傳輸中的請求，
+  // 否則慢速線路上一塊資料可能遠遠拖過設定的秒數。使用者按停止時也會連動。
+  const phase = new AbortController();
+  const stopPhase = () => phase.abort();
+  const phaseTimer = setTimeout(stopPhase, durationMs);
+  if (signal.aborted) stopPhase();
+  else signal.addEventListener('abort', stopPhase, { once: true });
+
+  const timer = setInterval(() => {
+    const speed = counter.tick();
+    series.push(speed);
+    if (speed > peak) peak = speed;
+    onSample?.(speed, Math.min(1, (performance.now() - (deadline - durationMs)) / durationMs));
+  }, DEFAULTS.sampleIntervalMs);
+
+  try {
+    const workers = [];
+    for (let i = 0; i < streams; i += 1) {
+      workers.push(worker(counter, deadline, phase.signal));
+      // 稍微錯開各連線的起始時間，避免同時建線互相排擠。
+      if (i < streams - 1) await sleep(60);
+    }
+    await Promise.all(workers);
+  } catch (error) {
+    if (error?.name !== 'AbortError') throw error;
+  } finally {
+    clearTimeout(phaseTimer);
+    signal.removeEventListener('abort', stopPhase);
+    clearInterval(timer);
+    counter.tick();
+  }
+
+  const err = abortError(signal);
+  if (err) throw err;
+
+  const warmup = Math.min(DEFAULTS.maxWarmupMs, durationMs * DEFAULTS.warmupRatio);
+  return { average: counter.average(warmup), peak, series, bytes: counter.total };
+}
+
+/**
+ * 依序執行完整測速流程。
+ * @param {object} options
+ * @param {object} options.provider  端點設定（見 config.js）
+ * @param {number} options.duration  每階段秒數
+ * @param {number} options.streams   並行連線數
+ * @param {boolean} options.includeUpload
+ * @param {AbortSignal} options.signal
+ * @param {(phase: string) => void} options.onPhase
+ * @param {(phase: string, mbps: number, progress: number) => void} options.onSample
+ */
+async function runSpeedTest({
+  provider,
+  duration = DEFAULTS.duration,
+  streams = DEFAULTS.streams,
+  includeUpload = DEFAULTS.includeUpload,
+  signal = new AbortController().signal,
+  onPhase,
+  onSample,
+  onPhaseDone,
+}) {
+  const durationMs = duration * 1000;
+  const result = { provider: provider.id, at: Date.now() };
+
+  onPhase?.('ping');
+  const latency = await measureLatency(provider, { signal });
+  result.ping = latency.ping;
+  result.jitter = latency.jitter;
+  onPhaseDone?.('ping', result);
+
+  onPhase?.('download');
+  const dl = await measureThroughput(
+    (counter, deadline, phaseSignal) => downloadWorker(provider, counter, deadline, phaseSignal),
+    { streams, durationMs, signal, onSample: (bps, p) => onSample?.('download', toMbps(bps), p) },
+  );
+  if (!dl.bytes) throw new Error('下載測試沒有收到任何資料');
+  result.download = toMbps(dl.average);
+  result.downloadPeak = toMbps(dl.peak);
+  result.downloadBytes = dl.bytes;
+  onPhaseDone?.('download', result);
+
+  if (includeUpload) {
+    onPhase?.('upload');
+    const ul = await measureThroughput(
+      (counter, deadline, phaseSignal) => uploadWorker(provider, counter, deadline, phaseSignal),
+      { streams, durationMs, signal, onSample: (bps, p) => onSample?.('upload', toMbps(bps), p) },
+    );
+    if (!ul.bytes) throw new Error('上傳測試沒有送出任何資料');
+    result.upload = toMbps(ul.average);
+    result.uploadPeak = toMbps(ul.peak);
+    result.uploadBytes = ul.bytes;
+    onPhaseDone?.('upload', result);
+  }
+
+  onPhase?.('done');
+  return result;
+}
+
+/* ── src/gauge.js ───────────────────────────── */
+/**
+ * 半圓儀表。刻度採非線性（各刻度等距排列），
+ * 這樣 5 Mbps 和 500 Mbps 才能在同一個表面上都看得清楚。
+ */
+const START_DEG = -135;
+const SWEEP_DEG = 270;
+const RADIUS = 118;
+const CENTER = 150;
+const TICKS = [0, 1, 5, 10, 25, 50, 100, 250, 500, 1000];
+
+const polar = (deg, r) => {
+  const rad = ((deg - 90) * Math.PI) / 180;
+  return [CENTER + r * Math.cos(rad), CENTER + r * Math.sin(rad)];
+};
+
+const arcPath = (fromDeg, toDeg, r) => {
+  const [x0, y0] = polar(fromDeg, r);
+  const [x1, y1] = polar(toDeg, r);
+  const large = Math.abs(toDeg - fromDeg) > 180 ? 1 : 0;
+  return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+};
+
+/** 把速度換算成 0~1 的表面位置（在刻度之間線性內插）。 */
+function scalePosition(value) {
+  const v = Math.max(0, value);
+  const last = TICKS.length - 1;
+  if (v >= TICKS[last]) return 1;
+  for (let i = 0; i < last; i += 1) {
+    const lo = TICKS[i];
+    const hi = TICKS[i + 1];
+    if (v <= hi) return (i + (v - lo) / (hi - lo)) / last;
+  }
+  return 1;
+}
+
+function createGauge(svg) {
+  const track = svg.querySelector('.gauge__track');
+  const value = svg.querySelector('.gauge__value');
+  const ticks = svg.querySelector('.gauge__ticks');
+  const path = arcPath(START_DEG, START_DEG + SWEEP_DEG, RADIUS);
+
+  track.setAttribute('d', path);
+  value.setAttribute('d', path);
+
+  const total = track.getTotalLength();
+  value.style.strokeDasharray = `0 ${total}`;
+
+  const ns = 'http://www.w3.org/2000/svg';
+  TICKS.forEach((tick, i) => {
+    const deg = START_DEG + (SWEEP_DEG * i) / (TICKS.length - 1);
+    const [x1, y1] = polar(deg, RADIUS - 13);
+    const [x2, y2] = polar(deg, RADIUS - 20);
+    const line = document.createElementNS(ns, 'line');
+    line.setAttribute('x1', x1.toFixed(2));
+    line.setAttribute('y1', y1.toFixed(2));
+    line.setAttribute('x2', x2.toFixed(2));
+    line.setAttribute('y2', y2.toFixed(2));
+    ticks.appendChild(line);
+
+    const [tx, ty] = polar(deg, RADIUS - 33);
+    const label = document.createElementNS(ns, 'text');
+    label.setAttribute('x', tx.toFixed(2));
+    label.setAttribute('y', ty.toFixed(2));
+    label.textContent = String(tick);
+    ticks.appendChild(label);
+  });
+
+  return {
+    set(mbps) {
+      const filled = total * scalePosition(mbps);
+      value.style.strokeDasharray = `${filled.toFixed(2)} ${total}`;
+    },
+    reset() {
+      value.style.strokeDasharray = `0 ${total}`;
+    },
+  };
+}
+
+/* ── src/chart.js ───────────────────────────── */
+/** 即時速度曲線圖（下載與上傳各一條）。 */
+const COLORS = { download: '--accent', upload: '--up' };
+
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+function createChart(canvas) {
+  const ctx = canvas.getContext('2d');
+  const series = { download: [], upload: [] };
+
+  const fit = () => {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width) return;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+
+  const draw = () => {
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    if (!w || !h) return;
+
+    ctx.clearRect(0, 0, w, h);
+
+    const all = [...series.download, ...series.upload];
+    const peak = Math.max(1, ...all);
+    const top = peak * 1.15;
+    const padding = { left: 44, right: 10, top: 12, bottom: 18 };
+    const plotW = w - padding.left - padding.right;
+    const plotH = h - padding.top - padding.bottom;
+    const count = Math.max(series.download.length, series.upload.length, 2);
+
+    ctx.strokeStyle = cssVar('--line');
+    ctx.fillStyle = cssVar('--muted');
+    ctx.lineWidth = 1;
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    for (let i = 0; i <= 4; i += 1) {
+      const y = padding.top + (plotH * i) / 4;
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(w - padding.right, y);
+      ctx.stroke();
+      const label = (top * (1 - i / 4));
+      ctx.fillText(label >= 100 ? label.toFixed(0) : label.toFixed(1), padding.left - 8, y);
+    }
+
+    for (const key of ['download', 'upload']) {
+      const data = series[key];
+      if (data.length < 2) continue;
+      ctx.strokeStyle = cssVar(COLORS[key]);
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      data.forEach((v, i) => {
+        const x = padding.left + (plotW * i) / (count - 1);
+        const y = padding.top + plotH * (1 - Math.min(v, top) / top);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+  };
+
+  fit();
+  draw();
+  window.addEventListener('resize', () => { fit(); draw(); });
+
+  return {
+    push(key, mbps) {
+      series[key].push(mbps);
+      draw();
+    },
+    reset() {
+      series.download = [];
+      series.upload = [];
+      fit();
+      draw();
+    },
+  };
+}
+
+/* ── src/main.js ───────────────────────────── */
+const $ = (id) => document.getElementById(id);
+
+const els = {
+  start: $('startBtn'),
+  phase: $('phaseLabel'),
+  live: $('liveValue'),
+  ping: $('pingValue'),
+  jitter: $('jitterValue'),
+  download: $('downloadValue'),
+  upload: $('uploadValue'),
+  status: $('status'),
+  server: $('serverSelect'),
+  serverHint: $('serverHint'),
+  duration: $('durationInput'),
+  durationOut: $('durationOut'),
+  streams: $('streamsInput'),
+  streamsOut: $('streamsOut'),
+  uploadToggle: $('uploadToggle'),
+  historySection: $('historySection'),
+  historyBody: $('historyBody'),
+  clearHistory: $('clearHistory'),
+};
+
+const gauge = createGauge(document.querySelector('.gauge__svg'));
+const chart = createChart($('chart'));
+
+const PHASE_TEXT = {
+  idle: '準備就緒',
+  ping: '測量延遲',
+  download: '下載中',
+  upload: '上傳中',
+  done: '完成',
+};
+
+const FAILURE_HINT = '請確認網路連線；若本頁是嵌在其他網站或平台裡，'
+  + '對外的測速請求可能被該站的安全政策（CSP）擋下，'
+  + '此時請把這個 HTML 檔下載到本機開啟，或放到自己的伺服器上使用。';
+
+const SETTINGS_KEY = 'speedtest:settings';
+const HISTORY_KEY = 'speedtest:history';
+
+const readJSON = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const writeJSON = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* 無痕模式等情況下寫不進去，忽略即可 */
+  }
+};
+
+const fmtSpeed = (mbps) => {
+  if (!Number.isFinite(mbps)) return '—';
+  if (mbps >= 100) return mbps.toFixed(0);
+  if (mbps >= 10) return mbps.toFixed(1);
+  return mbps.toFixed(2);
+};
+
+const fmtMs = (ms) => (Number.isFinite(ms) ? ms.toFixed(ms < 10 ? 1 : 0) : '—');
+
+function setStatus(text, kind = '') {
+  els.status.textContent = text;
+  els.status.dataset.kind = kind;
+}
+
+function setActiveCard(metric) {
+  document.querySelectorAll('.card').forEach((card) => {
+    card.dataset.active = String(card.dataset.metric === metric);
+  });
+}
+
+/* ---------- 設定 ---------- */
+
+const settings = { ...DEFAULTS, ...readJSON(SETTINGS_KEY, {}) };
+if (!PROVIDERS[settings.provider]) settings.provider = DEFAULTS.provider;
+
+// 直接用 file:// 開啟時沒有本機伺服器可用，預設改走 Cloudflare。
+if (location.protocol === 'file:' && settings.provider === 'local') {
+  settings.provider = 'cloudflare';
+}
+
+function applySettingsToUI() {
+  els.server.value = settings.provider;
+  els.duration.value = settings.duration;
+  els.durationOut.textContent = settings.duration;
+  els.streams.value = settings.streams;
+  els.streamsOut.textContent = settings.streams;
+  els.uploadToggle.checked = settings.includeUpload;
+  els.serverHint.textContent = PROVIDERS[settings.provider].hint;
+}
+
+function saveSettings() {
+  writeJSON(SETTINGS_KEY, {
+    provider: settings.provider,
+    duration: settings.duration,
+    streams: settings.streams,
+    includeUpload: settings.includeUpload,
+  });
+}
+
+els.server.addEventListener('change', () => {
+  settings.provider = els.server.value;
+  els.serverHint.textContent = PROVIDERS[settings.provider].hint;
+  saveSettings();
+});
+
+els.duration.addEventListener('input', () => {
+  settings.duration = Number(els.duration.value);
+  els.durationOut.textContent = settings.duration;
+  saveSettings();
+});
+
+els.streams.addEventListener('input', () => {
+  settings.streams = Number(els.streams.value);
+  els.streamsOut.textContent = settings.streams;
+  saveSettings();
+});
+
+els.uploadToggle.addEventListener('change', () => {
+  settings.includeUpload = els.uploadToggle.checked;
+  saveSettings();
+});
+
+/* ---------- 歷史紀錄 ---------- */
+
+function renderHistory() {
+  const history = readJSON(HISTORY_KEY, []);
+  els.historySection.hidden = history.length === 0;
+  els.historyBody.innerHTML = '';
+
+  for (const entry of history) {
+    const tr = document.createElement('tr');
+    const cells = [
+      new Date(entry.at).toLocaleString(),
+      `${fmtSpeed(entry.download)} Mbps`,
+      Number.isFinite(entry.upload) ? `${fmtSpeed(entry.upload)} Mbps` : '—',
+      `${fmtMs(entry.ping)} ms`,
+      PROVIDERS[entry.provider]?.label ?? entry.provider,
+    ];
+    for (const text of cells) {
+      const td = document.createElement('td');
+      td.textContent = text;
+      tr.appendChild(td);
+    }
+    els.historyBody.appendChild(tr);
+  }
+}
+
+function pushHistory(result) {
+  const history = readJSON(HISTORY_KEY, []);
+  history.unshift(result);
+  writeJSON(HISTORY_KEY, history.slice(0, 10));
+  renderHistory();
+}
+
+els.clearHistory.addEventListener('click', () => {
+  writeJSON(HISTORY_KEY, []);
+  renderHistory();
+});
+
+/* ---------- 測試流程 ---------- */
+
+let controller = null;
+
+function resetDisplay() {
+  gauge.reset();
+  chart.reset();
+  els.live.textContent = '0.0';
+  els.ping.textContent = '—';
+  els.jitter.textContent = '—';
+  els.download.textContent = '—';
+  els.upload.textContent = '—';
+  setStatus('');
+}
+
+function finish(label) {
+  controller = null;
+  els.start.disabled = false;
+  els.start.dataset.state = 'idle';
+  els.start.textContent = '重新測速';
+  els.phase.textContent = label;
+  setActiveCard(null);
+}
+
+async function start() {
+  if (controller) {
+    controller.abort();
+    return;
+  }
+
+  controller = new AbortController();
+  resetDisplay();
+  els.start.dataset.state = 'running';
+  els.start.textContent = '停止';
+
+  const runWith = (provider, notice = '') => runSpeedTest({
+    provider,
+    duration: settings.duration,
+    streams: settings.streams,
+    includeUpload: settings.includeUpload,
+    signal: controller.signal,
+    onPhase: (phase) => {
+      els.phase.textContent = PHASE_TEXT[phase] ?? phase;
+      setActiveCard(phase === 'ping' ? 'ping' : phase);
+      if (phase === 'ping') setStatus(`${notice}正在測量往返延遲…`);
+      if (phase === 'download') setStatus(`${notice}使用 ${settings.streams} 條連線下載測試中…`);
+      if (phase === 'upload') setStatus(`${notice}使用 ${settings.streams} 條連線上傳測試中…`);
+    },
+    onSample: (phase, mbps) => {
+      els.live.textContent = fmtSpeed(mbps);
+      gauge.set(mbps);
+      chart.push(phase, mbps);
+      els[phase].textContent = fmtSpeed(mbps);
+    },
+    onPhaseDone: (phase, partial) => {
+      if (phase === 'ping') {
+        els.ping.textContent = fmtMs(partial.ping);
+        els.jitter.textContent = fmtMs(partial.jitter);
+      }
+      if (phase === 'download') els.download.textContent = fmtSpeed(partial.download);
+      if (phase === 'upload') els.upload.textContent = fmtSpeed(partial.upload);
+    },
+  });
+
+  let provider = PROVIDERS[settings.provider];
+
+  try {
+    let result;
+    try {
+      result = await runWith(provider);
+    } catch (error) {
+      // 單檔版或放在沒有測速 API 的靜態主機上時，本機端點不存在，直接改用 Cloudflare。
+      if (error?.name === 'AbortError' || provider.id !== 'local') throw error;
+      provider = PROVIDERS.cloudflare;
+      resetDisplay();
+      result = await runWith(provider, '找不到本機測速伺服器，改用 Cloudflare：');
+    }
+
+    gauge.set(result.download);
+    els.live.textContent = fmtSpeed(result.download);
+    setStatus(
+      `完成：下載 ${fmtSpeed(result.download)} Mbps`
+      + (Number.isFinite(result.upload) ? `，上傳 ${fmtSpeed(result.upload)} Mbps` : '')
+      + `，延遲 ${fmtMs(result.ping)} ms（${provider.label}）`,
+    );
+    pushHistory(result);
+    finish(PHASE_TEXT.done);
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      setStatus('測試已取消');
+      finish('已取消');
+    } else {
+      setStatus(`${error.message}。${FAILURE_HINT}`, 'error');
+      finish('發生錯誤');
+      gauge.reset();
+    }
+  }
+}
+
+els.start.addEventListener('click', start);
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === ' ' && event.target === document.body) {
+    event.preventDefault();
+    start();
+  }
+});
+
+/**
+ * 使用者沒自己選過時，開頁先探測同源有沒有測速 API：
+ * 有就用本機伺服器，沒有（例如單檔放在一般靜態主機上）就直接用 Cloudflare，
+ * 免得每次測速都要先白等本機端點逾時。
+ */
+async function autoSelectProvider() {
+  if (readJSON(SETTINGS_KEY, null)) return;          // 尊重使用者存過的選擇
+  if (location.protocol === 'file:') return;         // 已在上面切成 Cloudflare
+
+  let available = false;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 1500);
+    const res = await fetch(PROVIDERS.local.ping(), { cache: 'no-store', signal: ctrl.signal });
+    clearTimeout(timer);
+    available = res.ok || res.status === 204;
+  } catch {
+    available = false;
+  }
+
+  if (!available) {
+    settings.provider = 'cloudflare';
+    applySettingsToUI();
+  }
+}
+
+applySettingsToUI();
+renderHistory();
+autoSelectProvider();
+</script>
+</body>
+</html>
