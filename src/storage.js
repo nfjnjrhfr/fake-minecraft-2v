@@ -7,6 +7,8 @@
 export function createMemoryStorage(initial = {}) {
   const map = new Map(Object.entries(initial));
   return {
+    /** 标记为不持久, 界面据此提醒用户"关掉就没了" */
+    persistent: false,
     getItem: (key) => (map.has(key) ? map.get(key) : null),
     setItem: (key, value) => { map.set(key, String(value)); },
     removeItem: (key) => { map.delete(key); },
@@ -14,7 +16,11 @@ export function createMemoryStorage(initial = {}) {
 }
 
 /**
- * 浏览器存储。localStorage 不可用(隐私模式、被禁用)时自动降级为内存存储。
+ * 浏览器存储。localStorage 不可用时自动降级为内存存储(进度关掉就没了)。
+ *
+ * 什么时候会不可用: 无痕模式、被浏览器设置禁用, 以及 iOS Safari 直接打开
+ * 本地 file:// 文件的情况 —— 那时 origin 是 null, WebKit 会拒绝 localStorage。
+ * 返回值上的 persistent === false 就是这种降级状态, 界面会据此提示。
  */
 export function createBrowserStorage() {
   try {

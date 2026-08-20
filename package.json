@@ -10,7 +10,8 @@
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
-    "serve": "node scripts/serve.js"
+    "serve": "node scripts/serve.js",
+    "build": "node scripts/build-standalone.js"
   },
   "license": "MIT"
 }

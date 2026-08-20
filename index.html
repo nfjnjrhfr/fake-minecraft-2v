@@ -1,0 +1,1564 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#1b1b23" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="游玩时间" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>游玩时间系统</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20512%20512%22%20width%3D%22512%22%20height%3D%22512%22%3E%0A%20%20%3Crect%20width%3D%22512%22%20height%3D%22512%22%20rx%3D%2296%22%20fill%3D%22%231b1b23%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22256%22%20cy%3D%22256%22%20r%3D%22150%22%20fill%3D%22none%22%20stroke%3D%22%235fa843%22%20stroke-width%3D%2228%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M256%20158v104l72%2044%22%20fill%3D%22none%22%20stroke%3D%22%23d9a441%22%20stroke-width%3D%2228%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%0A%3C%2Fsvg%3E" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20512%20512%22%20width%3D%22512%22%20height%3D%22512%22%3E%0A%20%20%3Crect%20width%3D%22512%22%20height%3D%22512%22%20rx%3D%2296%22%20fill%3D%22%231b1b23%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%22256%22%20cy%3D%22256%22%20r%3D%22150%22%20fill%3D%22none%22%20stroke%3D%22%235fa843%22%20stroke-width%3D%2228%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M256%20158v104l72%2044%22%20fill%3D%22none%22%20stroke%3D%22%23d9a441%22%20stroke-width%3D%2228%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%0A%3C%2Fsvg%3E" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<style>
+:root {
+  --bg: #1b1b23;
+  --panel: #2b2b35;
+  --line: #3d3d4a;
+  --text: #ece7dd;
+  --muted: #9b95a8;
+  --grass: #5fa843;
+  --grass-dark: #3f7a2c;
+  --amber: #d9a441;
+  --stone: #6d6d7a;
+}
+
+* { box-sizing: border-box; }
+
+/* .gate / .banner-warn 这些设了 display:flex, 会盖掉 hidden 属性自带的 display:none */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+.app { width: 100%; max-width: 520px; }
+
+.header { text-align: center; margin-bottom: 20px; }
+.header h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: 2px; }
+.subtitle { margin: 0; color: var(--muted); font-size: 13px; }
+
+.panel {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  background: var(--stone);
+  color: #fff;
+}
+.panel[data-phase="ready"] .badge { background: var(--grass); }
+.panel[data-phase="playing"] .badge { background: var(--amber); color: #2b2b35; }
+
+.countdown {
+  margin: 16px 0 4px;
+  font-size: 56px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 2px;
+}
+.panel[data-phase="playing"] .countdown { color: var(--amber); }
+.panel[data-phase="cooldown"] .countdown { color: var(--stone); }
+.panel[data-phase="ready"] .countdown { color: var(--grass); }
+
+.countdown-label { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+
+.progress {
+  height: 12px;
+  background: #1f1f27;
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  width: 0;
+  background: var(--grass);
+  transition: width .3s linear;
+}
+.panel[data-phase="playing"] .progress-bar { background: var(--amber); }
+.panel[data-phase="cooldown"] .progress-bar { background: var(--stone); }
+
+.actions { display: flex; gap: 10px; justify-content: center; margin: 18px 0 6px; }
+
+.btn {
+  font: inherit;
+  padding: 12px 20px;
+  border-radius: 6px;
+  border: 2px solid var(--line);
+  background: #35353f;
+  color: var(--text);
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { background: #40404c; }
+.btn-primary { background: var(--grass); border-color: var(--grass-dark); color: #10210a; font-weight: bold; }
+.btn-primary:hover:not(:disabled) { background: #6cbb4c; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.hint { min-height: 18px; margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+
+.game {
+  margin-top: 16px;
+  border: 2px dashed var(--line);
+  border-radius: 10px;
+  padding: 22px;
+  text-align: center;
+  color: var(--muted);
+}
+.game p { margin: 8px 0 0; font-size: 13px; }
+.game-open { color: var(--amber); }
+.lock, .pick { font-size: 30px; }
+
+.stats { display: flex; gap: 10px; margin-top: 16px; }
+.stat {
+  flex: 1;
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 8px;
+  text-align: center;
+}
+.stat-value { display: block; font-size: 16px; }
+.stat-label { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); }
+
+.footer { margin-top: 16px; text-align: center; font-size: 12px; color: var(--muted); }
+.link {
+  background: none; border: none; font: inherit; color: var(--muted);
+  cursor: pointer; text-decoration: underline; padding: 0;
+}
+.link:hover { color: var(--text); }
+.dot { margin: 0 8px; }
+
+/* ------------------------------------------------------ 提示条 */
+
+.banner {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 2px solid var(--grass-dark);
+  background: #24331d;
+  color: #cfe6c0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.banner-warn {
+  border-color: #7a5f21;
+  background: #33291a;
+  color: #e8d3a0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.btn-small { padding: 6px 12px; font-size: 12px; white-space: nowrap; }
+
+/* ------------------------------------------------------ 两道门槛 */
+
+.gates { display: flex; gap: 10px; margin-top: 12px; }
+.gate {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12px;
+}
+.gate[data-passed="true"] { border-color: var(--grass-dark); }
+.gate-icon { color: var(--muted); font-size: 14px; }
+.gate[data-passed="true"] .gate-icon { color: var(--grass); }
+.gate-name { color: var(--muted); }
+.gate-value { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------ 学习卡片 */
+
+.card {
+  margin-top: 12px;
+  padding: 16px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.card-head { display: flex; align-items: baseline; justify-content: space-between; }
+.card-head h2 { margin: 0; font-size: 15px; letter-spacing: 1px; }
+.study-credits { font-size: 11px; color: var(--grass); }
+
+.study[data-running="true"] { border-color: #3f6ea8; }
+
+.study-time {
+  margin: 10px 0 8px;
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  color: #7fb2e8;
+}
+.study[data-running="true"] .study-time { color: #a8d0f5; }
+.study-need { font-size: 14px; color: var(--muted); }
+
+.progress-study { height: 10px; }
+.progress-study .progress-bar { background: #4f86c6; }
+
+.btn-study { background: #35506e; border-color: #3f6ea8; color: #e6f0fa; width: 100%; }
+.btn-study:hover:not(:disabled) { background: #3f6187; }
+.study[data-running="true"] .btn-study { background: #6e4a35; border-color: #a8703f; }
+
+.card .actions { margin: 12px 0 6px; }
+.card .hint { text-align: left; }
+
+/* ------------------------------------------------------ 其它 */
+
+.game-note { font-size: 11px !important; color: var(--muted); }
+
+.footer { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.opt { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.opt input { cursor: pointer; }
+
+.panel[data-phase="study_required"] .badge { background: #4f86c6; }
+.panel[data-phase="study_required"] .countdown { color: #7fb2e8; }
+.panel[data-phase="study_required"] .progress-bar { background: #4f86c6; }
+</style>
+</head>
+<body>
+<!--
+  游玩时间系统 —— 单文件版本, 由 npm run build 从 src/ 和 web/ 生成, 不要直接改这个文件。
+  不依赖任何外部文件: 双击用 Safari / Chrome 打开即可, 也可以直接作为静态站点首页。
+-->
+<main class="app">
+    <header class="header">
+      <h1>游玩时间系统</h1>
+      <p class="subtitle">首个 30 分钟直接送 · 之后学满 6 小时换 30 分钟</p>
+    </header>
+
+    <!-- 切回来时告诉你离开期间发生了什么 -->
+    <div class="banner" id="banner" hidden></div>
+
+    <!-- 通知没开的话提示开启, 否则切走就没人叫你了 -->
+    <div class="banner banner-warn" id="notifyBanner" hidden>
+      <span id="notifyText">开启通知，切到别的 App 时间到了才能叫醒你</span>
+      <button class="btn btn-small" id="notifyBtn">开启通知</button>
+    </div>
+
+    <section class="panel" id="panel" data-phase="study_required">
+      <div class="badge" id="badge">可以登记</div>
+
+      <div class="countdown" id="countdown">30:00</div>
+      <div class="countdown-label" id="countdownLabel">第一次不用学，直接登记</div>
+
+      <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="claimBtn">登记 30 分钟</button>
+        <button class="btn" id="endBtn" hidden>提前结束</button>
+      </div>
+
+      <p class="hint" id="hint"></p>
+    </section>
+
+    <!-- 两道门槛 -->
+    <section class="gates">
+      <div class="gate" id="gateStudy">
+        <span class="gate-icon" id="gateStudyIcon">✓</span>
+        <span class="gate-name">学习</span>
+        <span class="gate-value" id="gateStudyValue">首次赠送</span>
+      </div>
+      <div class="gate" id="gateCooldown">
+        <span class="gate-icon" id="gateCooldownIcon">✓</span>
+        <span class="gate-name">冷却</span>
+        <span class="gate-value" id="gateCooldownValue">已结束</span>
+      </div>
+    </section>
+
+    <!-- 学习卡片 -->
+    <section class="card study" id="studyCard">
+      <div class="card-head">
+        <h2>学习</h2>
+        <span class="study-credits" id="studyCredits"></span>
+      </div>
+
+      <div class="study-time"><span id="studyBanked">00:00</span> <span class="study-need" id="studyNeed">/ 6:00:00</span></div>
+      <div class="progress progress-study"><div class="progress-bar" id="studyBar"></div></div>
+
+      <div class="actions">
+        <button class="btn btn-study" id="studyBtn">开始学习</button>
+      </div>
+      <p class="hint" id="studyHint">学习时间按真实时间走，可以锁屏去看书。</p>
+    </section>
+
+    <!-- 游玩区域 -->
+    <section class="game" id="game" aria-live="polite">
+      <div class="game-locked" id="gameLocked">
+        <span class="lock">🔒</span>
+        <p id="lockedText">游玩区域已锁定</p>
+      </div>
+      <div class="game-open" id="gameOpen" hidden>
+        <span class="pick">⛏️</span>
+        <p>游玩中，可以切到游戏 App 了</p>
+        <p class="game-note">时间到会通知你</p>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stat"><span class="stat-value" id="statSessions">0</span><span class="stat-label">完成场次</span></div>
+      <div class="stat"><span class="stat-value" id="statPlayed">0 分钟</span><span class="stat-label">累计游玩</span></div>
+      <div class="stat"><span class="stat-value" id="statStudied">0 分钟</span><span class="stat-label">累计学习</span></div>
+    </section>
+
+    <footer class="footer">
+      <label class="opt"><input type="checkbox" id="pauseOnHide" /> 离开页面时暂停学习计时</label>
+      <label class="opt"><input type="checkbox" id="fastMode" /> 演示模式（学 30 秒 / 玩 20 秒）</label>
+      <button class="link" id="resetBtn">清空进度</button>
+    </footer>
+  </main>
+<script type="module">
+// ================================================================
+// src/storage.js
+// ================================================================
+
+/**
+ * 存储适配器。接口与 localStorage 一致: getItem / setItem / removeItem。
+ * 浏览器里直接把 window.localStorage 传进去即可。
+ */
+
+/** 内存存储: 进程退出即丢失, 用于测试和 SSR 兜底 */
+function createMemoryStorage(initial = {}) {
+  const map = new Map(Object.entries(initial));
+  return {
+    /** 标记为不持久, 界面据此提醒用户"关掉就没了" */
+    persistent: false,
+    getItem: (key) => (map.has(key) ? map.get(key) : null),
+    setItem: (key, value) => { map.set(key, String(value)); },
+    removeItem: (key) => { map.delete(key); },
+  };
+}
+
+/**
+ * 浏览器存储。localStorage 不可用时自动降级为内存存储(进度关掉就没了)。
+ *
+ * 什么时候会不可用: 无痕模式、被浏览器设置禁用, 以及 iOS Safari 直接打开
+ * 本地 file:// 文件的情况 —— 那时 origin 是 null, WebKit 会拒绝 localStorage。
+ * 返回值上的 persistent === false 就是这种降级状态, 界面会据此提示。
+ */
+function createBrowserStorage() {
+  try {
+    const probe = '__playtime_probe__';
+    globalThis.localStorage.setItem(probe, '1');
+    globalThis.localStorage.removeItem(probe);
+    return globalThis.localStorage;
+  } catch {
+    return createMemoryStorage();
+  }
+}
+
+/**
+ * Node 端的文件存储, 用于把进度落到磁盘。
+ * @param {string} filePath
+ */
+function createFileStorage(filePath) {
+  const fs = require_fs();
+  const read = () => {
+    try {
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch {
+      return {};
+    }
+  };
+  return {
+    getItem(key) {
+      const data = read();
+      return Object.hasOwn(data, key) ? data[key] : null;
+    },
+    setItem(key, value) {
+      const data = read();
+      data[key] = String(value);
+      fs.mkdirSync(dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    },
+    removeItem(key) {
+      const data = read();
+      delete data[key];
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    },
+  };
+}
+
+// 让本文件在浏览器里也能被打包/直接 import: 只有真正调用 createFileStorage 时才碰 node:fs
+function require_fs() {
+  // eslint-disable-next-line no-undef
+  const mod = globalThis.process?.getBuiltinModule?.('node:fs');
+  if (!mod) throw new Error('createFileStorage 只能在 Node.js 环境中使用');
+  return mod;
+}
+
+function dirname(p) {
+  const i = p.replace(/\\/g, '/').lastIndexOf('/');
+  return i <= 0 ? '.' : p.slice(0, i);
+}
+
+// ================================================================
+// src/playtime-timer.js
+// ================================================================
+
+/**
+ * 游玩时间计时系统
+ *
+ * 规则:
+ *   1. 第一个 30 分钟直接送, 不用学;
+ *   2. 之后想再登记, 必须学满 6 小时;
+ *   3. 登记一次得到 30 分钟游玩时间;
+ *   4. 玩完再学 6 小时, 才能再登记。
+ *
+ * 学习时长是"存款": 可以分几次学, 中间暂停不会白学, 学满 6 小时就能登记一次,
+ * 登记时从存款里扣掉 6 小时。多学的会留着, 够几个 6 小时就能登记几次。
+ *
+ * 另外还有个可选的"干等冷却"(cooldownDurationMs), 默认关闭 ——
+ * 默认只靠学习换时间, 不靠干等。
+ *
+ * 所有计时都基于绝对时间戳(deadline)而不是累加的 tick,
+ * 因此切到别的 App、锁屏、甚至把这个页面完全关掉,
+ * 时间依然在"真实世界"里流逝, 回来时会自动结算到正确的状态。
+ */
+
+
+/** 主状态 */
+const Phase = Object.freeze({
+  /** 学习时长不够, 领取不了 */
+  STUDY_REQUIRED: 'study_required',
+  /** 两道门槛都过了, 可以登记 30 分钟 */
+  READY: 'ready',
+  /** 游玩中 */
+  PLAYING: 'playing',
+  /** 冷却中 */
+  COOLDOWN: 'cooldown',
+});
+
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+
+const DEFAULT_PLAY_DURATION_MS = 30 * MINUTE;
+/** 登记一次要学满 6 小时 */
+const DEFAULT_STUDY_REQUIRED_MS = 6 * HOUR;
+/** 默认没有干等的冷却 —— 时间只能靠学习换 */
+const DEFAULT_COOLDOWN_DURATION_MS = 0;
+
+/** 时钟被往回拨多少毫秒才算作异常(容忍 NTP 校准的小幅抖动) */
+const CLOCK_BACKWARD_TOLERANCE_MS = 2000;
+
+const STATE_VERSION = 3;
+
+function emptyState() {
+  return {
+    version: STATE_VERSION,
+    /** 当前游玩场次的开始 / 结束时间戳; 不在游玩中时为 null */
+    sessionStartedAt: null,
+    sessionEndsAt: null,
+    /** 冷却结束时间戳; 不在冷却中时为 null */
+    cooldownEndsAt: null,
+    /** 已结算的学习时长("存款"), 登记一次扣掉 studyRequiredMs */
+    studyBankedMs: 0,
+    /** 本次学习开始的时间戳; 没在学习时为 null */
+    studyStartedAt: null,
+    /** 累计学习总时长(只增不减, 用于统计) */
+    totalStudiedMs: 0,
+    /** 首次赠送的那 30 分钟用掉没有 */
+    freeClaimUsed: false,
+    /** 已经完成的游玩场次数 */
+    sessionsCompleted: 0,
+    /** 累计游玩毫秒数 */
+    totalPlayedMs: 0,
+    /** 最后一次观测到的时间戳, 用于检测时钟被往回拨 */
+    lastSeenAt: 0,
+    /** 检测到时钟回拨的次数 */
+    clockAnomalies: 0,
+  };
+}
+
+class PlaytimeTimer {
+  #storage;
+  #storageKey;
+  #now;
+  #playDurationMs;
+  #cooldownDurationMs;
+  #studyRequiredMs;
+  #freeFirstClaim;
+  #state;
+  #listeners = new Set();
+  #ticker = null;
+  #studyGoalReached = false;
+
+  /**
+   * @param {object} [options]
+   * @param {{getItem(k:string):(string|null), setItem(k:string,v:string):void, removeItem?(k:string):void}} [options.storage]
+   *        持久化适配器, 接口与 localStorage 一致。默认只存在内存里。
+   * @param {string}   [options.storageKey]
+   * @param {() => number} [options.now]  时间源, 传服务器时间可以防作弊
+   * @param {number}   [options.playDurationMs]      单次游玩时长, 默认 30 分钟
+   * @param {number}   [options.cooldownDurationMs]  冷却时长, 默认 6 小时
+   * @param {number}   [options.studyRequiredMs]     登记一次需要的学习时长, 默认 6 小时
+   * @param {number}   [options.cooldownDurationMs]  额外的干等冷却, 默认 0(不干等)
+   * @param {boolean}  [options.freeFirstClaim]      第一次登记免学习, 默认 true
+   */
+  constructor(options = {}) {
+    const {
+      storage = createMemoryStorage(),
+      storageKey = 'fake-minecraft:playtime:v2',
+      now = () => Date.now(),
+      playDurationMs = DEFAULT_PLAY_DURATION_MS,
+      cooldownDurationMs = DEFAULT_COOLDOWN_DURATION_MS,
+      studyRequiredMs = DEFAULT_STUDY_REQUIRED_MS,
+      freeFirstClaim = true,
+    } = options;
+
+    if (!(playDurationMs > 0)) throw new RangeError('playDurationMs 必须大于 0');
+    if (!(cooldownDurationMs >= 0)) throw new RangeError('cooldownDurationMs 不能为负数');
+    if (!(studyRequiredMs >= 0)) throw new RangeError('studyRequiredMs 不能为负数');
+
+    this.#storage = storage;
+    this.#storageKey = storageKey;
+    this.#now = now;
+    this.#playDurationMs = playDurationMs;
+    this.#cooldownDurationMs = cooldownDurationMs;
+    this.#studyRequiredMs = studyRequiredMs;
+    this.#freeFirstClaim = freeFirstClaim;
+    this.#state = this.#load();
+    this.#studyGoalReached = this.#liveStudyMs(this.#now()) >= studyRequiredMs;
+
+    // 构造时立刻结算一次: 处理"上次关掉页面之后经过的时间"
+    this.refresh();
+  }
+
+  get playDurationMs() { return this.#playDurationMs; }
+  get cooldownDurationMs() { return this.#cooldownDurationMs; }
+  get studyRequiredMs() { return this.#studyRequiredMs; }
+  get freeFirstClaim() { return this.#freeFirstClaim; }
+
+  // ---------------------------------------------------------------- 持久化
+
+  #load() {
+    let raw = null;
+    try {
+      raw = this.#storage.getItem(this.#storageKey);
+    } catch {
+      raw = null;
+    }
+    if (!raw) return emptyState();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return emptyState();
+    }
+    if (!parsed || typeof parsed !== 'object') return emptyState();
+
+    // v1 没有学习字段, v2 没有赠送字段, 其余同名, 合并即可平滑升级
+    if (![1, 2, STATE_VERSION].includes(parsed.version)) return emptyState();
+
+    const migrated = { ...emptyState(), ...parsed, version: STATE_VERSION };
+    // 老存档里已经玩过的, 不再补送首次的 30 分钟
+    if (parsed.version !== STATE_VERSION) {
+      migrated.freeClaimUsed = (parsed.sessionsCompleted ?? 0) > 0
+        || parsed.sessionEndsAt !== null
+        || parsed.cooldownEndsAt !== null;
+    }
+    return migrated;
+  }
+
+  #save() {
+    try {
+      this.#storage.setItem(this.#storageKey, JSON.stringify(this.#state));
+    } catch {
+      // 存储不可用(隐私模式 / 配额满)时降级为纯内存运行, 不影响本次会话
+    }
+  }
+
+  // ------------------------------------------------------------ 时钟与结算
+
+  /**
+   * 读取当前时间, 并检测时钟被往回拨的情况。
+   * 时钟往回拨会让 deadline 显得更远、让已累计的学习时长缩水,
+   * 所以这里把所有时间锚点按同样的差值平移, 保证"剩余时间"不变。
+   */
+  #readClock() {
+    const now = this.#now();
+    const backwards = this.#state.lastSeenAt - now;
+
+    if (backwards > CLOCK_BACKWARD_TOLERANCE_MS) {
+      const shift = backwards;
+      if (this.#state.sessionStartedAt !== null) this.#state.sessionStartedAt -= shift;
+      if (this.#state.sessionEndsAt !== null) this.#state.sessionEndsAt -= shift;
+      if (this.#state.cooldownEndsAt !== null) this.#state.cooldownEndsAt -= shift;
+      if (this.#state.studyStartedAt !== null) this.#state.studyStartedAt -= shift;
+      this.#state.clockAnomalies += 1;
+    }
+
+    this.#state.lastSeenAt = now;
+    return now;
+  }
+
+  /** 当前有效学习时长 = 已结算 + 本次正在进行的 */
+  #liveStudyMs(now) {
+    const s = this.#state;
+    return s.studyBankedMs + (s.studyStartedAt === null ? 0 : Math.max(0, now - s.studyStartedAt));
+  }
+
+  /** 把正在进行的学习时长结算进"存款" */
+  #settleStudy(now) {
+    const s = this.#state;
+    if (s.studyStartedAt === null) return;
+    const elapsed = Math.max(0, now - s.studyStartedAt);
+    s.studyBankedMs += elapsed;
+    s.totalStudiedMs += elapsed;
+    s.studyStartedAt = now;
+  }
+
+  /**
+   * 把状态结算到"此刻", 触发所有应该发生的状态迁移。
+   * 切去别的 App 几小时后回来, 这一次调用就能把 游玩结束 -> 冷却结束 全部补上。
+   * @returns {ReturnType<PlaytimeTimer['getSnapshot']>}
+   */
+  refresh() {
+    const now = this.#readClock();
+    const before = this.#phaseAt(now);
+    let changed = false;
+
+    // 游玩时间用完 -> 进入冷却。
+    // 冷却从"游玩实际结束的那一刻"起算, 而不是从发现它的这一刻起算,
+    // 这样切去别的 App 的期间冷却也在正常走。
+    if (this.#state.sessionEndsAt !== null && now >= this.#state.sessionEndsAt) {
+      const endedAt = this.#state.sessionEndsAt;
+      this.#state.totalPlayedMs += endedAt - this.#state.sessionStartedAt;
+      this.#state.sessionsCompleted += 1;
+      this.#state.sessionStartedAt = null;
+      this.#state.sessionEndsAt = null;
+      // 冷却时长为 0 时压根不进冷却, 免得发一条"冷却结束"的空提醒
+      this.#state.cooldownEndsAt = this.#cooldownDurationMs > 0 ? endedAt + this.#cooldownDurationMs : null;
+      changed = true;
+      this.#emit('session-end', { at: endedAt });
+    }
+
+    // 冷却结束
+    if (this.#state.cooldownEndsAt !== null && now >= this.#state.cooldownEndsAt) {
+      const readyAt = this.#state.cooldownEndsAt;
+      this.#state.cooldownEndsAt = null;
+      changed = true;
+      this.#emit('cooldown-end', { at: readyAt });
+    }
+
+    // 学习时长达标(每次从"不够"跨到"够了"时提醒一次)
+    const studyMs = this.#liveStudyMs(now);
+    if (studyMs >= this.#studyRequiredMs && !this.#studyGoalReached) {
+      this.#studyGoalReached = true;
+      this.#settleStudy(now);
+      changed = true;
+      this.#emit('study-goal', { at: now, bankedMs: this.#state.studyBankedMs });
+    } else if (studyMs < this.#studyRequiredMs) {
+      this.#studyGoalReached = false;
+    }
+
+    if (changed) this.#save();
+
+    const snapshot = this.getSnapshot();
+    if (changed || before !== snapshot.phase) this.#emit('change', snapshot);
+    // 每次结算都触发, 供 UI 刷新倒计时数字
+    this.#emit('tick', snapshot);
+    return snapshot;
+  }
+
+  #phaseAt(now) {
+    if (this.#state.sessionEndsAt !== null && now < this.#state.sessionEndsAt) return Phase.PLAYING;
+    if (this.#state.cooldownEndsAt !== null && now < this.#state.cooldownEndsAt) return Phase.COOLDOWN;
+    if (this.#liveStudyMs(now) >= this.#studyRequiredMs) return Phase.READY;
+    // 首次赠送的那 30 分钟不用学
+    if (this.#freeClaimAvailable()) return Phase.READY;
+    return Phase.STUDY_REQUIRED;
+  }
+
+  /** 首次赠送的名额还在不在 */
+  #freeClaimAvailable() {
+    return this.#freeFirstClaim && !this.#state.freeClaimUsed;
+  }
+
+  // -------------------------------------------------------------------- 读
+
+  /**
+   * 当前状态快照。纯读取, 不会触发状态迁移(需要迁移请先 refresh)。
+   */
+  getSnapshot() {
+    const now = this.#now();
+    const phase = this.#phaseAt(now);
+    const s = this.#state;
+
+    const remainingPlayMs = phase === Phase.PLAYING ? Math.max(0, s.sessionEndsAt - now) : 0;
+    const remainingCooldownMs =
+      s.cooldownEndsAt !== null ? Math.max(0, s.cooldownEndsAt - now) : 0;
+
+    const studyMs = this.#liveStudyMs(now);
+    const studyRemainingMs = Math.max(0, this.#studyRequiredMs - studyMs);
+
+    // 两道门槛
+    const cooldownPassed = remainingCooldownMs === 0;
+    const studyPassed = studyRemainingMs === 0;
+
+    return {
+      phase,
+      /** 现在能不能玩 */
+      canPlay: phase === Phase.PLAYING,
+      /** 现在能不能登记 30 分钟 */
+      canClaim: phase === Phase.READY,
+      /** 这次登记用的是不是首次赠送的名额(没学够但仍然能登记) */
+      freeClaimAvailable: this.#freeClaimAvailable() && !studyPassed,
+      /** 现在能不能开始学习(游玩中不能学习, 避免一份时间用两次) */
+      canStudy: phase !== Phase.PLAYING,
+
+      /** 本场剩余游玩毫秒数 */
+      remainingPlayMs,
+      /** 冷却剩余毫秒数 */
+      remainingCooldownMs,
+      /** 当前阶段的主倒计时(READY / STUDY_REQUIRED 时为 0) */
+      remainingMs: phase === Phase.PLAYING ? remainingPlayMs : remainingCooldownMs,
+      /** 当前阶段进度 0~1 */
+      progress:
+        phase === Phase.PLAYING
+          ? 1 - remainingPlayMs / this.#playDurationMs
+          : phase === Phase.COOLDOWN
+            ? 1 - remainingCooldownMs / this.#cooldownDurationMs
+            : phase === Phase.STUDY_REQUIRED
+              ? (this.#studyRequiredMs === 0 ? 1 : studyMs / this.#studyRequiredMs)
+              : 1,
+
+      /** 登记的门槛, UI 可以分别显示 */
+      gates: {
+        cooldown: { passed: cooldownPassed, remainingMs: remainingCooldownMs },
+        study: {
+          passed: studyPassed,
+          remainingMs: studyRemainingMs,
+          /** 学习没达标, 但首次赠送的名额可以顶上 */
+          waived: !studyPassed && this.#freeClaimAvailable(),
+        },
+      },
+
+      /** 学习状态 */
+      study: {
+        /** 是否正在计学习时间 */
+        running: s.studyStartedAt !== null,
+        /** 当前累计的学习时长("存款") */
+        bankedMs: studyMs,
+        /** 登记一次需要的学习时长 */
+        requiredMs: this.#studyRequiredMs,
+        /** 还差多久达标 */
+        remainingMs: studyRemainingMs,
+        /** 学习进度 0~1 */
+        progress: this.#studyRequiredMs === 0 ? 1 : Math.min(1, studyMs / this.#studyRequiredMs),
+        /** 够不够登记一次 */
+        passed: studyPassed,
+        /** 存款够登记几次 */
+        credits: this.#studyRequiredMs === 0 ? Infinity : Math.floor(studyMs / this.#studyRequiredMs),
+      },
+
+      sessionStartedAt: s.sessionStartedAt,
+      sessionEndsAt: s.sessionEndsAt,
+      cooldownEndsAt: s.cooldownEndsAt,
+      /** 冷却最早结束的时间戳; 已经没有冷却时为 null。注意还要学习达标才能登记 */
+      cooldownReadyAt: phase === Phase.PLAYING
+        ? s.sessionEndsAt + this.#cooldownDurationMs
+        : s.cooldownEndsAt,
+
+      sessionsCompleted: s.sessionsCompleted,
+      totalPlayedMs: s.totalPlayedMs + (phase === Phase.PLAYING ? now - s.sessionStartedAt : 0),
+      totalStudiedMs: s.totalStudiedMs + (s.studyStartedAt === null ? 0 : Math.max(0, now - s.studyStartedAt)),
+      clockAnomalies: s.clockAnomalies,
+      now,
+    };
+  }
+
+  // ------------------------------------------------------------------ 学习
+
+  /**
+   * 开始(或继续)计学习时间。学习同样按真实时间走,
+   * 所以可以开始学习之后锁屏、去看书、去别的 App 背单词。
+   * @returns {{ok:true, snapshot:object} | {ok:false, reason:'playing'|'already-studying', snapshot:object}}
+   */
+  startStudy() {
+    this.refresh();
+    const now = this.#readClock();
+
+    if (this.#phaseAt(now) === Phase.PLAYING) {
+      return { ok: false, reason: 'playing', snapshot: this.getSnapshot() };
+    }
+    if (this.#state.studyStartedAt !== null) {
+      return { ok: false, reason: 'already-studying', snapshot: this.getSnapshot() };
+    }
+
+    this.#state.studyStartedAt = now;
+    this.#save();
+
+    const snapshot = this.getSnapshot();
+    this.#emit('study-start', { at: now });
+    this.#emit('change', snapshot);
+    return { ok: true, snapshot };
+  }
+
+  /**
+   * 暂停学习计时, 已经学的时间会存进"存款", 不会白学。
+   * @returns {{ok:true, snapshot:object} | {ok:false, reason:'not-studying', snapshot:object}}
+   */
+  pauseStudy() {
+    this.refresh();
+    const now = this.#readClock();
+
+    if (this.#state.studyStartedAt === null) {
+      return { ok: false, reason: 'not-studying', snapshot: this.getSnapshot() };
+    }
+
+    this.#settleStudy(now);
+    this.#state.studyStartedAt = null;
+    this.#save();
+
+    const snapshot = this.getSnapshot();
+    this.#emit('study-pause', { at: now, bankedMs: this.#state.studyBankedMs });
+    this.#emit('change', snapshot);
+    return { ok: true, snapshot };
+  }
+
+  // -------------------------------------------------------------------- 写
+
+  /**
+   * 登记奖励: 扣掉 6 小时学习时长, 换 30 分钟游玩时间。
+   * 第一次登记不用学, 直接送。
+   * @returns {{ok:true, snapshot:object} | {ok:false, reason:'playing'|'cooldown'|'study-required', snapshot:object}}
+   */
+  claim() {
+    this.refresh();
+    const now = this.#readClock();
+    const phase = this.#phaseAt(now);
+
+    if (phase !== Phase.READY) {
+      const reason = phase === Phase.PLAYING ? 'playing'
+        : phase === Phase.COOLDOWN ? 'cooldown'
+          : 'study-required';
+      return { ok: false, reason, snapshot: this.getSnapshot() };
+    }
+
+    // 学习中直接登记的话, 先把这一段学习时间结算进存款再扣
+    this.#settleStudy(now);
+    if (this.#state.studyStartedAt !== null) {
+      this.#state.studyStartedAt = null;
+      this.#emit('study-pause', { at: now, bankedMs: this.#state.studyBankedMs });
+    }
+
+    // 学习存款够就扣存款, 不够说明用的是首次赠送的名额
+    const usedFreeClaim = this.#state.studyBankedMs < this.#studyRequiredMs;
+    if (usedFreeClaim) {
+      this.#state.freeClaimUsed = true;
+    } else {
+      this.#state.studyBankedMs -= this.#studyRequiredMs;
+    }
+    this.#studyGoalReached = this.#state.studyBankedMs >= this.#studyRequiredMs;
+
+    this.#state.sessionStartedAt = now;
+    this.#state.sessionEndsAt = now + this.#playDurationMs;
+    this.#state.cooldownEndsAt = null;
+    this.#save();
+
+    const snapshot = this.getSnapshot();
+    this.#emit('session-start', { at: now, endsAt: this.#state.sessionEndsAt, free: usedFreeClaim });
+    this.#emit('change', snapshot);
+    return { ok: true, snapshot };
+  }
+
+  /** claim() 的别名, 语义更直白 */
+  startSession() { return this.claim(); }
+
+  /**
+   * 提前结束本场游玩。冷却照常从"结束的这一刻"起算 6 小时,
+   * 提前退出不会缩短冷却, 也不会保留没用完的时间。
+   */
+  endSession() {
+    this.refresh();
+    const now = this.#readClock();
+    if (this.#phaseAt(now) !== Phase.PLAYING) {
+      return { ok: false, reason: 'not-playing', snapshot: this.getSnapshot() };
+    }
+
+    this.#state.totalPlayedMs += now - this.#state.sessionStartedAt;
+    this.#state.sessionsCompleted += 1;
+    this.#state.sessionStartedAt = null;
+    this.#state.sessionEndsAt = null;
+    this.#state.cooldownEndsAt = this.#cooldownDurationMs > 0 ? now + this.#cooldownDurationMs : null;
+    this.#save();
+
+    const snapshot = this.getSnapshot();
+    this.#emit('session-end', { at: now, early: true });
+    this.#emit('change', snapshot);
+    return { ok: true, snapshot };
+  }
+
+  /** 清空全部进度(测试 / 管理员用) */
+  reset() {
+    this.#state = emptyState();
+    this.#studyGoalReached = this.#studyRequiredMs === 0;
+    this.#save();
+    const snapshot = this.getSnapshot();
+    this.#emit('change', snapshot);
+    return snapshot;
+  }
+
+  // ------------------------------------------------------------------ 事件
+
+  /**
+   * 订阅事件。
+   *   'tick'          每次 refresh() 都触发, 用来刷新倒计时显示
+   *   'change'        状态发生变化(阶段迁移 / 登记 / 学习开始暂停 / 重置)
+   *   'study-start'   开始计学习时间
+   *   'study-pause'   暂停学习
+   *   'study-goal'    学习时长达标, 可以登记了
+   *   'session-start' 登记成功, 开始游玩
+   *   'session-end'   游玩时间用完或提前结束
+   *   'cooldown-end'  冷却结束
+   * @returns {() => void} 取消订阅
+   */
+  on(event, listener) {
+    const entry = { event, listener };
+    this.#listeners.add(entry);
+    return () => this.#listeners.delete(entry);
+  }
+
+  #emit(event, payload) {
+    for (const entry of [...this.#listeners]) {
+      if (entry.event !== event) continue;
+      try {
+        entry.listener(payload);
+      } catch (err) {
+        // 一个监听器抛错不应该打断状态机
+        console.error(`[PlaytimeTimer] 监听器 ${event} 抛出异常:`, err);
+      }
+    }
+  }
+
+  // ------------------------------------------------------------ 后台轮询
+
+  /**
+   * 开始定时结算。这只是为了让 UI 上的秒数跳动 —— 状态本身由时间戳决定,
+   * 所以浏览器把定时器节流到几分钟一次也不会算错。
+   * @param {number} [intervalMs=1000]
+   */
+  startTicking(intervalMs = 1000) {
+    this.stopTicking();
+    this.#ticker = setInterval(() => this.refresh(), intervalMs);
+    this.#ticker.unref?.();
+    return () => this.stopTicking();
+  }
+
+  stopTicking() {
+    if (this.#ticker !== null) {
+      clearInterval(this.#ticker);
+      this.#ticker = null;
+    }
+  }
+}
+
+/**
+ * 把"已经过去的时间"格式化成 hh:mm:ss / mm:ss。
+ * 用向下取整, 免得同一个 10.5 秒既显示成"已学 11 秒"又显示成"还差 10 秒"。
+ */
+function formatElapsed(ms) {
+  return formatDuration(Math.floor(Math.max(0, ms) / 1000) * 1000);
+}
+
+/** 把"还剩多久"格式化成 hh:mm:ss / mm:ss(向上取整, 剩 0.5 秒也显示 1 秒) */
+function formatDuration(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+// ================================================================
+// src/alarms.js
+// ================================================================
+
+/**
+ * 闹钟层(浏览器专用)
+ *
+ * 解决的问题: 你登记完就切到别的 App 去玩了, 30 分钟到了得有人叫你。
+ *
+ * 三层保险, 从可靠到兜底:
+ *   1. 页面还活着(桌面端切到别的窗口、手机上还没被冻结) -> 页面里的 setTimeout 直接弹通知;
+ *   2. 页面被关掉但 Service Worker 还没被回收 -> SW 里的定时器弹通知;
+ *   3. 上面两层都被系统杀掉了 -> 下次回到页面时立刻"补发"一条, 并且界面上直接是结算好的状态。
+ *
+ * 说人话: 前两层是尽力而为(手机系统随时可能冻结网页), 第三层一定生效。
+ * 想要 100% 准时的后台闹钟, 只能上 Web Push(要服务端) 或者原生 App —— 见 README。
+ *
+ * 无论闹钟响没响, PlaytimeTimer 的状态永远是对的, 因为它只看时间戳。
+ */
+
+const FIRED_PREFIX = 'fake-minecraft:alarm-fired:';
+
+class AlarmScheduler {
+  #storage;
+  #swUrl;
+  #registration = null;
+  #alarms = new Map();      // id -> {id, at, title, body}
+  #timers = new Map();      // id -> setTimeout handle
+  #sound;
+
+  /**
+   * @param {object} [options]
+   * @param {Storage} [options.storage]  记录"已经响过"的闹钟, 避免补发时重复打扰
+   * @param {string}  [options.swUrl]    Service Worker 路径
+   * @param {boolean} [options.sound]    页面可见时是否额外响一声
+   */
+  constructor({ storage = globalThis.localStorage, swUrl = './sw.js', sound = true } = {}) {
+    this.#storage = storage;
+    this.#swUrl = swUrl;
+    this.#sound = sound;
+  }
+
+  /** 浏览器支不支持通知 */
+  get supported() {
+    return typeof globalThis.Notification !== 'undefined';
+  }
+
+  get permission() {
+    return this.supported ? globalThis.Notification.permission : 'unsupported';
+  }
+
+  /** 注册 Service Worker。失败(不支持 / file:// 打开)时静默降级为只用页面定时器 */
+  async init() {
+    if (!('serviceWorker' in globalThis.navigator)) return null;
+    try {
+      this.#registration = await globalThis.navigator.serviceWorker.register(this.#swUrl);
+      await globalThis.navigator.serviceWorker.ready;
+    } catch {
+      this.#registration = null;
+    }
+    return this.#registration;
+  }
+
+  /** 请求通知权限。必须由用户点击触发, 否则浏览器会直接拒绝 */
+  async requestPermission() {
+    if (!this.supported) return 'unsupported';
+    if (globalThis.Notification.permission !== 'default') return globalThis.Notification.permission;
+    try {
+      return await globalThis.Notification.requestPermission();
+    } catch {
+      return globalThis.Notification.permission;
+    }
+  }
+
+  /**
+   * 设置闹钟列表(整体替换, 不在列表里的会被取消)。
+   * @param {Array<{id:string, at:number, title:string, body:string}>} alarms
+   */
+  set(alarms) {
+    for (const timer of this.#timers.values()) clearTimeout(timer);
+    this.#timers.clear();
+    this.#alarms.clear();
+
+    const now = Date.now();
+    for (const alarm of alarms) {
+      if (!alarm || typeof alarm.at !== 'number') continue;
+      this.#alarms.set(alarm.id, alarm);
+      const delay = alarm.at - now;
+      if (delay <= 0) continue;
+      // 第 1 层: 页面里的定时器
+      this.#timers.set(alarm.id, setTimeout(() => this.fire(alarm), delay));
+    }
+
+    // 第 2 层: 交给 Service Worker 再排一遍
+    this.#postToWorker({ type: 'schedule', alarms: [...this.#alarms.values()] });
+  }
+
+  /** 全部取消 */
+  clear() {
+    this.set([]);
+  }
+
+  /**
+   * 第 3 层: 回到页面时调用, 把在离开期间已经到点、却没能弹出来的闹钟补发掉。
+   * @returns {Array<object>} 实际补发的闹钟
+   */
+  checkMissed(now = Date.now()) {
+    const missed = [];
+    for (const alarm of this.#alarms.values()) {
+      if (alarm.at <= now && !this.#alreadyFired(alarm)) {
+        this.fire(alarm);
+        missed.push(alarm);
+      }
+    }
+    return missed;
+  }
+
+  /** 立刻弹一条通知(带去重, 同一个闹钟只会响一次) */
+  fire(alarm) {
+    if (this.#alreadyFired(alarm)) return false;
+    this.#markFired(alarm);
+
+    const options = {
+      body: alarm.body,
+      tag: alarm.id,          // 同 tag 的通知会互相替换, 页面和 SW 同时响也只会看到一条
+      renotify: false,
+      requireInteraction: true,
+      icon: './icon.svg',
+      badge: './icon.svg',
+      vibrate: [200, 100, 200],
+    };
+
+    if (this.#registration) {
+      // 通过 SW 弹, 手机上才能保留通知
+      this.#registration.showNotification(alarm.title, options).catch(() => {});
+    } else if (this.permission === 'granted') {
+      try {
+        new globalThis.Notification(alarm.title, options);
+      } catch { /* 部分浏览器只允许 SW 弹通知 */ }
+    }
+
+    if (globalThis.document?.visibilityState === 'visible') {
+      globalThis.navigator?.vibrate?.([200, 100, 200]);
+      if (this.#sound) this.#beep();
+    }
+    return true;
+  }
+
+  // ------------------------------------------------------------------ 内部
+
+  #postToWorker(message) {
+    const controller = globalThis.navigator?.serviceWorker?.controller;
+    if (controller) controller.postMessage(message);
+    else this.#registration?.active?.postMessage(message);
+  }
+
+  #firedKey(alarm) {
+    return `${FIRED_PREFIX}${alarm.id}`;
+  }
+
+  #alreadyFired(alarm) {
+    try {
+      return Number(this.#storage?.getItem(this.#firedKey(alarm))) === alarm.at;
+    } catch {
+      return false;
+    }
+  }
+
+  #markFired(alarm) {
+    try {
+      this.#storage?.setItem(this.#firedKey(alarm), String(alarm.at));
+    } catch { /* 存储不可用就不去重, 顶多同 tag 替换一次 */ }
+  }
+
+  /** 一声短促的提示音, 不依赖任何音频文件 */
+  #beep() {
+    try {
+      const Ctx = globalThis.AudioContext || globalThis.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'square';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+      osc.onended = () => ctx.close().catch(() => {});
+    } catch { /* 没有用户交互过的页面不允许播声音, 忽略 */ }
+  }
+}
+
+// ================================================================
+// web/app.js
+// ================================================================
+
+const $ = (id) => document.getElementById(id);
+const el = {
+  banner: $('banner'), notifyBanner: $('notifyBanner'), notifyText: $('notifyText'), notifyBtn: $('notifyBtn'),
+  panel: $('panel'), badge: $('badge'), countdown: $('countdown'), countdownLabel: $('countdownLabel'),
+  progressBar: $('progressBar'), claimBtn: $('claimBtn'), endBtn: $('endBtn'), hint: $('hint'),
+  gateStudy: $('gateStudy'), gateStudyIcon: $('gateStudyIcon'), gateStudyValue: $('gateStudyValue'),
+  gateCooldown: $('gateCooldown'), gateCooldownIcon: $('gateCooldownIcon'), gateCooldownValue: $('gateCooldownValue'),
+  studyCard: $('studyCard'), studyCredits: $('studyCredits'), studyBanked: $('studyBanked'),
+  studyNeed: $('studyNeed'), studyBar: $('studyBar'), studyBtn: $('studyBtn'), studyHint: $('studyHint'),
+  gameLocked: $('gameLocked'), gameOpen: $('gameOpen'), lockedText: $('lockedText'),
+  statSessions: $('statSessions'), statPlayed: $('statPlayed'), statStudied: $('statStudied'),
+  resetBtn: $('resetBtn'), fastMode: $('fastMode'), pauseOnHide: $('pauseOnHide'),
+};
+
+const storage = createBrowserStorage();
+const FAST_KEY = 'fake-minecraft:fast-mode';
+const PAUSE_KEY = 'fake-minecraft:pause-on-hide';
+
+const alarms = new AlarmScheduler({ storage });
+alarms.init();
+
+/** localStorage 用不了(无痕模式 / 用 file:// 直接打开本地文件)时, 进度关掉就没了 */
+const storagePersists = storage.persistent !== false;
+
+const isFast = () => storage.getItem(FAST_KEY) === '1';
+const pausesOnHide = () => storage.getItem(PAUSE_KEY) === '1';
+
+let timer;
+let unbind = [];
+/** 离开页面时记下当时的状态, 回来好告诉你这期间发生了什么 */
+let phaseWhenHidden = null;
+
+function buildTimer() {
+  for (const off of unbind) off();
+  unbind = [];
+  timer?.stopTicking();
+
+  const fast = isFast();
+  timer = new PlaytimeTimer({
+    storage,
+    storageKey: fast ? 'fake-minecraft:playtime:demo' : 'fake-minecraft:playtime:v2',
+    studyRequiredMs: fast ? 30 * 1000 : 6 * HOUR,
+    playDurationMs: fast ? 20 * 1000 : 30 * MINUTE,
+  });
+
+  unbind.push(timer.on('tick', render));
+  unbind.push(timer.on('change', (s) => { rememberPhase(s.phase); syncAlarms(); render(); }));
+
+  // 页面还活着的时候, 通知直接由状态机事件发出。
+  // 不能只靠 syncAlarms 排的定时器 —— 每秒 tick 一旦先结算出状态变化,
+  // 重排闹钟会把那个还没来得及响的定时器一起清掉, 通知就丢了。
+  // alarms.fire() 内部按 id+时间戳 去重, 所以和兜底闹钟同时存在也只会响一条。
+  unbind.push(timer.on('session-end', (e) => alarms.fire({
+    id: 'play-end', at: e.at,
+    title: '游玩时间到了',
+    body: timer.cooldownDurationMs > 0
+      ? `本轮时间用完，接下来冷却 ${fmtDurationText(timer.cooldownDurationMs)}。`
+      : `本轮时间用完，再学满 ${fmtDurationText(timer.studyRequiredMs)}就能再登记。`,
+  })));
+  unbind.push(timer.on('cooldown-end', (e) => alarms.fire({
+    id: 'cooldown-end', at: e.at,
+    title: '冷却结束',
+    body: timer.getSnapshot().gates.study.passed ? '学习时长够了，现在就能登记。' : '再学一会儿就能登记了。',
+  })));
+  unbind.push(timer.on('study-goal', (e) => alarms.fire({
+    id: 'study-goal', at: e.at,
+    title: '学习目标达成',
+    body: timer.getSnapshot().gates.cooldown.passed ? '可以登记游玩时间了。' : '等冷却结束就能登记。',
+  })));
+
+  // 每秒刷新只是为了让秒数跳动; 状态本身由时间戳决定,
+  // 浏览器在后台把定时器节流到几分钟一次也不会算错。
+  timer.startTicking(1000);
+  syncAlarms();
+  render();
+  reportWhatHappenedWhileAway();
+}
+
+/**
+ * 记住上次看到的状态。整个 App 被关掉再打开时, 状态机会在构造函数里
+ * 静默结算完(那时还没挂监听器), 靠这个才能告诉你离开期间发生了什么。
+ */
+const LAST_PHASE_KEY = 'fake-minecraft:last-phase';
+
+function rememberPhase(phase) {
+  try { storage.setItem(LAST_PHASE_KEY, phase); } catch { /* 存储不可用就算了 */ }
+}
+
+function reportWhatHappenedWhileAway() {
+  const before = storage.getItem(LAST_PHASE_KEY);
+  const now = timer.getSnapshot().phase;
+  if (before && before !== now) {
+    const message = {
+      [Phase.PLAYING]: '你离开的这段时间，本轮游玩时间用完了。',
+      [Phase.COOLDOWN]: '冷却结束了。',
+      // 关掉 App 去学, 学满了回来
+      [Phase.STUDY_REQUIRED]: now === Phase.READY ? '学习时长够了，可以登记了。' : '',
+    }[before];
+    if (message) showBanner(message);
+  }
+  rememberPhase(now);
+}
+
+/**
+ * 根据当前状态排闹钟。真正会把你从别的 App 里叫回来的就是这几条。
+ */
+function syncAlarms() {
+  const s = timer.getSnapshot();
+  const list = [];
+
+  if (s.phase === Phase.PLAYING) {
+    list.push({
+      id: 'play-end',
+      at: s.sessionEndsAt,
+      title: '游玩时间到了',
+      body: '本轮时间用完，学满之后就能再登记。',
+    });
+  }
+
+  if (s.cooldownEndsAt !== null) {
+    list.push({
+      id: 'cooldown-end',
+      at: s.cooldownEndsAt,
+      title: '冷却结束',
+      body: s.gates.study.passed ? '学习时长够了，现在就能登记。' : '还差一点学习时长，学完就能登记。',
+    });
+  }
+
+  if (s.study.running && !s.study.passed) {
+    list.push({
+      id: 'study-goal',
+      at: s.now + s.study.remainingMs,
+      title: '学习目标达成',
+      body: '可以回来登记游玩时间了。',
+    });
+  }
+
+  alarms.set(list);
+}
+
+const PHASE_TEXT = {
+  [Phase.STUDY_REQUIRED]: {
+    badge: '需要学习', label: '还要学这么久才能登记', locked: '先学满才能玩',
+  },
+  [Phase.READY]: {
+    badge: '可以登记', label: '点击下方按钮登记本轮游玩时间', locked: '登记之后才能玩',
+  },
+  [Phase.PLAYING]: {
+    badge: '游玩中', label: '本轮剩余时间', locked: '',
+  },
+  [Phase.COOLDOWN]: {
+    badge: '冷却中', label: '距离冷却结束还有', locked: '冷却中，时间到了才能再玩',
+  },
+};
+
+function render() {
+  const s = timer.getSnapshot();
+  const text = PHASE_TEXT[s.phase];
+
+  el.panel.dataset.phase = s.phase;
+  el.badge.textContent = s.freeClaimAvailable ? '首次赠送' : text.badge;
+  el.countdownLabel.textContent = s.freeClaimAvailable ? '第一次不用学，直接登记' : text.label;
+
+  el.countdown.textContent =
+    s.phase === Phase.PLAYING ? formatDuration(s.remainingPlayMs)
+      : s.phase === Phase.COOLDOWN ? formatDuration(s.remainingCooldownMs)
+        : s.phase === Phase.STUDY_REQUIRED ? formatDuration(s.study.remainingMs)
+          : formatDuration(timer.playDurationMs);
+
+  el.progressBar.style.width = `${Math.min(100, Math.max(0, s.progress * 100))}%`;
+
+  // 主按钮
+  el.claimBtn.disabled = !s.canClaim;
+  el.claimBtn.textContent = s.canClaim
+    ? s.freeClaimAvailable ? `领取赠送的 ${fmtDurationText(timer.playDurationMs)}` : `登记 ${fmtDurationText(timer.playDurationMs)}`
+    : s.phase === Phase.PLAYING ? '游玩中'
+      : s.phase === Phase.COOLDOWN ? '冷却中'
+        : '学习未达标';
+  el.endBtn.hidden = !s.canPlay;
+
+  // 两道门槛
+  setGate(el.gateStudy, el.gateStudyIcon, el.gateStudyValue,
+    s.gates.study.passed || s.gates.study.waived,
+    s.gates.study.passed ? '已达标'
+      : s.gates.study.waived ? '首次赠送'
+        : `还差 ${formatDuration(s.gates.study.remainingMs)}`);
+
+  // 默认没有干等的冷却, 那就别占地方
+  el.gateCooldown.hidden = timer.cooldownDurationMs === 0;
+  setGate(el.gateCooldown, el.gateCooldownIcon, el.gateCooldownValue, s.gates.cooldown.passed,
+    s.gates.cooldown.passed ? '已结束' : formatDuration(s.gates.cooldown.remainingMs));
+
+  // 学习卡片
+  el.studyCard.dataset.running = String(s.study.running);
+  el.studyBanked.textContent = formatElapsed(s.study.bankedMs);
+  el.studyNeed.textContent = `/ ${formatDuration(s.study.requiredMs)}`;
+  el.studyBar.style.width = `${Math.min(100, s.study.progress * 100)}%`;
+  el.studyBtn.disabled = !s.canStudy;
+  el.studyBtn.textContent = s.study.running ? '暂停学习' : s.study.bankedMs > 0 ? '继续学习' : '开始学习';
+  el.studyCredits.textContent = s.study.credits > 0 ? `存款可登记 ${s.study.credits} 次` : '';
+  el.studyHint.textContent = s.canStudy
+    ? s.study.running ? '正在计时，可以锁屏去看书，回来再暂停。' : '学习时间也按真实时间走。'
+    : '游玩中不计学习时间。';
+
+  // 游玩区域
+  el.gameOpen.hidden = !s.canPlay;
+  el.gameLocked.hidden = s.canPlay;
+  el.lockedText.textContent = text.locked;
+
+  el.statSessions.textContent = String(s.sessionsCompleted);
+  el.statPlayed.textContent = fmtMinutes(s.totalPlayedMs);
+  el.statStudied.textContent = fmtMinutes(s.totalStudiedMs);
+
+  el.hint.textContent = s.clockAnomalies > 0
+    ? '检测到系统时间被往回调整，剩余时间已按真实流逝校正。'
+    : '';
+
+  renderNotifyBanner();
+}
+
+function setGate(node, icon, value, passed, textValue) {
+  node.dataset.passed = String(passed);
+  icon.textContent = passed ? '✓' : '○';
+  value.textContent = textValue;
+}
+
+function fmtMinutes(ms) {
+  const min = Math.floor(ms / MINUTE);
+  if (min >= 60) return `${Math.floor(min / 60)} 小时 ${min % 60} 分`;
+  return `${min} 分钟`;
+}
+
+/** 按钮和通知里用的时长文案, 不足 1 分钟时按秒显示 */
+function fmtDurationText(ms) {
+  if (ms < MINUTE) return `${Math.round(ms / 1000)} 秒`;
+  return fmtMinutes(ms);
+}
+
+function renderNotifyBanner() {
+  // 存不住进度是更严重的问题, 优先说这个
+  if (!storagePersists) {
+    el.notifyBanner.hidden = false;
+    el.notifyText.textContent = '这个打开方式存不住进度（关掉页面就清零）。把文件放到网上打开，或先「添加到主屏幕」再用。';
+    el.notifyBtn.hidden = true;
+    return;
+  }
+
+  const perm = alarms.permission;
+  if (perm === 'granted') {
+    el.notifyBanner.hidden = true;
+    return;
+  }
+  el.notifyBanner.hidden = false;
+  if (perm === 'denied') {
+    el.notifyText.textContent = '通知被浏览器拒绝了，切走之后没法叫醒你（回到页面仍会看到正确状态）。';
+    el.notifyBtn.hidden = true;
+  } else if (perm === 'unsupported') {
+    el.notifyText.textContent = '这个浏览器不支持通知，回到页面时会补一条提醒。';
+    el.notifyBtn.hidden = true;
+  } else {
+    el.notifyText.textContent = '开启通知，切到别的 App 时间到了才能叫醒你';
+    el.notifyBtn.hidden = false;
+  }
+}
+
+function showBanner(message) {
+  el.banner.textContent = message;
+  el.banner.hidden = false;
+  setTimeout(() => { el.banner.hidden = true; }, 12000);
+}
+
+// ---------------------------------------------------------------- 交互
+
+el.claimBtn.addEventListener('click', () => {
+  const res = timer.claim();
+  if (res.ok) {
+    alarms.requestPermission().then(renderNotifyBanner);
+    showBanner('登记成功，可以切到游戏 App 了，时间到会通知你。');
+  } else {
+    el.hint.textContent = {
+      playing: '本轮还在进行中。',
+      cooldown: '还在冷却中，冷却结束才能登记。',
+      'study-required': `还差 ${formatDuration(res.snapshot.gates.study.remainingMs)} 学习时长。`,
+    }[res.reason] ?? '';
+  }
+});
+
+el.studyBtn.addEventListener('click', () => {
+  const s = timer.getSnapshot();
+  if (s.study.running) {
+    timer.pauseStudy();
+  } else {
+    timer.startStudy();
+    alarms.requestPermission().then(renderNotifyBanner);
+  }
+});
+
+el.endBtn.addEventListener('click', () => {
+  if (confirm('提前结束会立刻进入冷却，没用完的时间不会保留。确定吗？')) timer.endSession();
+});
+
+el.resetBtn.addEventListener('click', () => {
+  if (confirm('清空全部进度（含学习存款）？')) {
+    timer.reset();
+    alarms.clear();
+  }
+});
+
+el.notifyBtn.addEventListener('click', async () => {
+  await alarms.requestPermission();
+  renderNotifyBanner();
+  syncAlarms();
+});
+
+el.fastMode.checked = isFast();
+el.fastMode.addEventListener('change', () => {
+  storage.setItem(FAST_KEY, el.fastMode.checked ? '1' : '0');
+  buildTimer();
+});
+
+el.pauseOnHide.checked = pausesOnHide();
+el.pauseOnHide.addEventListener('change', () => {
+  storage.setItem(PAUSE_KEY, el.pauseOnHide.checked ? '1' : '0');
+});
+
+// ------------------------------------------------- 切走 / 切回来的处理
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    phaseWhenHidden = timer.getSnapshot().phase;
+    // 勾了"离开页面暂停学习"就在这里停掉, 不然离开也照算
+    if (pausesOnHide() && timer.getSnapshot().study.running) timer.pauseStudy();
+    return;
+  }
+  onReturn();
+});
+
+for (const evt of ['focus', 'pageshow']) {
+  globalThis.addEventListener(evt, () => {
+    if (document.visibilityState === 'visible') onReturn();
+  });
+}
+
+/** 回到页面: 立刻结算 + 补发离开期间错过的闹钟 + 告诉你发生了什么 */
+function onReturn() {
+  const before = phaseWhenHidden;
+  const s = timer.refresh();
+  alarms.checkMissed();
+
+  if (before && before !== s.phase) {
+    const message = {
+      [Phase.PLAYING]: '你离开的这段时间，本轮游玩时间用完了。',
+      [Phase.COOLDOWN]: '冷却结束了。',
+      [Phase.READY]: '学习达标，可以登记了。',
+      [Phase.STUDY_REQUIRED]: '',
+    }[before];
+    if (message) showBanner(message);
+  }
+  phaseWhenHidden = null;
+  syncAlarms();
+}
+
+// 多标签页同步: 另一个标签页登记后, 这边也立刻跟上
+globalThis.addEventListener('storage', (e) => {
+  if (e.key && e.key.startsWith('fake-minecraft:playtime')) buildTimer();
+});
+
+buildTimer();
+</script>
+</body>
+</html>

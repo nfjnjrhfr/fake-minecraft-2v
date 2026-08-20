@@ -15,13 +15,15 @@ const TYPES = {
 createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
-  // 重定向到 /web/ , 让页面里的相对路径(./styles.css)能正确解析
-  if (url.pathname === '/' || url.pathname === '/web') {
+  // /web 少了斜杠的话补上, 否则页面里的相对路径(./styles.css)会解析到根目录
+  if (url.pathname === '/web') {
     res.writeHead(302, { location: '/web/' }).end();
     return;
   }
 
-  const rel = normalize(url.pathname === '/web/' ? '/web/index.html' : url.pathname).replace(/^(\.\.[/\\])+/, '');
+  // / -> 根目录的单文件版; /web/ -> 分模块的开发版
+  const pathname = url.pathname.endsWith('/') ? `${url.pathname}index.html` : url.pathname;
+  const rel = normalize(pathname).replace(/^(\.\.[/\\])+/, '');
   const file = join(root, rel);
 
   if (!file.startsWith(root)) {

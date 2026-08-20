@@ -23,6 +23,9 @@ const PAUSE_KEY = 'fake-minecraft:pause-on-hide';
 const alarms = new AlarmScheduler({ storage });
 alarms.init();
 
+/** localStorage 用不了(无痕模式 / 用 file:// 直接打开本地文件)时, 进度关掉就没了 */
+const storagePersists = storage.persistent !== false;
+
 const isFast = () => storage.getItem(FAST_KEY) === '1';
 const pausesOnHide = () => storage.getItem(PAUSE_KEY) === '1';
 
@@ -238,6 +241,14 @@ function fmtDurationText(ms) {
 }
 
 function renderNotifyBanner() {
+  // 存不住进度是更严重的问题, 优先说这个
+  if (!storagePersists) {
+    el.notifyBanner.hidden = false;
+    el.notifyText.textContent = '这个打开方式存不住进度（关掉页面就清零）。把文件放到网上打开，或先「添加到主屏幕」再用。';
+    el.notifyBtn.hidden = true;
+    return;
+  }
+
   const perm = alarms.permission;
   if (perm === 'granted') {
     el.notifyBanner.hidden = true;

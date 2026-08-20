@@ -50,17 +50,38 @@
 系统时间往回拨没用：所有时间锚点会按同样差值平移，剩余时间和已学时长都不变，
 并计入 `clockAnomalies`。往前拨在纯前端治不了，把 `now` 换成服务器时间即可根治。
 
-## 跑起来看
+## 怎么打开（Safari / iPhone 也能用）
+
+**根目录的 `index.html` 是一个不依赖任何外部文件的单文件版本**，所有 CSS 和 JS 都内联在里面。
+三种打开方式都行：
+
+| 方式 | 怎么做 | 能存进度吗 |
+| --- | --- | --- |
+| **直接打开文件** | 把 `index.html` 存到 iCloud/文件 App，点开用 Safari 打开 | 看浏览器，见下方说明 |
+| **GitHub Pages** | 仓库 Settings → Pages → Source 选 `main` 分支根目录，然后开 `https://<用户名>.github.io/fake-minecraft-2v/` | ✅ |
+| **本地跑** | `npm run serve`，开 `http://localhost:8080` | ✅ |
+
+> **为什么要单文件？** Safari 和 Chrome 在 `file://` 下都会拒绝 ES 模块的跨文件 `import`
+> （origin 是 `null`，被 CORS 挡掉）。所以直接双击 `web/index.html` 会是一个「能看见但点不动」的死页面。
+> 单文件版没有任何跨文件请求，双击就能用。
+
+在 iPhone 上建议用 **GitHub Pages 的网址 + 「添加到主屏幕」**：
+
+- 从 `file://` 打开时，iOS Safari 可能禁用 `localStorage`，进度关掉就没了 ——
+  真发生时页面顶部会直接告诉你，不会默默丢数据；
+- iOS 只允许**已添加到主屏幕**的网页发通知（iOS 16.4+），在普通标签页里是收不到的；
+- 添加到主屏幕之后它就是个独立 App，图标、全屏、通知都有。
 
 ```bash
-npm run serve          # 打开 http://localhost:8080
+npm run serve          # http://localhost:8080  根目录=单文件版, /web/=分模块开发版
+npm run build          # 从 src/ 和 web/ 重新生成 index.html（改完代码要跑一次）
 npm test               # 56 项单元测试
 ```
 
 界面底部有「演示模式」开关，把 6 小时 / 30 分钟压成 30 秒 / 20 秒，一分钟看完整个循环。
 
-页面是可安装的 PWA（有 manifest + Service Worker），手机上「添加到主屏幕」之后就是个独立 App，
-通知也更容易活下来。
+> `index.html`、`sw.js`、`manifest.webmanifest`、`icon.svg` 都是 `npm run build` 生成的，
+> 不要直接改，改 `src/` 和 `web/` 里的源文件。
 
 ## 在代码里用
 
@@ -172,11 +193,15 @@ alarms.checkMissed();              // 回到页面时补发错过的
 ## 目录
 
 ```
-src/playtime-timer.js   核心状态机（浏览器 / Node 通用，零依赖）
-src/storage.js          存储适配器：内存 / localStorage / 文件
-src/alarms.js           闹钟层：三层保险的通知调度
-web/                    可安装的 PWA 界面
-web/sw.js               Service Worker：第二层闹钟 + 离线可用
-test/                   56 项单元测试
-scripts/serve.js        静态服务器
+src/playtime-timer.js       核心状态机（浏览器 / Node 通用，零依赖）
+src/storage.js              存储适配器：内存 / localStorage / 文件
+src/alarms.js               闹钟层：三层保险的通知调度
+web/                        分模块的开发版界面（需要通过 http 打开）
+web/sw.js                   Service Worker：第二层闹钟 + 离线可用
+test/                       56 项单元测试
+scripts/build-standalone.js 打包成单文件
+scripts/serve.js            静态服务器
+
+index.html                  ← 生成物：单文件版，双击可开 / GitHub Pages 首页
+sw.js manifest.webmanifest icon.svg   ← 生成物
 ```
