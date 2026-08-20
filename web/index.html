@@ -16,7 +16,7 @@
   <main class="app">
     <header class="header">
       <h1>游玩时间系统</h1>
-      <p class="subtitle">学满 30 分钟 · 换 30 分钟游玩 · 冷却 6 小时</p>
+      <p class="subtitle">首个 30 分钟直接送 · 之后学满 6 小时换 30 分钟</p>
     </header>
 
     <!-- 切回来时告诉你离开期间发生了什么 -->
@@ -29,10 +29,10 @@
     </div>
 
     <section class="panel" id="panel" data-phase="study_required">
-      <div class="badge" id="badge">需要学习</div>
+      <div class="badge" id="badge">可以登记</div>
 
-      <div class="countdown" id="countdown">--:--</div>
-      <div class="countdown-label" id="countdownLabel">先完成学习才能登记</div>
+      <div class="countdown" id="countdown">30:00</div>
+      <div class="countdown-label" id="countdownLabel">第一次不用学，直接登记</div>
 
       <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
 
@@ -47,9 +47,9 @@
     <!-- 两道门槛 -->
     <section class="gates">
       <div class="gate" id="gateStudy">
-        <span class="gate-icon" id="gateStudyIcon">○</span>
+        <span class="gate-icon" id="gateStudyIcon">✓</span>
         <span class="gate-name">学习</span>
-        <span class="gate-value" id="gateStudyValue">还差 30:00</span>
+        <span class="gate-value" id="gateStudyValue">首次赠送</span>
       </div>
       <div class="gate" id="gateCooldown">
         <span class="gate-icon" id="gateCooldownIcon">✓</span>
@@ -65,13 +65,13 @@
         <span class="study-credits" id="studyCredits"></span>
       </div>
 
-      <div class="study-time"><span id="studyBanked">00:00</span> <span class="study-need" id="studyNeed">/ 30:00</span></div>
+      <div class="study-time"><span id="studyBanked">00:00</span> <span class="study-need" id="studyNeed">/ 6:00:00</span></div>
       <div class="progress progress-study"><div class="progress-bar" id="studyBar"></div></div>
 
       <div class="actions">
         <button class="btn btn-study" id="studyBtn">开始学习</button>
       </div>
-      <p class="hint" id="studyHint">学习时间也按真实时间走，可以锁屏去看书。</p>
+      <p class="hint" id="studyHint">学习时间按真实时间走，可以锁屏去看书。</p>
     </section>
 
     <!-- 游玩区域 -->
@@ -95,7 +95,7 @@
 
     <footer class="footer">
       <label class="opt"><input type="checkbox" id="pauseOnHide" /> 离开页面时暂停学习计时</label>
-      <label class="opt"><input type="checkbox" id="fastMode" /> 演示模式（学 20 秒 / 玩 30 秒 / 冷却 1 分钟）</label>
+      <label class="opt"><input type="checkbox" id="fastMode" /> 演示模式（学 30 秒 / 玩 20 秒）</label>
       <button class="link" id="resetBtn">清空进度</button>
     </footer>
   </main>

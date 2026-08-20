@@ -14,13 +14,29 @@ function fakeClock(start = 1_700_000_000_000) {
   };
 }
 
-/** 只关心游玩/冷却逻辑时, 把学习门槛设为 0 */
+/**
+ * 只关心游玩/冷却机制时用: 关掉学习门槛和首次赠送, 打开干等冷却。
+ * 这些参数都显式写死, 不受默认值改动影响。
+ */
 function makeTimer(clock, storage = createMemoryStorage(), extra = {}) {
-  return new PlaytimeTimer({ storage, now: clock.now, studyRequiredMs: 0, ...extra });
+  return new PlaytimeTimer({
+    storage, now: clock.now,
+    studyRequiredMs: 0, cooldownDurationMs: 6 * HOUR, freeFirstClaim: false,
+    ...extra,
+  });
 }
 
-/** 带学习门槛的计时器, 默认学满 30 分钟才能登记 */
+/** 只关心学习机制时用: 学满 30 分钟 + 6 小时冷却, 不送首次 */
 function makeStudyTimer(clock, storage = createMemoryStorage(), extra = {}) {
+  return new PlaytimeTimer({
+    storage, now: clock.now,
+    studyRequiredMs: 30 * MINUTE, cooldownDurationMs: 6 * HOUR, freeFirstClaim: false,
+    ...extra,
+  });
+}
+
+/** 产品实际默认值: 首个 30 分钟白拿, 之后学满 6 小时换一次, 没有干等冷却 */
+function makeDefaultTimer(clock, storage = createMemoryStorage(), extra = {}) {
   return new PlaytimeTimer({ storage, now: clock.now, ...extra });
 }
 
@@ -596,4 +612,224 @@ test('formatElapsed 向下取整, 和倒计时不打架', () => {
   assert.equal(formatElapsed(0), '00:00');
   assert.equal(formatElapsed(-5000), '00:00');
   assert.equal(formatElapsed(90 * MINUTE), '1:30:00');
+});
+
+// ---------------------------------------------- 产品默认: 白拿一次 + 学满 6 小时
+
+test('默认值: 学 6 小时换 30 分钟, 没有干等冷却', () => {
+  const timer = makeDefaultTimer(fakeClock());
+  assert.equal(timer.studyRequiredMs, 6 * HOUR);
+  assert.equal(timer.playDurationMs, 30 * MINUTE);
+  assert.equal(timer.cooldownDurationMs, 0);
+  assert.equal(timer.freeFirstClaim, true);
+});
+
+test('第一个 30 分钟白拿: 一上来就能登记, 不用学', () => {
+  const clock = fakeClock();
+  const timer = makeDefaultTimer(clock);
+
+  const s = timer.getSnapshot();
+  assert.equal(s.phase, Phase.READY);
+  assert.equal(s.canClaim, true);
+  assert.equal(s.freeClaimAvailable, true);
+  assert.equal(s.gates.study.waived, true, '学习门槛被赠送名额顶掉');
+  assert.equal(s.study.bankedMs, 0);
+
+  const res = timer.claim();
+  assert.equal(res.ok, true);
+  assert.equal(res.snapshot.remainingPlayMs, 30 * MINUTE);
+  assert.equal(res.snapshot.study.bankedMs, 0, '白拿不该扣出负数存款');
+});
+
+test('白拿只有一次: 玩完之后必须学满 6 小时', () => {
+  const clock = fakeClock();
+  const timer = makeDefaultTimer(clock);
+
+  timer.claim();
+  clock.advance(30 * MINUTE);
+
+  const s = timer.refresh();
+  assert.equal(s.phase, Phase.STUDY_REQUIRED, '没有干等冷却, 直接卡在学习上');
+  assert.equal(s.freeClaimAvailable, false);
+  assert.equal(s.study.remainingMs, 6 * HOUR);
+  assert.equal(timer.claim().reason, 'study-required');
+});
+
+test('学满 6 小时才能登记第二次, 差一分钟都不行', () => {
+  const clock = fakeClock();
+  const timer = makeDefaultTimer(clock);
+  timer.claim();
+  clock.advance(30 * MINUTE);
+  timer.refresh();
+
+  timer.startStudy();
+  clock.advance(5 * HOUR + 59 * MINUTE);
+  assert.equal(timer.refresh().phase, Phase.STUDY_REQUIRED);
+  assert.equal(timer.claim().ok, false);
+
+  clock.advance(1 * MINUTE);
+  assert.equal(timer.refresh().phase, Phase.READY);
+  const res = timer.claim();
+  assert.equal(res.ok, true);
+  assert.equal(res.snapshot.study.bankedMs, 0, '存款被扣掉 6 小时');
+});
+
+test('玩完立刻能接着学, 中间不用干等', () => {
+  const clock = fakeClock();
+  const timer = makeDefaultTimer(clock);
+  timer.claim();
+  clock.advance(30 * MINUTE);
+  timer.refresh();
+
+  const res = timer.startStudy();
+  assert.equal(res.ok, true);
+  assert.equal(res.snapshot.gates.cooldown.passed, true);
+});
+
+test('赠送名额跨重启只算一次', () => {
+  const clock = fakeClock();
+  const storage = createMemoryStorage();
+
+  makeDefaultTimer(clock, storage).claim();
+  clock.advance(30 * MINUTE);
+
+  const revived = makeDefaultTimer(clock, storage);
+  const s = revived.getSnapshot();
+  assert.equal(s.phase, Phase.STUDY_REQUIRED);
+  assert.equal(s.freeClaimAvailable, false);
+  assert.equal(revived.claim().reason, 'study-required');
+});
+
+test('6 小时学习也在后台走: 开始学习后关掉页面, 回来直接可登记', () => {
+  const clock = fakeClock();
+  const storage = createMemoryStorage();
+
+  const first = makeDefaultTimer(clock, storage);
+  first.claim();
+  clock.advance(30 * MINUTE);
+  first.refresh();
+  first.startStudy();
+
+  // 关掉页面, 去学 6 个小时
+  clock.advance(6 * HOUR);
+
+  const revived = makeDefaultTimer(clock, storage);
+  const s = revived.getSnapshot();
+  assert.equal(s.phase, Phase.READY);
+  assert.equal(s.study.bankedMs, 6 * HOUR);
+  assert.equal(revived.claim().ok, true);
+});
+
+test('学 12 小时可以攒够两次登记', () => {
+  const clock = fakeClock();
+  const timer = makeDefaultTimer(clock);
+  timer.claim();                       // 先把白拿的用掉
+  clock.advance(30 * MINUTE);
+  timer.refresh();
+
+  timer.startStudy();
+  clock.advance(12 * HOUR);
+  timer.pauseStudy();
+  assert.equal(timer.getSnapshot().study.credits, 2);
+
+  assert.equal(timer.claim().ok, true);
+  clock.advance(30 * MINUTE);
+  assert.equal(timer.refresh().phase, Phase.READY, '存款还够一次, 不用再学');
+  assert.equal(timer.claim().ok, true);
+  clock.advance(30 * MINUTE);
+  assert.equal(timer.refresh().phase, Phase.STUDY_REQUIRED, '存款用完了');
+});
+
+test('freeFirstClaim: false 时第一次也要学满', () => {
+  const clock = fakeClock();
+  const timer = makeDefaultTimer(clock, createMemoryStorage(), { freeFirstClaim: false });
+  assert.equal(timer.getSnapshot().phase, Phase.STUDY_REQUIRED);
+  assert.equal(timer.claim().reason, 'study-required');
+});
+
+test('v2 存档升级: 已经玩过的不再补送白拿名额', () => {
+  const clock = fakeClock();
+  const v2 = JSON.stringify({
+    version: 2,
+    sessionStartedAt: null, sessionEndsAt: null, cooldownEndsAt: null,
+    studyBankedMs: 0, studyStartedAt: null, totalStudiedMs: 60 * MINUTE,
+    sessionsCompleted: 2, totalPlayedMs: 60 * MINUTE,
+    lastSeenAt: clock.now(), clockAnomalies: 0,
+  });
+  const storage = createMemoryStorage({ 'fake-minecraft:playtime:v2': v2 });
+  const timer = makeDefaultTimer(clock, storage);
+
+  const s = timer.getSnapshot();
+  assert.equal(s.phase, Phase.STUDY_REQUIRED);
+  assert.equal(s.freeClaimAvailable, false);
+  assert.equal(s.sessionsCompleted, 2);
+});
+
+test('全新 v2 存档(还没玩过)升级后仍然保留白拿名额', () => {
+  const clock = fakeClock();
+  const v2 = JSON.stringify({
+    version: 2,
+    sessionStartedAt: null, sessionEndsAt: null, cooldownEndsAt: null,
+    studyBankedMs: 5 * MINUTE, studyStartedAt: null, totalStudiedMs: 5 * MINUTE,
+    sessionsCompleted: 0, totalPlayedMs: 0,
+    lastSeenAt: clock.now(), clockAnomalies: 0,
+  });
+  const storage = createMemoryStorage({ 'fake-minecraft:playtime:v2': v2 });
+  const timer = makeDefaultTimer(clock, storage);
+
+  assert.equal(timer.getSnapshot().phase, Phase.READY);
+  assert.equal(timer.getSnapshot().freeClaimAvailable, true);
+});
+
+test('默认配置下的完整循环: 白拿 -> 玩 -> 学 6 小时 -> 玩', () => {
+  const clock = fakeClock();
+  const timer = makeDefaultTimer(clock);
+
+  // 第 1 轮: 白拿
+  assert.equal(timer.claim().ok, true);
+  clock.advance(30 * MINUTE);
+  assert.equal(timer.refresh().phase, Phase.STUDY_REQUIRED);
+
+  // 第 2、3 轮: 各学 6 小时
+  for (let i = 2; i <= 3; i += 1) {
+    timer.startStudy();
+    clock.advance(6 * HOUR);
+    assert.equal(timer.refresh().phase, Phase.READY, `第 ${i} 轮学满后应可登记`);
+    timer.pauseStudy();
+
+    assert.equal(timer.claim().ok, true);
+    clock.advance(30 * MINUTE);
+    assert.equal(timer.refresh().phase, Phase.STUDY_REQUIRED);
+  }
+
+  const s = timer.getSnapshot();
+  assert.equal(s.sessionsCompleted, 3);
+  assert.equal(s.totalPlayedMs, 90 * MINUTE);
+  assert.equal(s.totalStudiedMs, 12 * HOUR);
+});
+
+test('冷却时长为 0 时不进冷却, 也不发"冷却结束"的空提醒', () => {
+  const clock = fakeClock();
+  const timer = makeDefaultTimer(clock);
+  const events = [];
+  timer.on('session-end', () => events.push('end'));
+  timer.on('cooldown-end', () => events.push('cooldown-end'));
+
+  timer.claim();
+  clock.advance(30 * MINUTE);
+  const s = timer.refresh();
+
+  assert.deepEqual(events, ['end'], '不该冒出 cooldown-end');
+  assert.equal(s.cooldownEndsAt, null);
+  assert.equal(s.phase, Phase.STUDY_REQUIRED);
+});
+
+test('提前结束在无冷却配置下也不留冷却', () => {
+  const clock = fakeClock();
+  const timer = makeDefaultTimer(clock);
+  timer.claim();
+  clock.advance(5 * MINUTE);
+  const res = timer.endSession();
+  assert.equal(res.snapshot.cooldownEndsAt, null);
+  assert.equal(res.snapshot.phase, Phase.STUDY_REQUIRED);
 });

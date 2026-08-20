@@ -2,13 +2,16 @@
  * 游玩时间计时系统
  *
  * 规则:
- *   1. 想领取游玩时间, 必须先完成学习 —— 学习满 30 分钟才能登记一次;
- *   2. 登记一次得到 30 分钟游玩时间;
- *   3. 游玩时间用完后进入 6 小时冷却;
- *   4. 冷却结束 + 学习时长够, 才能再次登记。
+ *   1. 第一个 30 分钟直接送, 不用学;
+ *   2. 之后想再登记, 必须学满 6 小时;
+ *   3. 登记一次得到 30 分钟游玩时间;
+ *   4. 玩完再学 6 小时, 才能再登记。
  *
- * 两道门槛是相互独立的, 冷却期间可以先把学习做掉,
- * 冷却一结束就能立刻登记。
+ * 学习时长是"存款": 可以分几次学, 中间暂停不会白学, 学满 6 小时就能登记一次,
+ * 登记时从存款里扣掉 6 小时。多学的会留着, 够几个 6 小时就能登记几次。
+ *
+ * 另外还有个可选的"干等冷却"(cooldownDurationMs), 默认关闭 ——
+ * 默认只靠学习换时间, 不靠干等。
  *
  * 所有计时都基于绝对时间戳(deadline)而不是累加的 tick,
  * 因此切到别的 App、锁屏、甚至把这个页面完全关掉,
@@ -33,13 +36,15 @@ export const MINUTE = 60 * 1000;
 export const HOUR = 60 * MINUTE;
 
 export const DEFAULT_PLAY_DURATION_MS = 30 * MINUTE;
-export const DEFAULT_COOLDOWN_DURATION_MS = 6 * HOUR;
-export const DEFAULT_STUDY_REQUIRED_MS = 30 * MINUTE;
+/** 登记一次要学满 6 小时 */
+export const DEFAULT_STUDY_REQUIRED_MS = 6 * HOUR;
+/** 默认没有干等的冷却 —— 时间只能靠学习换 */
+export const DEFAULT_COOLDOWN_DURATION_MS = 0;
 
 /** 时钟被往回拨多少毫秒才算作异常(容忍 NTP 校准的小幅抖动) */
 const CLOCK_BACKWARD_TOLERANCE_MS = 2000;
 
-const STATE_VERSION = 2;
+const STATE_VERSION = 3;
 
 function emptyState() {
   return {
@@ -55,6 +60,8 @@ function emptyState() {
     studyStartedAt: null,
     /** 累计学习总时长(只增不减, 用于统计) */
     totalStudiedMs: 0,
+    /** 首次赠送的那 30 分钟用掉没有 */
+    freeClaimUsed: false,
     /** 已经完成的游玩场次数 */
     sessionsCompleted: 0,
     /** 累计游玩毫秒数 */
@@ -73,6 +80,7 @@ export class PlaytimeTimer {
   #playDurationMs;
   #cooldownDurationMs;
   #studyRequiredMs;
+  #freeFirstClaim;
   #state;
   #listeners = new Set();
   #ticker = null;
@@ -86,7 +94,9 @@ export class PlaytimeTimer {
    * @param {() => number} [options.now]  时间源, 传服务器时间可以防作弊
    * @param {number}   [options.playDurationMs]      单次游玩时长, 默认 30 分钟
    * @param {number}   [options.cooldownDurationMs]  冷却时长, 默认 6 小时
-   * @param {number}   [options.studyRequiredMs]     登记一次需要的学习时长, 默认 30 分钟
+   * @param {number}   [options.studyRequiredMs]     登记一次需要的学习时长, 默认 6 小时
+   * @param {number}   [options.cooldownDurationMs]  额外的干等冷却, 默认 0(不干等)
+   * @param {boolean}  [options.freeFirstClaim]      第一次登记免学习, 默认 true
    */
   constructor(options = {}) {
     const {
@@ -96,6 +106,7 @@ export class PlaytimeTimer {
       playDurationMs = DEFAULT_PLAY_DURATION_MS,
       cooldownDurationMs = DEFAULT_COOLDOWN_DURATION_MS,
       studyRequiredMs = DEFAULT_STUDY_REQUIRED_MS,
+      freeFirstClaim = true,
     } = options;
 
     if (!(playDurationMs > 0)) throw new RangeError('playDurationMs 必须大于 0');
@@ -108,6 +119,7 @@ export class PlaytimeTimer {
     this.#playDurationMs = playDurationMs;
     this.#cooldownDurationMs = cooldownDurationMs;
     this.#studyRequiredMs = studyRequiredMs;
+    this.#freeFirstClaim = freeFirstClaim;
     this.#state = this.#load();
     this.#studyGoalReached = this.#liveStudyMs(this.#now()) >= studyRequiredMs;
 
@@ -118,6 +130,7 @@ export class PlaytimeTimer {
   get playDurationMs() { return this.#playDurationMs; }
   get cooldownDurationMs() { return this.#cooldownDurationMs; }
   get studyRequiredMs() { return this.#studyRequiredMs; }
+  get freeFirstClaim() { return this.#freeFirstClaim; }
 
   // ---------------------------------------------------------------- 持久化
 
@@ -138,10 +151,17 @@ export class PlaytimeTimer {
     }
     if (!parsed || typeof parsed !== 'object') return emptyState();
 
-    // v1 没有学习相关字段, 其余字段同名, 直接合并即可平滑升级
-    if (parsed.version !== 1 && parsed.version !== STATE_VERSION) return emptyState();
+    // v1 没有学习字段, v2 没有赠送字段, 其余同名, 合并即可平滑升级
+    if (![1, 2, STATE_VERSION].includes(parsed.version)) return emptyState();
 
-    return { ...emptyState(), ...parsed, version: STATE_VERSION };
+    const migrated = { ...emptyState(), ...parsed, version: STATE_VERSION };
+    // 老存档里已经玩过的, 不再补送首次的 30 分钟
+    if (parsed.version !== STATE_VERSION) {
+      migrated.freeClaimUsed = (parsed.sessionsCompleted ?? 0) > 0
+        || parsed.sessionEndsAt !== null
+        || parsed.cooldownEndsAt !== null;
+    }
+    return migrated;
   }
 
   #save() {
@@ -211,7 +231,8 @@ export class PlaytimeTimer {
       this.#state.sessionsCompleted += 1;
       this.#state.sessionStartedAt = null;
       this.#state.sessionEndsAt = null;
-      this.#state.cooldownEndsAt = endedAt + this.#cooldownDurationMs;
+      // 冷却时长为 0 时压根不进冷却, 免得发一条"冷却结束"的空提醒
+      this.#state.cooldownEndsAt = this.#cooldownDurationMs > 0 ? endedAt + this.#cooldownDurationMs : null;
       changed = true;
       this.#emit('session-end', { at: endedAt });
     }
@@ -247,8 +268,15 @@ export class PlaytimeTimer {
   #phaseAt(now) {
     if (this.#state.sessionEndsAt !== null && now < this.#state.sessionEndsAt) return Phase.PLAYING;
     if (this.#state.cooldownEndsAt !== null && now < this.#state.cooldownEndsAt) return Phase.COOLDOWN;
-    if (this.#liveStudyMs(now) < this.#studyRequiredMs) return Phase.STUDY_REQUIRED;
-    return Phase.READY;
+    if (this.#liveStudyMs(now) >= this.#studyRequiredMs) return Phase.READY;
+    // 首次赠送的那 30 分钟不用学
+    if (this.#freeClaimAvailable()) return Phase.READY;
+    return Phase.STUDY_REQUIRED;
+  }
+
+  /** 首次赠送的名额还在不在 */
+  #freeClaimAvailable() {
+    return this.#freeFirstClaim && !this.#state.freeClaimUsed;
   }
 
   // -------------------------------------------------------------------- 读
@@ -278,6 +306,8 @@ export class PlaytimeTimer {
       canPlay: phase === Phase.PLAYING,
       /** 现在能不能登记 30 分钟 */
       canClaim: phase === Phase.READY,
+      /** 这次登记用的是不是首次赠送的名额(没学够但仍然能登记) */
+      freeClaimAvailable: this.#freeClaimAvailable() && !studyPassed,
       /** 现在能不能开始学习(游玩中不能学习, 避免一份时间用两次) */
       canStudy: phase !== Phase.PLAYING,
 
@@ -297,10 +327,15 @@ export class PlaytimeTimer {
               ? (this.#studyRequiredMs === 0 ? 1 : studyMs / this.#studyRequiredMs)
               : 1,
 
-      /** 登记的两道门槛, UI 可以分别显示 */
+      /** 登记的门槛, UI 可以分别显示 */
       gates: {
         cooldown: { passed: cooldownPassed, remainingMs: remainingCooldownMs },
-        study: { passed: studyPassed, remainingMs: studyRemainingMs },
+        study: {
+          passed: studyPassed,
+          remainingMs: studyRemainingMs,
+          /** 学习没达标, 但首次赠送的名额可以顶上 */
+          waived: !studyPassed && this.#freeClaimAvailable(),
+        },
       },
 
       /** 学习状态 */
@@ -389,8 +424,8 @@ export class PlaytimeTimer {
   // -------------------------------------------------------------------- 写
 
   /**
-   * 登记奖励: 扣掉 30 分钟学习时长, 换 30 分钟游玩时间。
-   * 需要同时满足: 冷却已结束 + 学习时长达标。
+   * 登记奖励: 扣掉 6 小时学习时长, 换 30 分钟游玩时间。
+   * 第一次登记不用学, 直接送。
    * @returns {{ok:true, snapshot:object} | {ok:false, reason:'playing'|'cooldown'|'study-required', snapshot:object}}
    */
   claim() {
@@ -411,7 +446,14 @@ export class PlaytimeTimer {
       this.#state.studyStartedAt = null;
       this.#emit('study-pause', { at: now, bankedMs: this.#state.studyBankedMs });
     }
-    this.#state.studyBankedMs = Math.max(0, this.#state.studyBankedMs - this.#studyRequiredMs);
+
+    // 学习存款够就扣存款, 不够说明用的是首次赠送的名额
+    const usedFreeClaim = this.#state.studyBankedMs < this.#studyRequiredMs;
+    if (usedFreeClaim) {
+      this.#state.freeClaimUsed = true;
+    } else {
+      this.#state.studyBankedMs -= this.#studyRequiredMs;
+    }
     this.#studyGoalReached = this.#state.studyBankedMs >= this.#studyRequiredMs;
 
     this.#state.sessionStartedAt = now;
@@ -420,7 +462,7 @@ export class PlaytimeTimer {
     this.#save();
 
     const snapshot = this.getSnapshot();
-    this.#emit('session-start', { at: now, endsAt: this.#state.sessionEndsAt });
+    this.#emit('session-start', { at: now, endsAt: this.#state.sessionEndsAt, free: usedFreeClaim });
     this.#emit('change', snapshot);
     return { ok: true, snapshot };
   }
@@ -443,7 +485,7 @@ export class PlaytimeTimer {
     this.#state.sessionsCompleted += 1;
     this.#state.sessionStartedAt = null;
     this.#state.sessionEndsAt = null;
-    this.#state.cooldownEndsAt = now + this.#cooldownDurationMs;
+    this.#state.cooldownEndsAt = this.#cooldownDurationMs > 0 ? now + this.#cooldownDurationMs : null;
     this.#save();
 
     const snapshot = this.getSnapshot();

@@ -40,9 +40,8 @@ function buildTimer() {
   timer = new PlaytimeTimer({
     storage,
     storageKey: fast ? 'fake-minecraft:playtime:demo' : 'fake-minecraft:playtime:v2',
-    studyRequiredMs: fast ? 20 * 1000 : 30 * MINUTE,
-    playDurationMs: fast ? 30 * 1000 : 30 * MINUTE,
-    cooldownDurationMs: fast ? 60 * 1000 : 6 * HOUR,
+    studyRequiredMs: fast ? 30 * 1000 : 6 * HOUR,
+    playDurationMs: fast ? 20 * 1000 : 30 * MINUTE,
   });
 
   unbind.push(timer.on('tick', render));
@@ -55,7 +54,9 @@ function buildTimer() {
   unbind.push(timer.on('session-end', (e) => alarms.fire({
     id: 'play-end', at: e.at,
     title: '游玩时间到了',
-    body: `本轮时间用完，接下来冷却 ${fmtDurationText(timer.cooldownDurationMs)}。`,
+    body: timer.cooldownDurationMs > 0
+      ? `本轮时间用完，接下来冷却 ${fmtDurationText(timer.cooldownDurationMs)}。`
+      : `本轮时间用完，再学满 ${fmtDurationText(timer.studyRequiredMs)}就能再登记。`,
   })));
   unbind.push(timer.on('cooldown-end', (e) => alarms.fire({
     id: 'cooldown-end', at: e.at,
@@ -93,6 +94,8 @@ function reportWhatHappenedWhileAway() {
     const message = {
       [Phase.PLAYING]: '你离开的这段时间，本轮游玩时间用完了。',
       [Phase.COOLDOWN]: '冷却结束了。',
+      // 关掉 App 去学, 学满了回来
+      [Phase.STUDY_REQUIRED]: now === Phase.READY ? '学习时长够了，可以登记了。' : '',
     }[before];
     if (message) showBanner(message);
   }
@@ -111,7 +114,7 @@ function syncAlarms() {
       id: 'play-end',
       at: s.sessionEndsAt,
       title: '游玩时间到了',
-      body: '本轮时间用完，接下来冷却 6 小时。',
+      body: '本轮时间用完，学满之后就能再登记。',
     });
   }
 
@@ -138,7 +141,7 @@ function syncAlarms() {
 
 const PHASE_TEXT = {
   [Phase.STUDY_REQUIRED]: {
-    badge: '需要学习', label: '学满才能登记', locked: '先完成学习才能玩',
+    badge: '需要学习', label: '还要学这么久才能登记', locked: '先学满才能玩',
   },
   [Phase.READY]: {
     badge: '可以登记', label: '点击下方按钮登记本轮游玩时间', locked: '登记之后才能玩',
@@ -156,8 +159,8 @@ function render() {
   const text = PHASE_TEXT[s.phase];
 
   el.panel.dataset.phase = s.phase;
-  el.badge.textContent = text.badge;
-  el.countdownLabel.textContent = text.label;
+  el.badge.textContent = s.freeClaimAvailable ? '首次赠送' : text.badge;
+  el.countdownLabel.textContent = s.freeClaimAvailable ? '第一次不用学，直接登记' : text.label;
 
   el.countdown.textContent =
     s.phase === Phase.PLAYING ? formatDuration(s.remainingPlayMs)
@@ -170,15 +173,21 @@ function render() {
   // 主按钮
   el.claimBtn.disabled = !s.canClaim;
   el.claimBtn.textContent = s.canClaim
-    ? `登记 ${fmtDurationText(timer.playDurationMs)}`
+    ? s.freeClaimAvailable ? `领取赠送的 ${fmtDurationText(timer.playDurationMs)}` : `登记 ${fmtDurationText(timer.playDurationMs)}`
     : s.phase === Phase.PLAYING ? '游玩中'
       : s.phase === Phase.COOLDOWN ? '冷却中'
         : '学习未达标';
   el.endBtn.hidden = !s.canPlay;
 
   // 两道门槛
-  setGate(el.gateStudy, el.gateStudyIcon, el.gateStudyValue, s.gates.study.passed,
-    s.gates.study.passed ? '已达标' : `还差 ${formatDuration(s.gates.study.remainingMs)}`);
+  setGate(el.gateStudy, el.gateStudyIcon, el.gateStudyValue,
+    s.gates.study.passed || s.gates.study.waived,
+    s.gates.study.passed ? '已达标'
+      : s.gates.study.waived ? '首次赠送'
+        : `还差 ${formatDuration(s.gates.study.remainingMs)}`);
+
+  // 默认没有干等的冷却, 那就别占地方
+  el.gateCooldown.hidden = timer.cooldownDurationMs === 0;
   setGate(el.gateCooldown, el.gateCooldownIcon, el.gateCooldownValue, s.gates.cooldown.passed,
     s.gates.cooldown.passed ? '已结束' : formatDuration(s.gates.cooldown.remainingMs));
 
