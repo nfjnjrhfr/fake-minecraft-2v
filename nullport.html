@@ -1,0 +1,877 @@
+<title>NULLPORT 攻防演武場</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+
+<style>
+/* ── NULLPORT · 單一視覺世界（深色戰情室），所有顏色明確塗色 ───────────── */
+:root{
+  --void:#0B0F14;
+  --hull:#131B24;
+  --hull-2:#18222D;
+  --rule:#25333F;
+  --rule-hot:#3B5163;
+  --mist:#7D93A6;
+  --mist-dim:#54697B;
+  --paper:#DEE8F0;
+  --flare:#F2A93B;
+  --flare-ink:#2A1D08;
+  --breach:#E5484D;
+
+  --p-you:#5CC8FF;
+  --p-xt:#93A6B8;
+  --p-cl:#FF7A5C;
+  --p-bz:#B98CFF;
+  --p-qw:#4FD1C5;
+
+  --disp:'Chakra Petch','Noto Sans TC',system-ui,sans-serif;
+  --body:'IBM Plex Sans','Noto Sans TC',system-ui,sans-serif;
+  --mono:'IBM Plex Mono','Noto Sans TC',ui-monospace,monospace;
+
+  --r:4px;
+  --gap:14px;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background-color:var(--void);
+  background-image:
+    linear-gradient(var(--rule) 1px,transparent 1px),
+    linear-gradient(90deg,var(--rule) 1px,transparent 1px);
+  background-size:48px 48px,48px 48px;
+  background-position:-1px -1px;
+  color:var(--paper);
+  font-family:var(--body);
+  font-size:15px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(120% 80% at 50% 0%,rgba(242,169,59,.07),transparent 60%);
+}
+.shell{position:relative;z-index:1;max-width:1320px;margin:0 auto;padding:0 18px 56px}
+
+/* ── 指揮列 ─────────────────────────────────────────────────────────── */
+.bar{
+  position:sticky;top:0;z-index:40;
+  margin:0 -18px 0;padding:14px 18px;
+  background:rgba(11,15,20,.92);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--rule);
+  display:flex;flex-wrap:wrap;align-items:center;gap:18px;
+}
+.mark{display:flex;flex-direction:column;gap:1px;margin-right:auto}
+.mark b{
+  font-family:var(--disp);font-weight:700;font-size:23px;letter-spacing:.06em;
+  color:var(--paper);line-height:1;
+}
+.mark b i{color:var(--flare);font-style:normal}
+.mark span{
+  font-family:var(--body);font-size:12px;font-weight:500;
+  letter-spacing:.34em;color:var(--mist);
+}
+
+.clock{display:flex;align-items:center;gap:16px}
+.clock-face{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.clock-face .t{
+  font-family:var(--mono);font-weight:500;font-size:34px;line-height:1;
+  font-variant-numeric:tabular-nums;letter-spacing:.02em;color:var(--flare);
+}
+.clock-face .t.idle{color:var(--mist-dim)}
+.clock-face .l{
+  font-size:10px;letter-spacing:.26em;color:var(--mist-dim);
+}
+.drain{width:96px;height:3px;background:var(--rule);border-radius:2px;overflow:hidden}
+.drain i{display:block;height:100%;width:0;background:var(--flare);transition:width .25s linear}
+.rnd{
+  font-family:var(--mono);font-size:13px;color:var(--mist);
+  border-left:1px solid var(--rule);padding-left:16px;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.rnd b{color:var(--paper);font-weight:600;font-size:17px}
+
+.ctrls{display:flex;gap:8px;flex-wrap:wrap}
+button{font-family:inherit;font-size:inherit;cursor:pointer}
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:9px 15px;border-radius:var(--r);
+  border:1px solid var(--rule-hot);background:var(--hull-2);color:var(--paper);
+  font-size:13px;font-weight:500;letter-spacing:.02em;
+  transition:background .14s,border-color .14s,color .14s;
+}
+.btn:hover:not(:disabled){background:#20303E;border-color:var(--mist-dim)}
+.btn:disabled{opacity:.34;cursor:not-allowed}
+.btn.go{background:var(--flare);border-color:var(--flare);color:var(--flare-ink);font-weight:600}
+.btn.go:hover:not(:disabled){background:#FFBC55;border-color:#FFBC55}
+.btn .g{font-family:var(--mono);font-size:14px;line-height:1}
+:focus-visible{outline:2px solid var(--flare);outline-offset:2px}
+
+/* ── 安全宣告條 ─────────────────────────────────────────────────────── */
+.safety{
+  margin:0 -18px 22px;padding:8px 18px;
+  background:var(--hull);border-bottom:1px solid var(--rule);
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.11em;color:var(--mist-dim);
+  display:flex;align-items:center;gap:10px;
+}
+.safety .dot{width:6px;height:6px;border-radius:50%;background:var(--p-qw);flex:none}
+
+/* ── 版面 ───────────────────────────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:var(--gap);align-items:start}
+@media(max-width:1040px){.grid{grid-template-columns:1fr}}
+
+.panel{background:var(--hull);border:1px solid var(--rule);border-radius:var(--r)}
+.panel + .panel{margin-top:var(--gap)}
+.ph{
+  display:flex;align-items:baseline;gap:10px;
+  padding:12px 16px;border-bottom:1px solid var(--rule);
+}
+.ph h2{
+  margin:0;font-family:var(--disp);font-weight:600;font-size:14px;
+  letter-spacing:.14em;color:var(--paper);text-wrap:balance;
+}
+.ph small{font-family:var(--mono);font-size:11px;color:var(--mist-dim);letter-spacing:.06em;margin-left:auto}
+.pb{padding:16px}
+
+/* ── 我方陣地 ───────────────────────────────────────────────────────── */
+.home{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center}
+@media(max-width:620px){.home{grid-template-columns:1fr}}
+.home-id{display:flex;align-items:center;gap:11px;margin-bottom:12px}
+.chip{width:10px;height:10px;border-radius:2px;flex:none}
+.home-id b{font-family:var(--disp);font-size:17px;font-weight:600;letter-spacing:.05em}
+.host{font-family:var(--mono);font-size:12.5px;color:var(--mist)}
+.meter{margin-top:2px}
+.meter-l{
+  display:flex;justify-content:space-between;font-family:var(--mono);
+  font-size:11px;letter-spacing:.08em;color:var(--mist);margin-bottom:5px;
+}
+.meter-l b{color:var(--paper);font-weight:500}
+.track{height:6px;background:var(--void);border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+.track i{display:block;height:100%;background:var(--p-you);transition:width .3s ease}
+.track i.over{background:var(--breach)}
+.warn{margin-top:7px;font-size:11.5px;color:var(--breach);font-family:var(--mono);letter-spacing:.04em}
+.acts{display:flex;flex-direction:column;gap:9px;min-width:186px}
+.ap{
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--mist-dim);
+  display:flex;align-items:center;gap:6px;
+}
+.pip{width:9px;height:9px;border-radius:50%;border:1px solid var(--rule-hot);flex:none}
+.pip.on{background:var(--flare);border-color:var(--flare)}
+
+/* ── 目標卡 ─────────────────────────────────────────────────────────── */
+.targets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--gap)}
+@media(max-width:560px){.targets{grid-template-columns:1fr}}
+.tgt{
+  background:var(--hull-2);border:1px solid var(--rule);border-top:2px solid var(--c);
+  border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:11px;
+}
+.tgt.ally{border-color:var(--flare);box-shadow:inset 0 0 0 1px rgba(242,169,59,.18)}
+.tgt-top{display:flex;align-items:flex-start;gap:9px}
+.tgt-top .nm{display:flex;flex-direction:column;gap:2px;min-width:0}
+.tgt-top .nm b{font-family:var(--disp);font-size:16px;font-weight:600;letter-spacing:.06em;color:var(--c)}
+.tgt-top .nm span{font-size:11px;color:var(--mist-dim);letter-spacing:.04em}
+.tgt-top .sc{
+  margin-left:auto;text-align:right;font-family:var(--mono);
+  font-variant-numeric:tabular-nums;
+}
+.tgt-top .sc b{display:block;font-size:19px;font-weight:500;line-height:1.1}
+.tgt-top .sc span{font-size:10px;letter-spacing:.16em;color:var(--mist-dim)}
+.flagline{
+  font-family:var(--mono);font-size:12px;padding:8px 10px;border-radius:3px;
+  background:var(--void);border:1px solid var(--rule);
+  display:flex;align-items:center;gap:8px;overflow:hidden;
+}
+.flagline .st{width:7px;height:7px;border-radius:50%;flex:none;background:var(--p-qw)}
+.flagline.gone{color:var(--mist-dim)}
+.flagline.gone .st{background:var(--breach)}
+.flagline .fx{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat{display:flex;gap:14px;font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;color:var(--mist-dim)}
+.stat b{color:var(--mist);font-weight:500}
+.tgt .row{display:flex;gap:8px;margin-top:auto}
+.tgt .row .btn{flex:1;justify-content:center;padding:8px 10px;font-size:12px}
+/* 卡片層級的主要動作用外框式：實心琥珀只保留給指揮列與解題視窗，避免搶走時鐘的焦點 */
+.tgt .row .btn.go{background:transparent;border-color:var(--flare);color:var(--flare)}
+.tgt .row .btn.go:hover:not(:disabled){background:rgba(242,169,59,.12);border-color:#FFBC55;color:#FFBC55}
+
+/* ── 選手台 ─────────────────────────────────────────────────────────── */
+.board{display:flex;flex-direction:column;gap:2px}
+.brow{
+  display:grid;grid-template-columns:20px 10px 1fr auto;gap:10px;align-items:center;
+  padding:9px 6px;border-bottom:1px solid var(--rule);
+}
+.brow:last-child{border-bottom:0}
+.brow.me{background:rgba(92,200,255,.06);border-radius:3px}
+.brow .rk{font-family:var(--mono);font-size:12px;color:var(--mist-dim);font-variant-numeric:tabular-nums}
+.brow .nb{display:flex;flex-direction:column;gap:4px;min-width:0}
+.brow .nb b{font-family:var(--disp);font-size:13.5px;font-weight:600;letter-spacing:.05em;color:var(--paper)}
+.brow .nb .spark{height:4px;background:var(--void);border-radius:2px;overflow:hidden}
+.brow .nb .spark i{display:block;height:100%;background:var(--c);transition:width .45s ease}
+.brow .pt{font-family:var(--mono);font-size:15px;font-variant-numeric:tabular-nums;color:var(--paper)}
+.tag{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;padding:1px 5px;border-radius:2px;
+  border:1px solid var(--flare);color:var(--flare);margin-left:6px;vertical-align:2px;
+}
+
+/* ── 事件流 ─────────────────────────────────────────────────────────── */
+.log{max-height:340px;overflow-y:auto;padding:4px 0}
+.ev{
+  display:grid;grid-template-columns:52px 1fr;gap:10px;
+  padding:7px 16px;border-bottom:1px solid rgba(37,51,63,.6);font-size:12.5px;
+}
+.ev .ts{font-family:var(--mono);font-size:10.5px;color:var(--mist-dim);padding-top:2px;font-variant-numeric:tabular-nums}
+.ev .tx{color:var(--mist);line-height:1.5}
+.ev .tx b{color:var(--paper);font-weight:500}
+.ev.hit .tx b{color:var(--paper)}
+.ev.lost{background:rgba(229,72,77,.07)}
+.ev.lost .tx{color:#F0A9AB}
+.ev.sys .tx{color:var(--mist-dim);font-family:var(--mono);font-size:11.5px;letter-spacing:.03em}
+.ev.win{background:rgba(242,169,59,.09)}
+.ev.win .tx{color:var(--flare)}
+.log::-webkit-scrollbar{width:8px}
+.log::-webkit-scrollbar-track{background:var(--void)}
+.log::-webkit-scrollbar-thumb{background:var(--rule-hot);border-radius:4px}
+
+/* ── 解題視窗 ───────────────────────────────────────────────────────── */
+.veil{
+  position:fixed;inset:0;z-index:90;background:rgba(6,9,12,.86);
+  display:flex;align-items:center;justify-content:center;padding:20px;
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+}
+.veil[hidden]{display:none}
+.modal{
+  width:min(520px,100%);background:var(--hull);border:1px solid var(--rule-hot);
+  border-radius:var(--r);box-shadow:0 24px 70px rgba(0,0,0,.6);
+  max-height:90vh;overflow-y:auto;
+}
+.mh{padding:16px 20px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:12px}
+.mh h3{margin:0;font-family:var(--disp);font-size:16px;font-weight:600;letter-spacing:.08em}
+.mh .x{margin-left:auto;background:none;border:0;color:var(--mist);font-size:20px;line-height:1;padding:2px 6px;border-radius:3px}
+.mh .x:hover{color:var(--paper);background:var(--hull-2)}
+.mb{padding:20px}
+.q{
+  font-family:var(--mono);font-size:14px;line-height:1.9;padding:14px 16px;
+  background:var(--void);border:1px solid var(--rule);border-radius:3px;
+  word-break:break-all;
+}
+.q b{color:var(--flare);font-weight:500;font-size:15px;letter-spacing:.06em}
+.hint{margin-top:12px;font-size:12.5px;color:var(--mist);display:flex;gap:8px}
+.hint .k{color:var(--mist-dim);font-family:var(--mono);font-size:11px;letter-spacing:.1em;flex:none;padding-top:2px}
+.ansrow{display:flex;gap:9px;margin-top:18px}
+input[type=text]{
+  flex:1;min-width:0;font-family:var(--mono);font-size:15px;letter-spacing:.06em;
+  padding:11px 13px;border-radius:var(--r);
+  background:var(--void);border:1px solid var(--rule-hot);color:var(--paper);
+}
+input[type=text]:focus{outline:2px solid var(--flare);outline-offset:0;border-color:var(--flare)}
+input[type=text]::placeholder{color:var(--mist-dim);letter-spacing:.04em}
+.verdict{margin-top:14px;font-family:var(--mono);font-size:12.5px;letter-spacing:.04em;min-height:19px}
+.verdict.ok{color:var(--p-qw)}
+.verdict.no{color:var(--breach)}
+
+/* ── 結果 ───────────────────────────────────────────────────────────── */
+.final{text-align:center;padding:10px 4px}
+.final .cap{font-family:var(--mono);font-size:11px;letter-spacing:.28em;color:var(--mist-dim)}
+.final h3{margin:10px 0 4px;font-family:var(--disp);font-size:30px;font-weight:700;letter-spacing:.05em;color:var(--flare)}
+.final p{margin:0 0 18px;color:var(--mist);font-size:13.5px}
+
+.foot{
+  display:block;margin-top:30px;padding-top:20px;border-top:1px solid var(--rule);
+  font-size:12.5px;line-height:1.85;color:var(--mist-dim);max-width:70ch;
+}
+.foot b{color:var(--mist);font-weight:500}
+
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}
+</style>
+
+<div class="shell">
+
+  <header class="bar">
+    <div class="mark">
+      <b>NULLPORT<i>//</i></b>
+      <span>攻防演武場</span>
+    </div>
+
+    <div class="clock">
+      <div class="clock-face">
+        <div class="t idle" id="clock">--:--</div>
+        <div class="l">回合時鐘</div>
+      </div>
+      <div class="drain"><i id="drain"></i></div>
+      <div class="rnd">當前回合 <b id="roundNo">0</b><span id="roundMax"> / 12</span><br>FLAG 每回合刷新</div>
+    </div>
+
+    <div class="ctrls">
+      <button class="btn go" id="btnStart"><span class="g">▷</span>開始對戰</button>
+      <button class="btn" id="btnStep" disabled><span class="g">⤒</span>手動推進一回合</button>
+      <button class="btn" id="btnReset"><span class="g">↻</span>重置戰局</button>
+    </div>
+  </header>
+
+  <div class="safety">
+    <span class="dot"></span>全模擬環境 · 無真實服務 · 無真實憑證
+  </div>
+
+  <div class="grid">
+    <main>
+      <section class="panel">
+        <div class="ph"><h2>我方陣地</h2><small id="homeHost">10.13.0.7:31337</small></div>
+        <div class="pb home">
+          <div>
+            <div class="home-id">
+              <span class="chip" style="background:var(--p-you)"></span>
+              <b>你</b>
+              <span class="host" id="homeFlag">FLAG{待開戰}</span>
+            </div>
+            <div class="meter">
+              <div class="meter-l"><span>服務加固程度</span><b id="patchPct">0%</b></div>
+              <div class="track"><i id="patchBar" style="width:0%"></i></div>
+              <div class="warn" id="slaWarn" hidden>過度加固 · 服務可用性檢查未通過 · 本回合無 SLA 分</div>
+            </div>
+          </div>
+          <div class="acts">
+            <div class="ap">本回合行動點
+              <span class="pip" id="pip0"></span><span class="pip" id="pip1"></span>
+            </div>
+            <button class="btn" id="btnPatch" disabled>加固服務 · 消耗 1 點</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="ph"><h2>攻擊目標</h2><small>各 AI 的虛擬伺服器</small></div>
+        <div class="pb"><div class="targets" id="targets"></div></div>
+      </section>
+    </main>
+
+    <aside>
+      <section class="panel">
+        <div class="ph"><h2>選手台</h2><small>記分 · 本機儲存</small></div>
+        <div class="pb"><div class="board" id="board"></div></div>
+      </section>
+
+      <section class="panel">
+        <div class="ph"><h2>戰況事件流</h2><small id="evCount">0 筆</small></div>
+        <div class="log" id="log"></div>
+      </section>
+    </aside>
+  </div>
+
+  <div class="foot">
+    <b>NULLPORT</b> 是一個 <b>純本地、純模擬</b> 的 CTF 攻防練習場。所有伺服器、FLAG、AI 選手皆為虛構，
+    不連線任何真實服務、不觸及任何真實帳號或金鑰。結盟僅限「人 + AI」，AI 之間不可結盟。
+  </div>
+</div>
+
+<div class="veil" id="veil" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="mh">
+      <span class="chip" id="mChip" style="background:var(--flare)"></span>
+      <h3 id="mTitle">解題奪 FLAG</h3>
+      <button class="x" id="mClose" aria-label="關閉">×</button>
+    </div>
+    <div class="mb" id="mBody"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ═══ 常數 ═══════════════════════════════════════════════════════════ */
+const ROUND_SECONDS = 45;
+const MAX_ROUNDS    = 12;
+const STORE_KEY     = 'nullport.state.v1';
+const BEST_KEY      = 'nullport.best.v1';
+
+const $ = function(id){ return document.getElementById(id); };
+const rnd = function(){ return Math.random(); };
+const pick = function(a){ return a[Math.floor(rnd()*a.length)]; };
+const clamp = function(v,a,b){ return Math.max(a, Math.min(b, v)); };
+const pad2 = function(n){ return String(n).padStart(2,'0'); };
+function shuffle(a){ a=a.slice(); for(var i=a.length-1;i>0;i--){var j=Math.floor(rnd()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;} return a; }
+
+/* ═══ 選手名冊 ═══════════════════════════════════════════════════════ */
+function roster(){
+  return [
+    {id:'you',name:'你',  kind:'human',color:'--p-you',host:'10.13.0.7', port:31337,trait:'指揮官 · 由你操刀',      atk:0,  def:0,  aggro:0,  loyalty:0},
+    {id:'xt', name:'玄鐵',kind:'ai',   color:'--p-xt', host:'10.13.0.21',port:8080, trait:'重防禦 · 補洞極快',      atk:.34,def:.72,aggro:.30,loyalty:.72},
+    {id:'cl', name:'赤練',kind:'ai',   color:'--p-cl', host:'10.13.0.34',port:9001, trait:'高侵略 · 專打領先者',    atk:.78,def:.30,aggro:.88,loyalty:.22},
+    {id:'bz', name:'白噪',kind:'ai',   color:'--p-bz', host:'10.13.0.55',port:4444, trait:'亂數行動 · 難以預測',    atk:.52,def:.46,aggro:.55,loyalty:.40},
+    {id:'qw', name:'青梧',kind:'ai',   color:'--p-qw', host:'10.13.0.88',port:5150, trait:'均衡 · 傾向結盟',        atk:.50,def:.55,aggro:.48,loyalty:.86}
+  ].map(function(p){
+    p.score=0; p.patch=(p.kind==='human')?0:.25; p.flag=''; p.takenBy=null; p.caps=0; p.losses=0;
+    return p;
+  });
+}
+
+/* ═══ 狀態 ═══════════════════════════════════════════════════════════ */
+var S = null, BEST = 0, timer = null, left = 0, lastFocus = null, current = null;
+
+function fresh(){
+  return { players:roster(), round:0, phase:'idle', actions:2, ally:null, log:[], slaFail:false };
+}
+function byId(id){ return S.players.filter(function(p){ return p.id===id; })[0]; }
+function ais(){ return S.players.filter(function(p){ return p.kind==='ai'; }); }
+function ranked(){ return S.players.slice().sort(function(a,b){ return b.score-a.score; }); }
+function allied(a,b){ return !!S.ally && ((a==='you'&&b===S.ally)||(b==='you'&&a===S.ally)); }
+
+/* ═══ 儲存（本機） ═══════════════════════════════════════════════════ */
+function save(){
+  try{
+    localStorage.setItem(STORE_KEY, JSON.stringify(S));
+    localStorage.setItem(BEST_KEY, String(BEST));
+  }catch(e){ /* 私密瀏覽或封鎖站台資料時忽略 */ }
+}
+function load(){
+  try{
+    var b = localStorage.getItem(BEST_KEY);
+    BEST = b ? (parseInt(b,10)||0) : 0;
+    var raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return null;
+    var o = JSON.parse(raw);
+    if(!o || !Array.isArray(o.players) || o.players.length!==5) return null;
+    if(o.phase==='live') o.phase='paused';
+    if(!Array.isArray(o.log)) o.log=[];
+    return o;
+  }catch(e){ return null; }
+}
+
+/* ═══ 事件流 ═════════════════════════════════════════════════════════ */
+function stamp(){
+  var el = (S.phase==='live'||S.phase==='paused') ? (ROUND_SECONDS-left) : 0;
+  return 'R'+pad2(S.round)+'·'+pad2(clamp(el,0,99));
+}
+function log(html, cls){
+  S.log.unshift({ t:stamp(), h:html, c:cls||'' });
+  if(S.log.length>70) S.log.pop();
+}
+
+/* ═══ FLAG ═══════════════════════════════════════════════════════════ */
+function mkFlag(){
+  var h='', hex='0123456789abcdef';
+  for(var i=0;i<10;i++) h += hex[Math.floor(rnd()*16)];
+  return 'FLAG{'+h+'}';
+}
+
+/* ═══ 題庫（全部離線計算，無任何外部請求） ═══════════════════════════ */
+var WORDS = ['FLAG','SHELL','TOKEN','BREACH','CIPHER','VECTOR','PAYLOAD','KERNEL','SOCKET','BUFFER','PATCH','DAEMON'];
+var SHORT = ['PORT','ROOT','HASH','LEAK','GATE','NODE','SALT'];
+var PORTS = [['HTTPS',443],['SSH',22],['DNS',53],['HTTP',80],['SMTP',25],['MySQL',3306],['PostgreSQL',5432],['Redis',6379],['RDP',3389],['FTP',21]];
+
+function rot(s,k){
+  return s.replace(/[A-Z]/g, function(c){
+    return String.fromCharCode((c.charCodeAt(0)-65+k+26)%26+65);
+  });
+}
+function toHex(s){
+  return s.split('').map(function(c){ return c.charCodeAt(0).toString(16).padStart(2,'0'); }).join(' ');
+}
+
+var CHAL = [
+  {tier:1,name:'凱撒位移',gen:function(){
+    var w=pick(WORDS), k=2+Math.floor(rnd()*8);
+    return {q:'攔截到一段位移過的字串：<br><b>'+rot(w,k)+'</b><br>位移量 k = '+k+'（加密時向後推）',
+            hint:'把每個字母往回推 k 位，A 之前繞回 Z。', ans:w, ph:'大寫英文'};
+  }},
+  {tier:1,name:'服務指紋',gen:function(){
+    var p=pick(PORTS);
+    return {q:'目標開了一個沒有標示的服務，指紋辨識結果：<br><b>'+p[0]+'</b><br>它的標準通訊埠是幾號？',
+            hint:'常見服務的預設埠號。', ans:String(p[1]), ph:'數字'};
+  }},
+  {tier:1,name:'位元遮罩',gen:function(){
+    var a=1+Math.floor(rnd()*220), b=1+Math.floor(rnd()*220), x=rnd()<.5;
+    return {q:'存取控制遮罩比對：<br><b>'+a+(x?' XOR ':' AND ')+b+'</b><br>以十進位作答。',
+            hint:x?'轉成二進位，逐位相異為 1。':'轉成二進位，逐位皆為 1 才是 1。',
+            ans:String(x?(a^b):(a&b)), ph:'數字'};
+  }},
+  {tier:2,name:'Base64 還原',gen:function(){
+    var w=pick(WORDS);
+    return {q:'設定檔裡的一欄編碼值：<br><b>'+btoa(w)+'</b><br>還原成原始字串。',
+            hint:'Base64：每 4 個字元還原成 3 個位元組。', ans:w, ph:'大寫英文'};
+  }},
+  {tier:2,name:'十六進位轉譯',gen:function(){
+    var w=pick(WORDS);
+    return {q:'記憶體傾印片段：<br><b>'+toHex(w)+'</b><br>對應的 ASCII 字串是什麼？',
+            hint:'每兩碼一個位元組，0x41 = A。', ans:w, ph:'大寫英文'};
+  }},
+  {tier:3,name:'單位元組 XOR',gen:function(){
+    var w=pick(SHORT), k=0x11+Math.floor(rnd()*0x60);
+    var enc=w.split('').map(function(c){ return (c.charCodeAt(0)^k).toString(16).padStart(2,'0'); }).join(' ');
+    return {q:'單一位元組金鑰加密後的密文：<br><b>'+enc+'</b><br>金鑰 = 0x'+k.toString(16),
+            hint:'每個位元組跟金鑰做一次 XOR，再查 ASCII 表。', ans:w, ph:'大寫英文'};
+  }}
+];
+
+function chalFor(def){
+  var maxT = def>.62 ? 3 : (def>.42 ? 2 : 1);
+  var pool = CHAL.filter(function(c){ return c.tier<=maxT; });
+  var top  = pool.filter(function(c){ return c.tier===maxT; });
+  var c = (rnd()<.6 && top.length) ? pick(top) : pick(pool);
+  var made = c.gen();
+  made.name = c.name; made.tier = c.tier;
+  return made;
+}
+
+/* ═══ 回合流程 ═══════════════════════════════════════════════════════ */
+function newRound(){
+  S.round += 1;
+  S.actions = 2;
+  S.slaFail = false;
+  var you = byId('you');
+  you.patch = clamp(you.patch - .06, 0, 1);
+  S.players.forEach(function(p){ p.takenBy=null; p.flag=mkFlag(); });
+  left = ROUND_SECONDS;
+  log('第 '+S.round+' 回合開始 · 全場 FLAG 已刷新', 'sys');
+}
+
+function capture(att, tgt){
+  if(tgt.takenBy) return false;
+  tgt.takenBy = att.id;
+  att.score += 100;
+  tgt.score = Math.max(0, tgt.score - 60);
+  att.caps++; tgt.losses++;
+  var mine = (tgt.id==='you');
+  log('<b>'+att.name+'</b> 攻破 <b>'+tgt.name+'</b> 的服務，奪得 FLAG　+100 / −60', mine?'lost':'hit');
+  return true;
+}
+function repel(att, tgt){
+  tgt.score += 25;
+  log('<b>'+tgt.name+'</b> 擋下 <b>'+att.name+'</b> 的攻擊　+25', 'sys');
+}
+
+function aiRound(){
+  shuffle(ais()).forEach(function(ai){
+    ai.patch = clamp(ai.patch - .08, 0, 1);
+    if(rnd() > ai.aggro){
+      ai.patch = clamp(ai.patch + .14, 0, .95);
+      log('<b>'+ai.name+'</b> 選擇加固自己的服務', 'sys');
+      return;
+    }
+    var cands = S.players.filter(function(t){
+      return t.id!==ai.id && !allied(ai.id,t.id) && !t.takenBy;
+    });
+    if(!cands.length) return;
+    cands.sort(function(a,b){ return b.score-a.score; });
+    var tgt = (rnd()<.6) ? cands[0] : pick(cands);
+    var p = clamp(.16 + ai.atk*.60 - tgt.patch*.65, .05, .88);
+    if(rnd() < p) capture(ai, tgt); else repel(ai, tgt);
+  });
+}
+
+function allyUpkeep(){
+  if(!S.ally) return;
+  var ai = byId(S.ally), you = byId('you');
+  if(!ai) { S.ally=null; return; }
+  ai.score += 15; you.score += 15;
+  log('你與 <b>'+ai.name+'</b> 的同盟生效　雙方各得協同分 +15', 'sys');
+  var gap = you.score - ai.score;
+  var br = clamp(.06 + (gap>120 ? .16 : 0) - ai.loyalty*.05, 0, .5);
+  if(rnd() < br){
+    log('<b>'+ai.name+'</b> 撕毀同盟，你們回到敵對狀態', 'lost');
+    S.ally = null;
+  }
+}
+
+function slaRound(){
+  S.players.forEach(function(p){
+    if(p.patch > .8){
+      if(p.id==='you'){ S.slaFail = true; log('可用性檢查未通過 · 你的服務因過度加固而無法回應　SLA +0', 'lost'); }
+    } else {
+      p.score += 10;
+    }
+  });
+}
+
+function resolveRound(){
+  if(S.phase!=='live' && S.phase!=='paused') return;
+  aiRound();
+  allyUpkeep();
+  slaRound();
+  if(S.round >= MAX_ROUNDS){ finish(); return; }
+  newRound();
+  render(); save();
+}
+
+function finish(){
+  S.phase = 'over';
+  stopTimer();
+  var r = ranked(), w = r[0], you = byId('you');
+  if(you.score > BEST) BEST = you.score;
+  log('戰局結束 · <b>'+w.name+'</b> 以 '+w.score+' 分奪冠', 'win');
+  render(); save();
+  showFinal(r);
+}
+
+/* ═══ 計時 ═══════════════════════════════════════════════════════════ */
+function startTimer(){
+  stopTimer();
+  timer = setInterval(function(){
+    left -= 1;
+    if(left <= 0){ resolveRound(); }
+    paintClock();
+  }, 1000);
+}
+function stopTimer(){ if(timer){ clearInterval(timer); timer=null; } }
+
+function paintClock(){
+  var c = $('clock'), d = $('drain');
+  if(S.phase==='idle' || S.phase==='over'){
+    c.textContent = '--:--'; c.classList.add('idle'); d.style.width='0%';
+  } else {
+    c.textContent = pad2(Math.floor(Math.max(left,0)/60))+':'+pad2(Math.max(left,0)%60);
+    c.classList.remove('idle');
+    d.style.width = clamp(left/ROUND_SECONDS*100, 0, 100)+'%';
+  }
+  $('roundNo').textContent = S.round;
+}
+
+/* ═══ 玩家行動 ═══════════════════════════════════════════════════════ */
+function spend(){ S.actions = Math.max(0, S.actions-1); }
+
+function doPatch(){
+  if(S.phase!=='live' || S.actions<=0) return;
+  var you = byId('you');
+  you.patch = clamp(you.patch + .15, 0, .95);
+  spend();
+  log('你加固了自己的服務　加固程度 '+Math.round(you.patch*100)+'%', 'sys');
+  if(you.patch > .8) log('警告：加固程度超過 80%，服務可用性檢查會失敗', 'lost');
+  render(); save();
+}
+
+function doAlly(ai){
+  if(S.phase!=='live') return;
+  if(S.ally === ai.id){
+    log('你單方面解除了與 <b>'+ai.name+'</b> 的同盟', 'sys');
+    S.ally = null; render(); save(); return;
+  }
+  if(S.ally) return;
+  if(S.actions<=0) return;
+  spend();
+  var you = byId('you');
+  var leading = ranked()[0].id === 'you';
+  var ch = clamp(.28 + ai.loyalty*.50 - (leading ? .24 : 0), .05, .90);
+  if(rnd() < ch){
+    S.ally = ai.id;
+    log('<b>'+ai.name+'</b> 接受結盟 · 雙方停火，每回合各得協同分 +15', 'win');
+  } else {
+    log('<b>'+ai.name+'</b> 拒絕了你的結盟提議', 'sys');
+  }
+  render(); save();
+}
+
+/* ═══ 解題視窗 ═══════════════════════════════════════════════════════ */
+function openChallenge(ai){
+  if(S.phase!=='live' || S.actions<=0 || ai.takenBy || allied('you',ai.id)) return;
+  current = { ai:ai, c:chalFor(ai.def), done:false };
+  lastFocus = document.activeElement;
+
+  $('mChip').style.background = 'var('+ai.color+')';
+  $('mTitle').textContent = '解題奪 FLAG · ' + ai.name;
+  $('mBody').innerHTML =
+    '<div class="q">'+current.c.q+'</div>'+
+    '<div class="hint"><span class="k">提示</span><span>'+current.c.hint+'</span></div>'+
+    '<div class="ansrow">'+
+      '<input type="text" id="ansIn" placeholder="'+current.c.ph+'" autocomplete="off" autocapitalize="characters" spellcheck="false">'+
+      '<button class="btn go" id="ansGo">提交</button>'+
+    '</div>'+
+    '<div class="verdict" id="verdict">題型：'+current.c.name+'　難度 T'+current.c.tier+'　答錯會消耗 1 行動點</div>';
+
+  $('veil').hidden = false;
+  $('ansGo').addEventListener('click', submitAns);
+  $('ansIn').addEventListener('keydown', function(e){ if(e.key==='Enter') submitAns(); });
+  $('ansIn').focus();
+}
+
+function submitAns(){
+  if(!current || current.done) return;
+  var v = ($('ansIn').value||'').trim().toUpperCase();
+  if(!v) return;
+  current.done = true;
+  var ok = (v === String(current.c.ans).toUpperCase());
+  var vd = $('verdict');
+  spend();
+  if(ok){
+    capture(byId('you'), current.ai);
+    vd.className = 'verdict ok';
+    vd.textContent = '正解 · 已取得 ' + current.ai.name + ' 的 FLAG：' + current.ai.flag;
+  } else {
+    vd.className = 'verdict no';
+    vd.textContent = '答案錯誤 · 正確答案是 ' + current.c.ans + '　入侵失敗，消耗 1 行動點';
+    log('你對 <b>'+current.ai.name+'</b> 的入侵失敗（'+current.c.name+'）', 'sys');
+  }
+  $('ansGo').disabled = true;
+  $('ansIn').disabled = true;
+  render(); save();
+  setTimeout(closeModal, 1900);
+}
+
+function closeModal(){
+  $('veil').hidden = true;
+  $('mBody').innerHTML = '';
+  current = null;
+  if(lastFocus && lastFocus.focus) { try{ lastFocus.focus(); }catch(e){} }
+}
+
+function showFinal(r){
+  var you = byId('you');
+  var champ = r[0];
+  lastFocus = document.activeElement;
+  $('mChip').style.background = 'var('+champ.color+')';
+  $('mTitle').textContent = '戰局結束';
+  var rows = r.map(function(p,i){
+    return '<div class="brow'+(p.id==='you'?' me':'')+'" style="--c:var('+p.color+')">'+
+             '<span class="rk">'+(i+1)+'</span>'+
+             '<span class="chip" style="background:var('+p.color+')"></span>'+
+             '<span class="nb"><b>'+p.name+'</b></span>'+
+             '<span class="pt">'+p.score+'</span>'+
+           '</div>';
+  }).join('');
+  $('mBody').innerHTML =
+    '<div class="final">'+
+      '<div class="cap">'+MAX_ROUNDS+' 回合 · 最終排名</div>'+
+      '<h3>'+champ.name+' 奪冠</h3>'+
+      '<p>你的成績 '+you.score+' 分　奪旗 '+you.caps+' 次 · 失守 '+you.losses+' 次　本機最佳 '+BEST+' 分</p>'+
+    '</div>'+
+    '<div class="board">'+rows+'</div>'+
+    '<div class="ansrow"><button class="btn go" id="againBtn" style="flex:1;justify-content:center">再戰一局</button></div>';
+  $('veil').hidden = false;
+  $('againBtn').addEventListener('click', function(){ closeModal(); reset(); });
+  $('againBtn').focus();
+}
+
+/* ═══ 繪製 ═══════════════════════════════════════════════════════════ */
+function render(){
+  var you = byId('you');
+  var live = (S.phase==='live');
+
+  /* 指揮列 */
+  var b = $('btnStart');
+  if(S.phase==='idle')       b.innerHTML = '<span class="g">▷</span>開始對戰';
+  else if(S.phase==='live')  b.innerHTML = '<span class="g">❚❚</span>暫停';
+  else if(S.phase==='paused')b.innerHTML = '<span class="g">▷</span>繼續對戰';
+  else                       b.innerHTML = '<span class="g">↻</span>再戰一局';
+  $('btnStep').disabled = !(S.phase==='live' || S.phase==='paused');
+  $('roundMax').textContent = ' / ' + MAX_ROUNDS;
+  paintClock();
+
+  /* 我方陣地 */
+  $('homeHost').textContent = you.host + ':' + you.port;
+  $('homeFlag').textContent = S.round===0 ? 'FLAG{待開戰}'
+                            : (you.takenBy ? 'FLAG 已被 '+byId(you.takenBy).name+' 奪走' : you.flag);
+  var pct = Math.round(you.patch*100);
+  $('patchPct').textContent = pct + '%';
+  $('patchBar').style.width = pct + '%';
+  $('patchBar').className = you.patch > .8 ? 'over' : '';
+  $('slaWarn').hidden = !(you.patch > .8);
+  $('pip0').className = 'pip' + (S.actions>0 ? ' on' : '');
+  $('pip1').className = 'pip' + (S.actions>1 ? ' on' : '');
+  $('btnPatch').disabled = !live || S.actions<=0;
+
+  /* 目標卡 */
+  $('targets').innerHTML = ais().map(function(a){
+    var isAlly = allied('you', a.id);
+    var taken  = !!a.takenBy;
+    var atkOff = !live || S.actions<=0 || taken || isAlly;
+    var atkTxt = isAlly ? '同盟中 · 停火' : (taken ? 'FLAG 已被 '+byId(a.takenBy).name+' 奪走' : '解題奪 FLAG');
+    var allyTxt, allyOff;
+    if(isAlly){ allyTxt='解除同盟'; allyOff = !live; }
+    else if(S.ally){ allyTxt='已有同盟'; allyOff = true; }
+    else { allyTxt='提議結盟'; allyOff = !live || S.actions<=0; }
+    return ''+
+      '<article class="tgt'+(isAlly?' ally':'')+'" style="--c:var('+a.color+')">'+
+        '<div class="tgt-top">'+
+          '<span class="chip" style="background:var('+a.color+');margin-top:5px"></span>'+
+          '<span class="nm"><b>'+a.name+(isAlly?'<span class="tag">同盟</span>':'')+'</b><span>'+a.trait+'</span></span>'+
+          '<span class="sc"><b>'+a.score+'</b><span>SCORE</span></span>'+
+        '</div>'+
+        '<div class="flagline'+(taken?' gone':'')+'">'+
+          '<span class="st"></span>'+
+          '<span class="fx">'+(taken ? 'FLAG 已失守' : 'FLAG{••••••••••}')+'</span>'+
+        '</div>'+
+        '<div class="stat">'+
+          '<span>主機 <b>'+a.host+':'+a.port+'</b></span>'+
+          '<span>加固 <b>'+Math.round(a.patch*100)+'%</b></span>'+
+        '</div>'+
+        '<div class="row">'+
+          '<button class="btn go" data-atk="'+a.id+'"'+(atkOff?' disabled':'')+'>'+atkTxt+'</button>'+
+          '<button class="btn" data-ally="'+a.id+'"'+(allyOff?' disabled':'')+' style="flex:0 0 96px">'+allyTxt+'</button>'+
+        '</div>'+
+      '</article>';
+  }).join('');
+
+  /* 選手台 */
+  var r = ranked();
+  var top = Math.max(1, r[0].score);
+  $('board').innerHTML = r.map(function(p,i){
+    return '<div class="brow'+(p.id==='you'?' me':'')+'" style="--c:var('+p.color+')">'+
+             '<span class="rk">'+pad2(i+1)+'</span>'+
+             '<span class="chip" style="background:var('+p.color+')"></span>'+
+             '<span class="nb">'+
+               '<b>'+p.name+(allied('you',p.id)?'<span class="tag">同盟</span>':'')+'</b>'+
+               '<span class="spark"><i style="width:'+Math.round(p.score/top*100)+'%"></i></span>'+
+             '</span>'+
+             '<span class="pt">'+p.score+'</span>'+
+           '</div>';
+  }).join('');
+
+  /* 事件流 */
+  $('evCount').textContent = S.log.length + ' 筆';
+  $('log').innerHTML = S.log.map(function(e){
+    return '<div class="ev '+e.c+'"><span class="ts">'+e.t+'</span><span class="tx">'+e.h+'</span></div>';
+  }).join('') || '<div class="ev sys"><span class="ts">--</span><span class="tx">尚未開戰。按下「開始對戰」進入第 1 回合。</span></div>';
+}
+
+/* ═══ 控制 ═══════════════════════════════════════════════════════════ */
+function toggleRun(){
+  if(S.phase==='over'){ reset(); return; }
+  if(S.phase==='live'){
+    S.phase='paused'; stopTimer(); log('戰局暫停','sys'); render(); save(); return;
+  }
+  if(S.phase==='idle'){ S.phase='live'; newRound(); }
+  else { S.phase='live'; log('戰局繼續','sys'); }
+  startTimer(); render(); save();
+}
+function reset(){
+  stopTimer();
+  S = fresh(); left = 0;
+  log('戰局已重置 · 全模擬環境已就緒','sys');
+  render(); save();
+}
+
+/* ═══ 綁定 ═══════════════════════════════════════════════════════════ */
+$('btnStart').addEventListener('click', toggleRun);
+$('btnStep').addEventListener('click', function(){
+  if(S.phase!=='live' && S.phase!=='paused') return;
+  log('手動推進回合','sys');
+  resolveRound();
+  if(S.phase==='live') { left = ROUND_SECONDS; startTimer(); }
+  render(); save();
+});
+$('btnReset').addEventListener('click', reset);
+$('btnPatch').addEventListener('click', doPatch);
+$('mClose').addEventListener('click', closeModal);
+$('veil').addEventListener('click', function(e){ if(e.target===$('veil')) closeModal(); });
+document.addEventListener('keydown', function(e){ if(e.key==='Escape' && !$('veil').hidden) closeModal(); });
+
+$('targets').addEventListener('click', function(e){
+  var t = e.target.closest ? e.target.closest('button') : null;
+  if(!t || t.disabled) return;
+  if(t.dataset.atk)  openChallenge(byId(t.dataset.atk));
+  if(t.dataset.ally) doAlly(byId(t.dataset.ally));
+});
+
+/* ═══ 啟動 ═══════════════════════════════════════════════════════════ */
+var saved = load();
+if(saved){
+  S = saved;
+  left = ROUND_SECONDS;
+} else {
+  S = fresh();
+  log('全模擬環境已就緒 · 5 名選手上線','sys');
+}
+render();
+})();
+</script>
