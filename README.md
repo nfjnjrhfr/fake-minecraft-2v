@@ -1,2 +1,69 @@
-# fake-minecraft-2v
-u8ujujujujujujujujujuujuujujujujuujujujujujjujjujujujuujjunjerivcfv dnds xdfbdehbhebhbdehbhbhrhbehebhderbhrvrdfgvfrfrevefvfegfhdevegdervgedryegehwrwehgerhwhrbhdbhdbdhbedbdiuheiuhur4ury4yeeyurheu4u44uyy56t4rueyrjdhjddbhdjebbhjejbhdwehjhejrhjedhjdjdndejndjnsdsjndsjndsjkkd.                                                                             67
+# 拟声台
+
+一个在浏览器里**实时合成**声音的音频程序：挑一只想吸引的动物，或者挑一种想模仿的情境，多种声音还能叠在一起。
+
+没有任何音频素材文件，也没有依赖——所有声音都由 Web Audio API 现场合成，因此每一次发声的音高、节奏、长短都略有不同，不会像循环播放的录音那样机械。
+
+## 运行
+
+直接用浏览器打开 `index.html` 即可（Chrome / Edge / Firefox / Safari）。
+或者起个本地服务：
+
+```bash
+npx http-server . -p 8080   # 然后访问 http://localhost:8080
+```
+
+首次播放需要点一下「播放」——浏览器不允许网页在用户操作前自行出声。
+
+## 能发出什么声音
+
+**吸引动物（18 种）**：麻雀、布谷鸟、猫、狗、绿头鸭、公鸡、灰林鸮、狼、蟋蟀、蝉、黑斑蛙、蜜蜂、珠颈斑鸠、银鸥、梅花鹿、野火鸡、小家鼠、山羊。
+
+**模拟情境（13 种）**：窗外小雨、雷暴、海浪、山间溪流、篝火、旷野的风、林间清晨、夏夜田野、夜行列车、咖啡馆、心跳、棕噪音、粉噪音。
+
+## 操作
+
+| 控件 | 作用 |
+| --- | --- |
+| 卡片 | 点一下开始／再点一下停止，可多选叠加（雨声 + 蛙鸣 + 篝火） |
+| 主音量 | 总输出，经过压缩器，叠再多层也不会破音 |
+| 音调 | ±12 半音，整体移调；对之后触发的每一次发声生效 |
+| 呼叫频率 | 0.3×–2.5× 缩放叫声之间的间隔，也控制雨滴、柴火爆裂的密度 |
+| 睡眠定时 | 到点前 20 秒淡出后停止 |
+| 混音台 ⟳ | 让该图层立刻发声一次，用来试听 |
+| 空格 / Esc | 播放暂停 / 全部停止 |
+
+顶部是真实的**声谱瀑布图**（对数频率轴，60 Hz–12 kHz），由 `AnalyserNode` 驱动：狼嚎是缓慢滑落的橙色曲线，雨声是一整片高频铺底，一眼能看出各层占了哪段频率。
+
+主音量、音调、呼叫频率和当前混音会存进 `localStorage`，下次打开自动恢复（在按下播放前不会出声）。
+
+## 代码结构
+
+单文件 `index.html`，脚本分八节：工具 → 噪声缓冲（白/粉/棕）→ 合成工具箱 `Kit` → 声音库 → 引擎 → 界面 → 声谱图 → 启动。
+
+添加一个新声音只需往 `ANIMALS` 或 `SCENES` 里加一条：
+
+```js
+{
+  id: "swan", name: "天鹅", latin: "Cygnus olor", emoji: "🦢",
+  band: "400–900 Hz", note: "一句话描述，会显示在卡片上。", tags: "搜索用的关键词",
+  interval: [2, 5],                 // 两次发声之间的秒数区间（随机）
+  call(k, t, bed) {                 // 一次发声，t 是精确的调度时间
+    k.tone({ t, dur: 0.4, type: "sawtooth", freq: 600,
+             sweep: [[1, 480]], gain: 0.2, filter: { type: "bandpass", freq: 1200, q: 2 } });
+  },
+  bed(k) {                          // 可选：持续背景层，返回带 stop(t) 的句柄
+    return k.loopNoise({ color: "pink", gain: 0.1, filters: [{ type: "lowpass", freq: 2000 }] });
+  }
+}
+```
+
+`Kit` 提供 `tone()`（振荡音，支持折线扫频、颤音、滤波）、`noise()`（一段噪声）、`loopNoise()`（持续噪声床）、`lfo()`（把低频振荡器接到任意 `AudioParam`）。发声用的是提前 0.45 秒的预调度，所以节奏不受界面卡顿影响。
+
+同时定义 `bed` 和 `call` 的声音（雨、篝火、雷暴等）会把 `bed` 句柄作为第三个参数传给 `call`，可以直接改背景层的滤波器——「旷野的风」就是这样让风声的中心频率随机漫游的。
+
+## 使用提示
+
+- 先把主音量调低再播放；长时间戴耳机请控制音量。
+- 声音是数字合成的**模仿**，不是实地录音，逼真度有限。
+- 在野外播放召唤声可能干扰动物的繁殖、育雏和觅食；部分国家和地区禁止用录音／回放招引鸟类或用于狩猎，请先确认当地法规再使用。

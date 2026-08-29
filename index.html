@@ -1,0 +1,1214 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>拟声台</title>
+<meta name="description" content="合成动物叫声与自然情境的浏览器音频工作台">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600&display=swap">
+<style>
+:root{
+  --ink:#F3F6F1; --panel:#FFFFFF; --panel-2:#E9EDE6; --line:#D3DBD1;
+  --text:#1A211C; --text-2:#5C6A60; --text-3:#8A9990;
+  --amber:#B26A0B; --amber-soft:rgba(178,106,11,.12);
+  --teal:#1C7A6C; --teal-soft:rgba(28,122,108,.12);
+  --danger:#A3341F;
+  --shadow:0 1px 2px rgba(26,33,28,.08), 0 8px 24px rgba(26,33,28,.06);
+  --scope-bg:#EDF1EA; --scope-rgb:237,241,234;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#0E1412; --panel:#16211D; --panel-2:#1D2B25; --line:#25352E;
+    --text:#E9F0EA; --text-2:#8CA396; --text-3:#63776C;
+    --amber:#E5A13C; --amber-soft:rgba(229,161,60,.14);
+    --teal:#48B3A2; --teal-soft:rgba(72,179,162,.14);
+    --danger:#E0705A;
+    --shadow:0 1px 0 rgba(255,255,255,.03), 0 12px 30px rgba(0,0,0,.35);
+    --scope-bg:#0A100E; --scope-rgb:10,16,14;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#0E1412; --panel:#16211D; --panel-2:#1D2B25; --line:#25352E;
+  --text:#E9F0EA; --text-2:#8CA396; --text-3:#63776C;
+  --amber:#E5A13C; --amber-soft:rgba(229,161,60,.14);
+  --teal:#48B3A2; --teal-soft:rgba(72,179,162,.14);
+  --danger:#E0705A;
+  --shadow:0 1px 0 rgba(255,255,255,.03), 0 12px 30px rgba(0,0,0,.35);
+  --scope-bg:#0A100E; --scope-rgb:10,16,14;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ink); color:var(--text);
+  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  padding-bottom:120px;
+}
+h1,h2,h3{font-family:"Noto Serif SC","Songti SC",serif;font-weight:600;text-wrap:balance;margin:0}
+button{font-family:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:4px}
+.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--text-3);font-family:"JetBrains Mono",monospace}
+
+/* ---------- 顶部：声谱瀑布 ---------- */
+.scope-wrap{position:relative;border-bottom:1px solid var(--line);background:var(--scope-bg)}
+#scope{display:block;width:100%;height:190px}
+.scope-head{
+  position:absolute;inset:0;padding:20px 22px;display:flex;flex-direction:column;
+  justify-content:space-between;pointer-events:none;
+  background:linear-gradient(180deg,
+    rgba(var(--scope-rgb),.96) 0%, rgba(var(--scope-rgb),.85) 28%, rgba(var(--scope-rgb),0) 46%,
+    rgba(var(--scope-rgb),0) 58%, rgba(var(--scope-rgb),.88) 78%, rgba(var(--scope-rgb),.96) 100%);
+}
+.brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.brand h1{font-size:26px;letter-spacing:.02em}
+.brand .sub{color:var(--text-2);font-size:13px}
+.scope-foot{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.readout{font-size:11px;color:var(--text-3);letter-spacing:.08em}
+.readout b{color:var(--text-2);font-weight:500}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--text-3);display:inline-block;margin-right:6px;vertical-align:1px}
+.live .dot{background:var(--amber);box-shadow:0 0 0 4px var(--amber-soft)}
+@media (prefers-reduced-motion: no-preference){ .live .dot{animation:pulse 1.6s ease-in-out infinite} }
+@keyframes pulse{50%{box-shadow:0 0 0 8px transparent}}
+
+/* ---------- 主体 ---------- */
+.layout{max-width:1180px;margin:0 auto;padding:24px 22px 0;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:26px;align-items:start}
+@media (max-width:900px){
+  .layout{grid-template-columns:minmax(0,1fr);padding-inline:16px}
+  .rack{position:static;order:2}
+  main{order:1}
+  /* 有图层在响时，混音台顶到最上面，免得滑到底才够得着推子 */
+  .layout.has-layers .rack{order:-1}
+}
+
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px}
+.tab{border:0;background:transparent;padding:7px 14px;border-radius:7px;font-size:14px;cursor:pointer;color:var(--text-2)}
+.tab[aria-selected="true"]{background:var(--panel-2);color:var(--text);font-weight:500}
+.search{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px;color:var(--text);font-family:inherit;font-size:14px}
+.search::placeholder{color:var(--text-3)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:12px;padding-bottom:28px}
+.card{
+  position:relative;text-align:left;background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;padding:14px 14px 12px;cursor:pointer;display:grid;
+  grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:start;
+  box-shadow:var(--shadow);transition:border-color .15s,transform .15s,background .15s;
+}
+.card:hover{transform:translateY(-1px);border-color:var(--hue)}
+.card .glyph{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-size:21px;background:var(--hue-soft);border:1px solid transparent}
+.card .name{display:block;font-size:15px;font-weight:500;line-height:1.3}
+.card .latin{display:block;font-size:11px;color:var(--text-3);font-style:italic;margin-top:2px}
+.card .note{display:block;font-size:12px;color:var(--text-2);margin-top:7px;line-height:1.5}
+.card .band{margin-top:8px;display:inline-block;font-size:10.5px;letter-spacing:.06em;color:var(--hue);border:1px solid var(--hue);opacity:.85;border-radius:20px;padding:1px 8px}
+.card[aria-pressed="true"]{background:var(--hue-soft);border-color:var(--hue)}
+.card[aria-pressed="true"] .glyph{border-color:var(--hue)}
+.card[aria-pressed="true"]::after{content:"";position:absolute;top:12px;right:12px;width:8px;height:8px;border-radius:50%;background:var(--hue)}
+.card[data-kind="animal"]{--hue:var(--amber);--hue-soft:var(--amber-soft)}
+.card[data-kind="scene"]{--hue:var(--teal);--hue-soft:var(--teal-soft)}
+.empty{color:var(--text-3);font-size:14px;padding:30px 4px}
+
+/* ---------- 混音台 ---------- */
+.rack{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow);position:sticky;top:20px}
+.rack h2{font-size:15px;margin-bottom:2px}
+.rack .hint{font-size:12px;color:var(--text-3);margin:8px 0 0}
+.layers{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
+.layer{border-top:1px solid var(--line);padding-top:12px}
+.layer:first-child{border-top:0;padding-top:0}
+.layer .top{display:flex;align-items:center;gap:8px}
+.layer .lname{flex:1;font-size:13.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.layer .lname i{font-style:normal;margin-right:6px}
+.icon-btn{border:1px solid var(--line);background:transparent;border-radius:6px;width:26px;height:24px;display:grid;place-items:center;cursor:pointer;color:var(--text-2);font-size:12px;line-height:1}
+.icon-btn:hover{color:var(--text);border-color:var(--text-3)}
+.layer .meta{display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:6px}
+
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;cursor:pointer;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--line);border-radius:3px}
+input[type=range]::-moz-range-track{height:3px;background:var(--line);border-radius:3px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--text);margin-top:-5px;border:0}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--text);border:0}
+.layer input[type=range]::-webkit-slider-thumb{background:var(--accent-hue,var(--text))}
+.layer input[type=range]::-moz-range-thumb{background:var(--accent-hue,var(--text))}
+
+/* ---------- 走带条 ---------- */
+.transport{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--panel);
+  border-top:1px solid var(--line);padding:12px 22px;
+  display:flex;gap:22px;align-items:center;flex-wrap:wrap;
+  box-shadow:0 -10px 30px rgba(0,0,0,.12);
+}
+.knob{display:flex;flex-direction:column;gap:2px;min-width:132px}
+.knob label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);font-family:"JetBrains Mono",monospace;display:flex;justify-content:space-between;gap:10px}
+.knob label span{color:var(--text-2);letter-spacing:.02em}
+.btn{border:1px solid var(--line);background:var(--panel-2);color:var(--text);padding:9px 16px;border-radius:9px;font-size:14px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--text-3)}
+.btn.primary{background:var(--amber);border-color:var(--amber);color:#121814;font-weight:500}
+.btn.ghost{background:transparent;color:var(--text-2)}
+.btn.danger:hover{color:var(--danger);border-color:var(--danger)}
+select{background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 8px;font-family:inherit;font-size:13px}
+.spacer{flex:1}
+
+@media (max-width:640px){
+  body{padding-bottom:210px}
+  .transport{padding:10px 14px;gap:14px;row-gap:10px}
+  .knob{min-width:110px;flex:1}
+  #scope{height:150px}
+  .brand h1{font-size:22px}
+  .brand .sub{display:none}
+}
+footer{max-width:1180px;margin:0 auto;padding:8px 22px 40px;color:var(--text-3);font-size:12px;line-height:1.7;border-top:1px solid var(--line);margin-top:10px}
+footer b{color:var(--text-2);font-weight:500}
+</style>
+</head>
+<body>
+
+<div class="scope-wrap">
+  <canvas id="scope" aria-hidden="true"></canvas>
+  <div class="scope-head">
+    <div class="brand">
+      <h1>拟声台</h1>
+      <span class="sub">选一只想召唤的动物，或一种想身处的情境——声音在你的浏览器里实时合成</span>
+    </div>
+    <div class="scope-foot" id="statusBar">
+      <span class="readout"><span class="dot"></span><b id="stStatus">待机</b></span>
+      <span class="readout mono">图层 <b id="stLayers">0</b></span>
+      <span class="readout mono">音调 <b id="stPitch">±0</b> 半音</span>
+      <span class="readout mono">采样率 <b id="stRate">—</b></span>
+      <span class="readout mono" id="stTimerWrap" hidden>定时 <b id="stTimer">—</b></span>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <main>
+    <div class="toolbar">
+      <div class="tabs" role="tablist" aria-label="声音分类">
+        <button class="tab" role="tab" id="tab-animal" aria-selected="true" aria-controls="grid">吸引动物</button>
+        <button class="tab" role="tab" id="tab-scene" aria-selected="false" aria-controls="grid">模拟情境</button>
+      </div>
+      <input class="search" id="search" type="search" placeholder="搜索名称、场景或用途…" aria-label="搜索声音">
+    </div>
+    <div class="grid" id="grid" role="tabpanel" aria-labelledby="tab-animal"></div>
+  </main>
+
+  <aside class="rack" aria-label="混音台">
+    <h2>混音台</h2>
+    <p class="eyebrow">正在发声的图层</p>
+    <ul class="layers" id="layers"></ul>
+    <p class="hint" id="rackHint">还没有选中任何声音。点一张卡片即可叠加——雨声配蛙鸣、篝火配狼嚎都行。</p>
+  </aside>
+</div>
+
+<footer>
+  <b>用法</b>：卡片可多选叠加；混音台里的推子调各层音量，⟳ 立即触发一次。空格键播放/暂停，Esc 全部停止。<br>
+  <b>提示</b>：先把主音量调低再播放；长时间佩戴耳机请控制音量。野外播放召唤声可能干扰动物繁殖与觅食，部分地区禁止用于狩猎与鸟类招引，请遵守当地法规。声音为数字合成的模仿，并非真实录音。
+</footer>
+
+<div class="transport">
+  <button class="btn primary" id="btnPlay">▶ 播放</button>
+  <button class="btn ghost danger" id="btnStop">全部停止</button>
+  <div class="knob">
+    <label for="vol">主音量 <span id="volVal" class="mono">55%</span></label>
+    <input type="range" id="vol" min="0" max="100" value="55">
+  </div>
+  <div class="knob">
+    <label for="pitch">音调 <span id="pitchVal" class="mono">±0 半音</span></label>
+    <input type="range" id="pitch" min="-12" max="12" step="1" value="0">
+  </div>
+  <div class="knob">
+    <label for="tempo">呼叫频率 <span id="tempoVal" class="mono">×1.0</span></label>
+    <input type="range" id="tempo" min="30" max="250" step="5" value="100">
+  </div>
+  <div class="spacer"></div>
+  <div class="knob" style="min-width:auto">
+    <label for="timer">睡眠定时</label>
+    <select id="timer">
+      <option value="0">关闭</option>
+      <option value="10">10 分钟</option>
+      <option value="30">30 分钟</option>
+      <option value="60">60 分钟</option>
+      <option value="120">120 分钟</option>
+    </select>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================
+   1. 工具
+   ========================================================= */
+const rnd = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const pick = arr => arr[(Math.random() * arr.length) | 0];
+
+/* =========================================================
+   2. 噪声缓冲（白 / 粉 / 棕）
+   ========================================================= */
+let BUFS = null;
+function buffers(ctx) {
+  if (BUFS && BUFS.sr === ctx.sampleRate) return BUFS;
+  const n = Math.floor(ctx.sampleRate * 3);
+  const mk = () => ctx.createBuffer(1, n, ctx.sampleRate);
+  const white = mk(), pink = mk(), brown = mk();
+  const w = white.getChannelData(0), p = pink.getChannelData(0), b = brown.getChannelData(0);
+  let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0, last = 0;
+  for (let i = 0; i < n; i++) {
+    const v = Math.random() * 2 - 1;
+    w[i] = v;
+    b0 = 0.99886 * b0 + v * 0.0555179;
+    b1 = 0.99332 * b1 + v * 0.0750759;
+    b2 = 0.96900 * b2 + v * 0.1538520;
+    b3 = 0.86650 * b3 + v * 0.3104856;
+    b4 = 0.55000 * b4 + v * 0.5329522;
+    b5 = -0.7616 * b5 - v * 0.0168980;
+    p[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + v * 0.5362) * 0.4;
+    b6 = v * 0.115926;
+    last = (last + 0.02 * v) / 1.02;
+    b[i] = last * 3.2;
+  }
+  BUFS = { sr: ctx.sampleRate, white, pink, brown };
+  return BUFS;
+}
+
+/* =========================================================
+   3. 合成工具箱 —— 每个图层拿到一个 Kit，输出到自己的音量节点
+   ========================================================= */
+class Kit {
+  constructor(ctx, out, params) { this.ctx = ctx; this.out = out; this.params = params; }
+  get pitch() { return this.params.pitch; }
+
+  env(t, dur, gain, attack, release) {
+    const ctx = this.ctx, g = ctx.createGain();
+    const a = Math.max(0.002, attack), r = Math.max(0.02, release);
+    const peak = Math.max(0.0004, gain), body = Math.max(a, dur);
+    g.gain.setValueAtTime(0.0002, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + a);
+    g.gain.setValueAtTime(peak, t + body);
+    g.gain.exponentialRampToValueAtTime(0.0002, t + body + r);
+    g.gain.setValueAtTime(0, t + body + r + 0.004);
+    return { node: g, end: t + body + r + 0.01 };
+  }
+
+  /* 单个振荡音：freq + sweep 折线 + 可选滤波、颤音 */
+  tone(o) {
+    const ctx = this.ctx, t = o.t, dur = o.dur == null ? 0.2 : o.dur;
+    const pit = o.abs ? 1 : this.pitch;
+    const osc = ctx.createOscillator();
+    osc.type = o.type || "sine";
+    osc.frequency.setValueAtTime(Math.max(20, o.freq * pit), t);
+    (o.sweep || []).forEach(([frac, f, mode]) => {
+      const tt = t + frac * dur, ff = Math.max(20, f * pit);
+      if (mode === "step") osc.frequency.setValueAtTime(ff, tt);
+      else osc.frequency.exponentialRampToValueAtTime(ff, tt);
+    });
+    let node = osc;
+    if (o.filter) {
+      const bq = ctx.createBiquadFilter();
+      bq.type = o.filter.type || "lowpass";
+      bq.frequency.setValueAtTime(Math.max(20, o.filter.freq * pit), t);
+      if (o.filter.q != null) bq.Q.value = o.filter.q;
+      if (o.filter.to) bq.frequency.exponentialRampToValueAtTime(Math.max(20, o.filter.to * pit), t + dur);
+      node.connect(bq); node = bq;
+    }
+    const e = this.env(t, dur, o.gain == null ? 0.3 : o.gain, o.attack == null ? 0.008 : o.attack, o.release == null ? 0.06 : o.release);
+    node.connect(e.node); e.node.connect(o.to || this.out);
+    if (o.vibrato) {
+      const lfo = ctx.createOscillator(), lg = ctx.createGain();
+      lfo.frequency.value = o.vibrato.rate;
+      lg.gain.value = o.vibrato.depth * pit;
+      lfo.connect(lg); lg.connect(osc.frequency);
+      lfo.start(t); lfo.stop(e.end);
+    }
+    osc.start(t); osc.stop(e.end);
+    return e.end;
+  }
+
+  /* 一段噪声：颜色 + 串联滤波器（可扫频） */
+  noise(o) {
+    const ctx = this.ctx, t = o.t, dur = o.dur == null ? 0.2 : o.dur;
+    const src = ctx.createBufferSource();
+    src.buffer = buffers(ctx)[o.color || "white"];
+    src.loop = true;
+    if (o.rate) src.playbackRate.value = o.rate;
+    let node = src;
+    (o.filters || []).forEach(f => {
+      const bq = ctx.createBiquadFilter();
+      bq.type = f.type || "bandpass";
+      bq.frequency.setValueAtTime(Math.max(20, f.freq), t);
+      if (f.q != null) bq.Q.value = f.q;
+      if (f.to) bq.frequency.exponentialRampToValueAtTime(Math.max(20, f.to), t + dur);
+      node.connect(bq); node = bq;
+    });
+    const e = this.env(t, dur, o.gain == null ? 0.2 : o.gain, o.attack == null ? 0.006 : o.attack, o.release == null ? 0.08 : o.release);
+    node.connect(e.node); e.node.connect(o.to || this.out);
+    src.start(t, Math.random() * 2); src.stop(e.end);
+    return e.end;
+  }
+
+  /* 持续噪声床，返回可停止的句柄 */
+  loopNoise(o) {
+    const ctx = this.ctx, t = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = buffers(ctx)[o.color || "white"];
+    src.loop = true;
+    if (o.rate) src.playbackRate.value = o.rate;
+    let node = src;
+    const filters = [];
+    (o.filters || []).forEach(f => {
+      const bq = ctx.createBiquadFilter();
+      bq.type = f.type || "lowpass";
+      bq.frequency.value = Math.max(20, f.freq);
+      if (f.q != null) bq.Q.value = f.q;
+      node.connect(bq); node = bq; filters.push(bq);
+    });
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0002, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0004, o.gain == null ? 0.2 : o.gain), t + (o.fade || 1.5));
+    node.connect(g); g.connect(o.to || this.out);
+    src.start(t, Math.random() * 2);
+    const extra = [];
+    return {
+      src, gain: g, filters, extra,
+      stop(when) {
+        const ct = Math.max(when || 0, ctx.currentTime);
+        g.gain.cancelScheduledValues(ct);
+        g.gain.setValueAtTime(Math.max(0.0004, g.gain.value), ct);
+        g.gain.exponentialRampToValueAtTime(0.0002, ct + 0.6);
+        try { src.stop(ct + 0.7); } catch (e) { /* 已停止 */ }
+        extra.forEach(n => { try { n.stop(ct + 0.7); } catch (e) { /* 已停止 */ } });
+      }
+    };
+  }
+
+  /* 把一个低频振荡器接到某个 AudioParam 上（记得放进 bed.extra） */
+  lfo(rate, depth, param, type) {
+    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type || "sine"; o.frequency.value = rate; g.gain.value = depth;
+    o.connect(g); g.connect(param); o.start();
+    return o;
+  }
+}
+
+/* =========================================================
+   4. 声音库
+   voice = { id, name, latin, emoji, band, note, tags,
+             interval:[min,max] 秒,      // 重复触发的间隔
+             call(kit, t, state),        // 一次发声
+             bed(kit) -> handle }        // 持续背景层
+   ========================================================= */
+const ANIMALS = [
+  {
+    id: "sparrow", name: "麻雀", latin: "Passer montanus", emoji: "🐦", band: "3–5 kHz",
+    note: "急促的“唧唧”串音，最容易引来同伴围观的日常鸟鸣。", tags: "鸟 麻雀 chirp 清晨",
+    interval: [0.7, 2.2],
+    call(k, t) {
+      const n = 2 + ((Math.random() * 3) | 0);
+      for (let i = 0; i < n; i++) {
+        const s = t + i * rnd(0.07, 0.13), f = rnd(3100, 4300);
+        k.tone({ t: s, dur: 0.055, type: "sine", freq: f * 0.8, sweep: [[0.35, f * 1.25], [1, f * 0.85]], gain: 0.3, attack: 0.005, release: 0.035 });
+        k.tone({ t: s, dur: 0.05, type: "triangle", freq: f * 1.6, sweep: [[1, f * 1.9]], gain: 0.05, attack: 0.005, release: 0.03 });
+      }
+    }
+  },
+  {
+    id: "cuckoo", name: "布谷鸟", latin: "Cuculus canorus", emoji: "🐧", band: "600–800 Hz",
+    note: "两声一组的“布——谷”，春夏领域宣示，隔着山谷也能传远。", tags: "鸟 杜鹃 布谷 春天",
+    interval: [1.8, 3.6],
+    call(k, t) {
+      k.tone({ t, dur: 0.19, type: "sine", freq: 780, sweep: [[1, 740]], gain: 0.28, attack: 0.02, release: 0.09, filter: { type: "lowpass", freq: 2000 } });
+      k.tone({ t, dur: 0.19, type: "triangle", freq: 1560, gain: 0.04, attack: 0.02, release: 0.08 });
+      k.tone({ t: t + 0.28, dur: 0.26, type: "sine", freq: 620, sweep: [[1, 580]], gain: 0.24, attack: 0.02, release: 0.14, filter: { type: "lowpass", freq: 1600 } });
+    }
+  },
+  {
+    id: "cat", name: "猫", latin: "Felis catus", emoji: "🐱", band: "500–900 Hz",
+    note: "带颤音的“喵——”，尾音下滑；家猫对同类叫声最好奇。", tags: "猫 喵 宠物 撸猫",
+    interval: [1.4, 3.4],
+    call(k, t) {
+      const b = rnd(520, 660), d = rnd(0.55, 0.85);
+      k.tone({ t, dur: d, type: "sawtooth", freq: b * 0.78, sweep: [[0.22, b * 1.16], [0.6, b * 1.05], [1, b * 0.7]], gain: 0.13, attack: 0.07, release: 0.22, vibrato: { rate: 21, depth: 13 }, filter: { type: "bandpass", freq: 1150, q: 1.6 } });
+      k.tone({ t, dur: d, type: "sine", freq: b * 0.78, sweep: [[0.22, b * 1.16], [1, b * 0.7]], gain: 0.09, attack: 0.08, release: 0.22 });
+    }
+  },
+  {
+    id: "dog", name: "狗", latin: "Canis familiaris", emoji: "🐶", band: "150–1200 Hz",
+    note: "短促吠叫，一到三声一串——远处的狗通常会回应。", tags: "狗 犬 吠 汪",
+    interval: [1.6, 4.5],
+    call(k, t) {
+      const n = 1 + ((Math.random() * 3) | 0), b = rnd(210, 280);
+      for (let i = 0; i < n; i++) {
+        const s = t + i * rnd(0.24, 0.34);
+        k.noise({ t: s, dur: 0.05, color: "white", filters: [{ type: "bandpass", freq: 900, q: 1.1, to: 500 }], gain: 0.22, attack: 0.003, release: 0.05 });
+        k.tone({ t: s, dur: 0.14, type: "sawtooth", freq: b, sweep: [[1, b * 0.62]], gain: 0.22, attack: 0.004, release: 0.1, filter: { type: "lowpass", freq: 1800, q: 1, to: 650 } });
+      }
+    }
+  },
+  {
+    id: "duck", name: "绿头鸭", latin: "Anas platyrhynchos", emoji: "🦆", band: "300–1500 Hz",
+    note: "母鸭的召唤式“嘎嘎”，湖面上最通用的搭讪语。", tags: "鸭 嘎嘎 水鸟 湖",
+    interval: [1.2, 3.0],
+    call(k, t) {
+      const n = 2 + ((Math.random() * 4) | 0);
+      for (let i = 0; i < n; i++) {
+        const s = t + i * rnd(0.16, 0.24), f = rnd(430, 520) * (1 - i * 0.05);
+        k.tone({ t: s, dur: 0.13, type: "sawtooth", freq: f, sweep: [[1, f * 0.62]], gain: 0.18, attack: 0.004, release: 0.07, filter: { type: "bandpass", freq: 1250, q: 2.2, to: 800 } });
+      }
+    }
+  },
+  {
+    id: "rooster", name: "公鸡", latin: "Gallus gallus domesticus", emoji: "🐓", band: "500–1400 Hz",
+    note: "四段式打鸣，最后一声拖长带颤——邻居家的公鸡会立刻接话。", tags: "鸡 打鸣 农场 清晨",
+    interval: [4, 9],
+    call(k, t) {
+      const F = { type: "bandpass", freq: 1500, q: 1.2 };
+      k.tone({ t, dur: 0.20, type: "sawtooth", freq: 880, sweep: [[1, 950]], gain: 0.15, attack: 0.02, release: 0.05, filter: F });
+      k.tone({ t: t + 0.26, dur: 0.13, type: "sawtooth", freq: 1150, gain: 0.15, attack: 0.015, release: 0.04, filter: F });
+      k.tone({ t: t + 0.42, dur: 0.16, type: "sawtooth", freq: 1000, gain: 0.14, attack: 0.015, release: 0.05, filter: F });
+      k.tone({ t: t + 0.62, dur: 0.62, type: "sawtooth", freq: 820, sweep: [[0.3, 760], [1, 620]], gain: 0.15, attack: 0.03, release: 0.2, vibrato: { rate: 17, depth: 26 }, filter: { type: "bandpass", freq: 1300, q: 1.4 } });
+    }
+  },
+  {
+    id: "owl", name: "灰林鸮", latin: "Strix aluco", emoji: "🦉", band: "300–450 Hz",
+    note: "柔软的低频“呼——呼”，夜里两三声一组。", tags: "猫头鹰 鸮 夜 hoot",
+    interval: [4, 10],
+    call(k, t) {
+      const b = rnd(320, 370);
+      k.tone({ t, dur: 0.42, type: "sine", freq: b, sweep: [[0.3, b * 1.05], [1, b * 0.93]], gain: 0.26, attack: 0.09, release: 0.2, vibrato: { rate: 6, depth: 4 } });
+      k.tone({ t, dur: 0.42, type: "triangle", freq: b * 2, gain: 0.03, attack: 0.1, release: 0.2 });
+      k.tone({ t: t + 0.85, dur: 0.55, type: "sine", freq: b * 0.96, sweep: [[0.25, b], [1, b * 0.88]], gain: 0.22, attack: 0.12, release: 0.28, vibrato: { rate: 7, depth: 5 } });
+    }
+  },
+  {
+    id: "wolf", name: "狼", latin: "Canis lupus", emoji: "🐺", band: "250–600 Hz",
+    note: "长嚎：先上扬，再缓缓滑落，可传数公里。", tags: "狼 嚎叫 howl 夜",
+    interval: [7, 16],
+    call(k, t) {
+      const b = rnd(340, 420), d = rnd(2.0, 2.8);
+      k.tone({ t, dur: d, type: "sawtooth", freq: b * 0.72, sweep: [[0.18, b * 1.25], [0.55, b * 1.18], [1, b * 0.8]], gain: 0.11, attack: 0.28, release: 0.5, vibrato: { rate: 5.5, depth: 7 }, filter: { type: "lowpass", freq: 1500, q: 1.2, to: 900 } });
+      k.tone({ t, dur: d, type: "sine", freq: b * 0.72, sweep: [[0.18, b * 1.25], [1, b * 0.8]], gain: 0.12, attack: 0.3, release: 0.5 });
+    }
+  },
+  {
+    id: "cricket", name: "蟋蟀", latin: "Gryllus campestris", emoji: "🦗", band: "4–5 kHz",
+    note: "四五个脉冲一组的高频摩擦声，气温越高节奏越快。", tags: "蟋蟀 虫鸣 夏夜 促织",
+    interval: [0.5, 1.1],
+    call(k, t) {
+      const f = rnd(4300, 4900), n = 3 + ((Math.random() * 3) | 0);
+      for (let i = 0; i < n; i++) {
+        k.tone({ t: t + i * 0.033, dur: 0.017, type: "sine", freq: f, gain: 0.16, attack: 0.004, release: 0.014 });
+        k.tone({ t: t + i * 0.033, dur: 0.017, type: "triangle", freq: f * 2, gain: 0.03, attack: 0.004, release: 0.012 });
+      }
+    }
+  },
+  {
+    id: "cicada", name: "蝉", latin: "Cicadidae", emoji: "🪰", band: "4–7 kHz",
+    note: "持续的高频嗡鸣，正午最盛；这是一条常开的背景层。", tags: "蝉 知了 夏天 嗡鸣",
+    bed(k) {
+      const h = k.loopNoise({ color: "white", gain: 0.10, filters: [{ type: "bandpass", freq: 5200, q: 5 }, { type: "bandpass", freq: 5600, q: 3 }] });
+      h.extra.push(k.lfo(58, 0.055, h.gain.gain));
+      h.extra.push(k.lfo(0.13, 1400, h.filters[0].frequency));
+      return h;
+    }
+  },
+  {
+    id: "frog", name: "黑斑蛙", latin: "Pelophylax nigromaculatus", emoji: "🐸", band: "150–700 Hz",
+    note: "一串低频“咕呱”，雨后的稻田最热闹。", tags: "青蛙 蛙鸣 稻田 雨后",
+    interval: [1.0, 2.6],
+    call(k, t) {
+      const b = rnd(165, 205), n = 5 + ((Math.random() * 5) | 0);
+      for (let i = 0; i < n; i++) {
+        k.tone({ t: t + i * 0.045, dur: 0.03, type: "sawtooth", freq: b, gain: 0.16, attack: 0.004, release: 0.02, filter: { type: "bandpass", freq: 520, q: 3.5 } });
+      }
+    }
+  },
+  {
+    id: "bee", name: "蜜蜂", latin: "Apis mellifera", emoji: "🐝", band: "180–500 Hz",
+    note: "翅膀振动的嗡嗡声，忽远忽近地绕着你飞。", tags: "蜜蜂 嗡嗡 昆虫 花园",
+    bed(k) {
+      const h = k.loopNoise({ color: "white", gain: 0.0006, filters: [{ type: "lowpass", freq: 900 }] });
+      const ctx = k.ctx, g = ctx.createGain();
+      g.gain.value = 0.09; g.connect(k.out);
+      const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), lp = ctx.createBiquadFilter();
+      o1.type = "sawtooth"; o1.frequency.value = 205;
+      o2.type = "sawtooth"; o2.frequency.value = 211;
+      lp.type = "lowpass"; lp.frequency.value = 950; lp.Q.value = 2;
+      o1.connect(lp); o2.connect(lp); lp.connect(g);
+      o1.start(); o2.start();
+      h.extra.push(o1, o2);
+      h.extra.push(k.lfo(6.5, 14, o1.frequency));
+      h.extra.push(k.lfo(0.21, 55, o2.frequency));
+      h.extra.push(k.lfo(0.17, 0.055, g.gain));
+      const base = h.stop.bind(h);
+      h.stop = function (when) {
+        const ct = Math.max(when || 0, ctx.currentTime);
+        g.gain.cancelScheduledValues(ct);
+        g.gain.setValueAtTime(Math.max(0.0004, g.gain.value), ct);
+        g.gain.exponentialRampToValueAtTime(0.0002, ct + 0.5);
+        base(when);
+      };
+      return h;
+    }
+  },
+  {
+    id: "dove", name: "珠颈斑鸠", latin: "Streptopelia chinensis", emoji: "🕊️", band: "400–600 Hz",
+    note: "闷闷的“咕——咕咕”，城市屋檐下最常见的鸽形目邻居。", tags: "斑鸠 鸽子 咕咕 屋檐",
+    interval: [3, 7],
+    call(k, t) {
+      const b = rnd(460, 520);
+      k.tone({ t, dur: 0.34, type: "sine", freq: b, sweep: [[0.3, b * 1.08], [1, b * 0.95]], gain: 0.22, attack: 0.08, release: 0.16, filter: { type: "lowpass", freq: 1000 } });
+      k.tone({ t: t + 0.6, dur: 0.22, type: "sine", freq: b * 0.94, gain: 0.17, attack: 0.06, release: 0.12, filter: { type: "lowpass", freq: 900 } });
+      k.tone({ t: t + 0.9, dur: 0.3, type: "sine", freq: b * 0.88, sweep: [[1, b * 0.8]], gain: 0.15, attack: 0.07, release: 0.18, filter: { type: "lowpass", freq: 850 } });
+    }
+  },
+  {
+    id: "gull", name: "银鸥", latin: "Larus argentatus", emoji: "🌊", band: "700–2000 Hz",
+    note: "下滑的尖啸，海边有食物时叫得最凶。", tags: "海鸥 海边 码头 尖叫",
+    interval: [1.6, 4.5],
+    call(k, t) {
+      const n = 2 + ((Math.random() * 3) | 0);
+      for (let i = 0; i < n; i++) {
+        const s = t + i * rnd(0.3, 0.45), f = rnd(1250, 1500) * (1 - i * 0.07);
+        k.tone({ t: s, dur: 0.3, type: "sawtooth", freq: f, sweep: [[0.25, f * 1.05], [1, f * 0.55]], gain: 0.11, attack: 0.02, release: 0.12, vibrato: { rate: 24, depth: 34 }, filter: { type: "bandpass", freq: 1900, q: 1.6, to: 1100 } });
+      }
+    }
+  },
+  {
+    id: "deer", name: "梅花鹿", latin: "Cervus nippon", emoji: "🦌", band: "90–400 Hz",
+    note: "短促的低频哼叫，发情期用来定位同伴。", tags: "鹿 grunt 森林 低频",
+    interval: [3, 8],
+    call(k, t) {
+      const b = rnd(105, 130);
+      k.tone({ t, dur: 0.28, type: "sawtooth", freq: b, sweep: [[0.5, b * 1.1], [1, b * 0.85]], gain: 0.18, attack: 0.02, release: 0.12, filter: { type: "lowpass", freq: 620, q: 3 } });
+      k.noise({ t, dur: 0.28, color: "brown", filters: [{ type: "bandpass", freq: 380, q: 2 }], gain: 0.09, attack: 0.02, release: 0.12 });
+    }
+  },
+  {
+    id: "turkey", name: "野火鸡", latin: "Meleagris gallopavo", emoji: "🦃", band: "400–900 Hz",
+    note: "跳跃着换音高的“咯噜咯噜”，公火鸡的经典应答声。", tags: "火鸡 gobble 打猎 应答",
+    interval: [3, 8],
+    call(k, t) {
+      k.tone({ t, dur: 0.18, type: "sawtooth", freq: 620, sweep: [[1, 700]], gain: 0.13, attack: 0.02, release: 0.05, filter: { type: "bandpass", freq: 1200, q: 1.5 } });
+      let s = t + 0.22;
+      for (let i = 0; i < 11; i++) {
+        const f = i % 2 ? rnd(430, 500) : rnd(680, 780);
+        k.tone({ t: s, dur: 0.045, type: "sawtooth", freq: f, gain: 0.12, attack: 0.005, release: 0.03, filter: { type: "bandpass", freq: 1300, q: 2 } });
+        s += rnd(0.05, 0.075);
+      }
+    }
+  },
+  {
+    id: "mouse", name: "小家鼠", latin: "Mus musculus", emoji: "🐭", band: "6–10 kHz",
+    note: "极短的高频吱声——猫和狗通常比人先有反应。", tags: "老鼠 吱吱 高频 逗猫",
+    interval: [0.6, 2.0],
+    call(k, t) {
+      const n = 1 + ((Math.random() * 3) | 0);
+      for (let i = 0; i < n; i++) {
+        const f = rnd(6500, 9000);
+        k.tone({ t: t + i * 0.08, dur: 0.035, type: "sine", freq: f * 0.85, sweep: [[0.4, f * 1.15], [1, f * 0.9]], gain: 0.12, attack: 0.004, release: 0.02 });
+      }
+    }
+  },
+  {
+    id: "goat", name: "山羊", latin: "Capra hircus", emoji: "🐐", band: "300–800 Hz",
+    note: "抖动得像颤音的“咩——”，羊群会齐声回应。", tags: "羊 咩 农场 颤音",
+    interval: [2.5, 6],
+    call(k, t) {
+      const b = rnd(330, 400), d = rnd(0.6, 0.95);
+      k.tone({ t, dur: d, type: "sawtooth", freq: b, sweep: [[0.15, b * 1.06], [1, b * 0.86]], gain: 0.12, attack: 0.04, release: 0.18, vibrato: { rate: 19, depth: 28 }, filter: { type: "bandpass", freq: 950, q: 1.3 } });
+      k.noise({ t, dur: d, color: "white", filters: [{ type: "bandpass", freq: 1800, q: 1 }], gain: 0.02, attack: 0.05, release: 0.15 });
+    }
+  }
+];
+
+const SCENES = [
+  {
+    id: "rain", name: "窗外小雨", emoji: "🌧️", band: "雨幕 + 檐滴",
+    note: "均匀的雨幕，偶尔有落在窗台上的水滴。适合写东西时开着。", tags: "雨 下雨 白噪音 睡眠 专注",
+    interval: [0.05, 0.28],
+    bed(k) {
+      const h = k.loopNoise({ color: "white", gain: 0.16, filters: [{ type: "highpass", freq: 700 }, { type: "lowpass", freq: 7000 }] });
+      h.extra.push(k.lfo(0.08, 900, h.filters[1].frequency));
+      return h;
+    },
+    call(k, t) {
+      k.tone({ t, dur: 0.014, type: "sine", freq: rnd(1600, 4200), abs: true, gain: rnd(0.02, 0.07), attack: 0.002, release: 0.03 });
+    }
+  },
+  {
+    id: "storm", name: "雷暴", emoji: "⛈️", band: "暴雨 + 远雷",
+    note: "密集的雨声压着低频，每隔十几秒滚过一阵雷。", tags: "雷 打雷 暴雨 雷暴 storm",
+    interval: [7, 22],
+    bed(k) {
+      const h = k.loopNoise({ color: "white", gain: 0.22, filters: [{ type: "highpass", freq: 400 }, { type: "lowpass", freq: 9000 }] });
+      const low = k.loopNoise({ color: "brown", gain: 0.12, filters: [{ type: "lowpass", freq: 260 }] });
+      h.extra.push(low.src);
+      h.extra.push(k.lfo(0.05, 1600, h.filters[1].frequency));
+      const base = h.stop.bind(h);
+      h.stop = w => { low.stop(w); base(w); };
+      return h;
+    },
+    call(k, t) {
+      const near = Math.random() < 0.35;
+      if (near) k.noise({ t, dur: 0.12, color: "white", filters: [{ type: "highpass", freq: 1400 }, { type: "lowpass", freq: 7000, to: 1800 }], gain: 0.16, attack: 0.004, release: 0.5 });
+      const d = rnd(2.2, 4.5);
+      k.noise({ t: t + (near ? 0.05 : 0), dur: d, color: "brown", filters: [{ type: "lowpass", freq: near ? 420 : 220, q: 1.4, to: 70 }], gain: near ? 0.5 : 0.3, attack: near ? 0.05 : 0.5, release: 1.6 });
+    }
+  },
+  {
+    id: "ocean", name: "海浪", emoji: "🏖️", band: "涌浪 8 秒周期",
+    note: "一涌一退的浪，周期约八秒，退潮时有细碎的泡沫声。", tags: "海 海浪 沙滩 潮汐 睡眠",
+    bed(k) {
+      const h = k.loopNoise({ color: "pink", gain: 0.03, filters: [{ type: "lowpass", freq: 700, q: 0.7 }] });
+      h.extra.push(k.lfo(0.12, 0.16, h.gain.gain));
+      h.extra.push(k.lfo(0.12, 520, h.filters[0].frequency));
+      const foam = k.loopNoise({ color: "white", gain: 0.012, filters: [{ type: "bandpass", freq: 3200, q: 0.8 }] });
+      foam.extra.push(k.lfo(0.12, 0.011, foam.gain.gain));
+      h.extra.push(foam.src, ...foam.extra);
+      const base = h.stop.bind(h);
+      h.stop = w => { foam.stop(w); base(w); };
+      return h;
+    }
+  },
+  {
+    id: "stream", name: "山间溪流", emoji: "💧", band: "水流 + 气泡",
+    note: "浅浅的流水冲过石头，不时冒出一串上扬的气泡。", tags: "溪流 小溪 流水 泉水 冥想",
+    interval: [0.2, 0.9],
+    bed(k) {
+      const h = k.loopNoise({ color: "white", gain: 0.11, filters: [{ type: "bandpass", freq: 1500, q: 0.6 }, { type: "highpass", freq: 500 }] });
+      h.extra.push(k.lfo(0.3, 350, h.filters[0].frequency));
+      return h;
+    },
+    call(k, t) {
+      const f = rnd(600, 1500);
+      k.tone({ t, dur: 0.05, type: "sine", freq: f, abs: true, sweep: [[1, f * 2.1]], gain: rnd(0.02, 0.06), attack: 0.004, release: 0.05 });
+    }
+  },
+  {
+    id: "fire", name: "篝火", emoji: "🔥", band: "低频 + 爆裂",
+    note: "低沉的火焰底噪，木柴不定时地噼啪炸开。", tags: "篝火 火焰 壁炉 露营 木柴",
+    interval: [0.06, 0.5],
+    bed(k) {
+      const h = k.loopNoise({ color: "brown", gain: 0.26, filters: [{ type: "lowpass", freq: 520, q: 0.8 }] });
+      h.extra.push(k.lfo(0.23, 0.08, h.gain.gain));
+      h.extra.push(k.lfo(0.11, 180, h.filters[0].frequency));
+      return h;
+    },
+    call(k, t) {
+      const big = Math.random() < 0.16;
+      k.noise({
+        t, dur: big ? 0.045 : 0.012, color: "white",
+        filters: [{ type: "bandpass", freq: rnd(1800, 4500), q: big ? 1.2 : 2.4 }],
+        gain: big ? rnd(0.16, 0.3) : rnd(0.03, 0.1), attack: 0.002, release: big ? 0.12 : 0.03
+      });
+    }
+  },
+  {
+    id: "wind", name: "旷野的风", emoji: "🌬️", band: "带通噪声漫游",
+    note: "一阵强一阵弱的风，滤波中心随机漫游，像掠过草坡。", tags: "风 呼啸 旷野 草原 白噪音",
+    interval: [2.5, 6],
+    bed(k) {
+      const h = k.loopNoise({ color: "pink", gain: 0.16, filters: [{ type: "bandpass", freq: 500, q: 0.55 }, { type: "lowpass", freq: 2600 }] });
+      h.extra.push(k.lfo(0.07, 0.07, h.gain.gain));
+      return h;
+    },
+    call(k, t, bed) {
+      if (!bed) return;
+      const p = bed.filters[0].frequency;
+      p.cancelScheduledValues(t);
+      p.setValueAtTime(Math.max(60, p.value), t);
+      p.exponentialRampToValueAtTime(rnd(260, 1100), t + rnd(1.5, 3.5));
+    }
+  },
+  {
+    id: "forest", name: "林间清晨", emoji: "🌲", band: "微风 + 晨鸟",
+    note: "树叶的沙沙声打底，鸟鸣此起彼伏，远处偶尔一声布谷。", tags: "森林 清晨 鸟鸣 树林 散步",
+    interval: [0.9, 3.0],
+    bed(k) {
+      const h = k.loopNoise({ color: "pink", gain: 0.075, filters: [{ type: "bandpass", freq: 1800, q: 0.5 }] });
+      h.extra.push(k.lfo(0.09, 0.05, h.gain.gain));
+      h.extra.push(k.lfo(0.06, 700, h.filters[0].frequency));
+      return h;
+    },
+    call(k, t) {
+      const r = Math.random();
+      if (r < 0.12) {
+        k.tone({ t, dur: 0.19, type: "sine", freq: 780, sweep: [[1, 740]], gain: 0.16, attack: 0.02, release: 0.09 });
+        k.tone({ t: t + 0.28, dur: 0.26, type: "sine", freq: 620, gain: 0.14, attack: 0.02, release: 0.14 });
+        return;
+      }
+      const n = 2 + ((Math.random() * 4) | 0), far = rnd(0.5, 1);
+      for (let i = 0; i < n; i++) {
+        const s = t + i * rnd(0.06, 0.16), f = rnd(2600, 4600);
+        k.tone({ t: s, dur: 0.06, type: "sine", freq: f * 0.85, sweep: [[0.4, f * 1.2], [1, f * 0.9]], gain: 0.16 * far, attack: 0.006, release: 0.05 });
+      }
+    }
+  },
+  {
+    id: "night", name: "夏夜田野", emoji: "🌙", band: "虫鸣 + 蛙声",
+    note: "满耳的蟋蟀，偶尔几声蛙鸣和一记远处的鸮叫。", tags: "夜晚 夏夜 虫鸣 蛙 乡下 睡眠",
+    interval: [0.35, 1.1],
+    bed(k) {
+      const h = k.loopNoise({ color: "brown", gain: 0.05, filters: [{ type: "lowpass", freq: 300 }] });
+      const air = k.loopNoise({ color: "white", gain: 0.025, filters: [{ type: "bandpass", freq: 4600, q: 2.5 }] });
+      air.extra.push(k.lfo(43, 0.014, air.gain.gain));
+      h.extra.push(air.src, ...air.extra);
+      const base = h.stop.bind(h);
+      h.stop = w => { air.stop(w); base(w); };
+      return h;
+    },
+    call(k, t) {
+      const r = Math.random();
+      if (r < 0.1) {
+        const b = rnd(170, 200);
+        for (let i = 0; i < 6; i++) k.tone({ t: t + i * 0.045, dur: 0.03, type: "sawtooth", freq: b, gain: 0.11, attack: 0.004, release: 0.02, filter: { type: "bandpass", freq: 520, q: 3.5 } });
+      } else if (r < 0.14) {
+        k.tone({ t, dur: 0.45, type: "sine", freq: 340, sweep: [[1, 320]], gain: 0.11, attack: 0.1, release: 0.22, vibrato: { rate: 6, depth: 4 } });
+      } else {
+        const f = rnd(4200, 5000), g = rnd(0.05, 0.13);
+        for (let i = 0; i < 4; i++) k.tone({ t: t + i * 0.033, dur: 0.017, type: "sine", freq: f, gain: g, attack: 0.004, release: 0.014 });
+      }
+    }
+  },
+  {
+    id: "train", name: "夜行列车", emoji: "🚂", band: "转向架 + 钢轨",
+    note: "车厢的持续轰鸣，加上过接缝时“咔嗒—咔嗒”的两连击。", tags: "火车 列车 铁轨 旅途 白噪音",
+    interval: [1.5, 1.75],
+    bed(k) {
+      const h = k.loopNoise({ color: "brown", gain: 0.24, filters: [{ type: "lowpass", freq: 320, q: 1.1 }] });
+      const hiss = k.loopNoise({ color: "white", gain: 0.02, filters: [{ type: "bandpass", freq: 2600, q: 0.7 }] });
+      h.extra.push(hiss.src);
+      h.extra.push(k.lfo(0.4, 0.05, h.gain.gain));
+      const base = h.stop.bind(h);
+      h.stop = w => { hiss.stop(w); base(w); };
+      return h;
+    },
+    call(k, t) {
+      [0, 0.16, 0.72, 0.88].forEach((off, i) => {
+        k.noise({ t: t + off, dur: 0.03, color: "white", filters: [{ type: "bandpass", freq: i % 2 ? 950 : 1200, q: 1.6 }], gain: 0.11, attack: 0.002, release: 0.06 });
+        k.tone({ t: t + off, dur: 0.05, type: "sine", freq: 90, abs: true, gain: 0.13, attack: 0.003, release: 0.07 });
+      });
+    }
+  },
+  {
+    id: "cafe", name: "咖啡馆", emoji: "☕", band: "人声底噪 + 杯碟",
+    note: "听不清内容的低频交谈，偶尔一声杯碟相碰。", tags: "咖啡馆 人声 学习 专注 café",
+    interval: [1.5, 6],
+    bed(k) {
+      const h = k.loopNoise({ color: "pink", gain: 0.10, filters: [{ type: "bandpass", freq: 450, q: 0.9 }, { type: "lowpass", freq: 1800 }] });
+      h.extra.push(k.lfo(0.9, 0.05, h.gain.gain));
+      h.extra.push(k.lfo(0.27, 160, h.filters[0].frequency));
+      return h;
+    },
+    call(k, t) {
+      if (Math.random() < 0.5) {
+        const f = rnd(2200, 3600);
+        k.tone({ t, dur: 0.05, type: "sine", freq: f, abs: true, gain: 0.07, attack: 0.002, release: 0.35 });
+        k.tone({ t, dur: 0.05, type: "sine", freq: f * 2.7, abs: true, gain: 0.03, attack: 0.002, release: 0.2 });
+      } else {
+        k.noise({ t, dur: 0.06, color: "white", filters: [{ type: "bandpass", freq: rnd(900, 1800), q: 1.2 }], gain: 0.05, attack: 0.01, release: 0.12 });
+      }
+    }
+  },
+  {
+    id: "heart", name: "心跳", emoji: "🫀", band: "约 60 BPM",
+    note: "双音节的“咚—哒”，宝宝和焦虑的人都吃这一套。", tags: "心跳 安抚 婴儿 助眠 heartbeat",
+    interval: [0.95, 1.05],
+    call(k, t) {
+      k.tone({ t, dur: 0.09, type: "sine", freq: 58, abs: true, sweep: [[1, 40]], gain: 0.55, attack: 0.008, release: 0.12 });
+      k.tone({ t: t + 0.26, dur: 0.07, type: "sine", freq: 48, abs: true, sweep: [[1, 34]], gain: 0.38, attack: 0.008, release: 0.14 });
+    }
+  },
+  {
+    id: "brown", name: "棕噪音", emoji: "🎚️", band: "−6 dB/oct",
+    note: "比白噪音低沉厚实，掩盖环境杂音而不刺耳。", tags: "噪音 白噪音 棕噪音 助眠 掩蔽",
+    bed(k) { return k.loopNoise({ color: "brown", gain: 0.3, filters: [{ type: "lowpass", freq: 1400 }] }); }
+  },
+  {
+    id: "pink", name: "粉噪音", emoji: "🔉", band: "−3 dB/oct",
+    note: "各频段能量均衡的经典助眠噪声，接近瀑布的声音。", tags: "噪音 粉噪音 助眠 专注 掩蔽",
+    bed(k) { return k.loopNoise({ color: "pink", gain: 0.13, filters: [{ type: "lowpass", freq: 9000 }] }); }
+  }
+];
+
+ANIMALS.forEach(v => v.kind = "animal");
+SCENES.forEach(v => { v.kind = "scene"; if (!v.latin) v.latin = ""; });
+const ALL = ANIMALS.concat(SCENES);
+const byId = id => ALL.find(v => v.id === id);
+
+/* =========================================================
+   5. 音频引擎
+   ========================================================= */
+const Engine = {
+  ctx: null, master: null, comp: null, analyser: null,
+  params: { pitch: 1, tempo: 1, volume: 0.55 },
+  active: new Map(),
+  running: false,
+  timerId: null, timerEnd: 0,
+
+  init() {
+    if (this.ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = this.params.volume;
+    this.comp = this.ctx.createDynamicsCompressor();
+    this.comp.threshold.value = -14; this.comp.ratio.value = 6; this.comp.release.value = 0.25;
+    this.analyser = this.ctx.createAnalyser();
+    this.analyser.fftSize = 2048;
+    this.analyser.smoothingTimeConstant = 0.72;
+    this.master.connect(this.comp); this.comp.connect(this.analyser);
+    this.analyser.connect(this.ctx.destination);
+    buffers(this.ctx);
+  },
+
+  async start() {
+    this.init();
+    if (this.ctx.state === "suspended") await this.ctx.resume();
+    this.running = true;
+    this.master.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.master.gain.setTargetAtTime(this.params.volume, this.ctx.currentTime, 0.05);
+    for (const inst of this.active.values()) this.spinUp(inst);
+    if (!this._tick) this._tick = setInterval(() => this.schedule(), 110);
+  },
+
+  pause() {
+    this.running = false;
+    for (const inst of this.active.values()) this.spinDown(inst);
+  },
+
+  spinUp(inst) {
+    if (!this.running) return;
+    if (inst.voice.bed && !inst.bed) inst.bed = inst.voice.bed(inst.kit);
+    if (inst.voice.call && inst.next === 0) inst.next = this.ctx.currentTime + 0.12;
+  },
+
+  spinDown(inst) {
+    if (inst.bed) { inst.bed.stop(this.ctx.currentTime); inst.bed = null; }
+    inst.next = 0;
+  },
+
+  add(id) {
+    this.init();
+    if (this.active.has(id)) return;
+    const voice = byId(id);
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.8;
+    gain.connect(this.master);
+    const inst = { id, voice, gain, kit: new Kit(this.ctx, gain, this.params), bed: null, next: 0, volume: 0.8 };
+    this.active.set(id, inst);
+    this.spinUp(inst);
+    return inst;
+  },
+
+  remove(id) {
+    const inst = this.active.get(id);
+    if (!inst) return;
+    this.spinDown(inst);
+    const t = this.ctx.currentTime;
+    inst.gain.gain.cancelScheduledValues(t);
+    inst.gain.gain.setTargetAtTime(0, t, 0.12);
+    setTimeout(() => { try { inst.gain.disconnect(); } catch (e) { /* 已断开 */ } }, 1200);
+    this.active.delete(id);
+  },
+
+  clear() { Array.from(this.active.keys()).forEach(id => this.remove(id)); },
+
+  setVolume(v) {
+    this.params.volume = v;
+    if (this.ctx && this.running) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
+    else if (this.ctx) this.master.gain.value = v;
+  },
+
+  setLayerVolume(id, v) {
+    const inst = this.active.get(id);
+    if (!inst) return;
+    inst.volume = v;
+    inst.gain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
+  },
+
+  trigger(id) {
+    const inst = this.active.get(id);
+    if (!inst || !inst.voice.call) return;
+    try { inst.voice.call(inst.kit, this.ctx.currentTime + 0.05, inst.bed); } catch (e) { console.warn(e); }
+  },
+
+  schedule() {
+    if (!this.running || !this.ctx) return;
+    const now = this.ctx.currentTime, ahead = now + 0.45;
+    for (const inst of this.active.values()) {
+      const v = inst.voice;
+      if (!v.call || !v.interval) continue;
+      if (inst.next < now - 1) inst.next = now + 0.05;
+      let guard = 0;
+      while (inst.next < ahead && guard++ < 60) {
+        try { v.call(inst.kit, inst.next, inst.bed); } catch (e) { console.warn(e); }
+        inst.next += Math.max(0.02, rnd(v.interval[0], v.interval[1]) / this.params.tempo);
+      }
+    }
+  }
+};
+
+/* =========================================================
+   6. 界面
+   ========================================================= */
+const $ = s => document.querySelector(s);
+const grid = $("#grid"), layersEl = $("#layers"), rackHint = $("#rackHint");
+let tab = "animal", query = "";
+
+const PREF_KEY = "nisheng.prefs.v1";
+function savePrefs() {
+  try {
+    localStorage.setItem(PREF_KEY, JSON.stringify({
+      volume: Engine.params.volume,
+      pitch: +$("#pitch").value,
+      tempo: +$("#tempo").value,
+      layers: Array.from(Engine.active.values()).map(i => ({ id: i.id, v: i.volume }))
+    }));
+  } catch (e) { /* 隐私模式下不可用，忽略 */ }
+}
+function loadPrefs() {
+  try { return JSON.parse(localStorage.getItem(PREF_KEY) || "null"); } catch (e) { return null; }
+}
+
+function cardHTML(v) {
+  const latin = v.latin ? `<span class="latin">${v.latin}</span>` : "";
+  return `<button class="card" data-id="${v.id}" data-kind="${v.kind}" aria-pressed="false">
+      <span class="glyph" aria-hidden="true">${v.emoji}</span>
+      <span>
+        <span class="name">${v.name}</span>${latin}
+        <span class="note">${v.note}</span>
+        <span class="band mono">${v.band}</span>
+      </span>
+    </button>`;
+}
+
+function renderGrid() {
+  const q = query.trim().toLowerCase();
+  const list = ALL.filter(v => {
+    if (q) return (v.name + " " + (v.latin || "") + " " + v.note + " " + (v.tags || "") + " " + v.id).toLowerCase().includes(q);
+    return v.kind === tab;
+  });
+  grid.innerHTML = list.length ? list.map(cardHTML).join("") : `<p class="empty">没有匹配「${query}」的声音。试试「雨」「猫」「睡眠」。</p>`;
+  Array.from(Engine.active.keys()).forEach(id => {
+    const el = grid.querySelector(`.card[data-id="${id}"]`);
+    if (el) el.setAttribute("aria-pressed", "true");
+  });
+  grid.setAttribute("aria-labelledby", q ? "tab-animal" : "tab-" + tab);
+}
+
+function renderRack() {
+  const insts = Array.from(Engine.active.values());
+  rackHint.hidden = insts.length > 0;
+  document.querySelector(".layout").classList.toggle("has-layers", insts.length > 0);
+  layersEl.innerHTML = insts.map(i => {
+    const hue = i.voice.kind === "animal" ? "var(--amber)" : "var(--teal)";
+    const canTrigger = !!i.voice.call;
+    return `<li class="layer" style="--accent-hue:${hue}">
+        <div class="top">
+          <span class="lname"><i>${i.voice.emoji}</i>${i.voice.name}</span>
+          ${canTrigger ? `<button class="icon-btn" data-trigger="${i.id}" title="立即发声一次" aria-label="${i.voice.name}：立即发声一次">⟳</button>` : ""}
+          <button class="icon-btn" data-remove="${i.id}" title="移除图层" aria-label="移除${i.voice.name}">✕</button>
+        </div>
+        <input type="range" min="0" max="100" value="${Math.round(i.volume * 100)}" data-vol="${i.id}" aria-label="${i.voice.name} 音量">
+        <div class="meta mono"><span>${i.voice.kind === "animal" ? "召唤" : "环境"}</span><span>${i.voice.band}</span></div>
+      </li>`;
+  }).join("");
+  $("#stLayers").textContent = insts.length;
+}
+
+function updateStatus() {
+  const live = Engine.running && Engine.active.size > 0;
+  $("#statusBar").classList.toggle("live", live);
+  $("#stStatus").textContent = !Engine.ctx ? "待机"
+    : !Engine.running ? "已暂停"
+      : Engine.active.size ? "发声中" : "就绪 · 请选择声音";
+  $("#stRate").textContent = Engine.ctx ? (Engine.ctx.sampleRate / 1000).toFixed(1) + " kHz" : "—";
+  $("#btnPlay").textContent = Engine.running ? "⏸ 暂停" : "▶ 播放";
+}
+
+async function toggleVoice(id) {
+  const card = grid.querySelector(`.card[data-id="${id}"]`);
+  if (Engine.active.has(id)) {
+    Engine.remove(id);
+    if (card) card.setAttribute("aria-pressed", "false");
+  } else {
+    if (!Engine.running) await Engine.start();
+    Engine.add(id);
+    if (card) card.setAttribute("aria-pressed", "true");
+  }
+  renderRack(); updateStatus(); savePrefs();
+}
+
+grid.addEventListener("click", e => {
+  const card = e.target.closest(".card");
+  if (card) toggleVoice(card.dataset.id);
+});
+
+layersEl.addEventListener("click", e => {
+  const t = e.target.closest("[data-trigger]"), r = e.target.closest("[data-remove]");
+  if (t) { Engine.start().then(() => Engine.trigger(t.dataset.trigger)); updateStatus(); }
+  if (r) toggleVoice(r.dataset.remove);
+});
+layersEl.addEventListener("input", e => {
+  const s = e.target.closest("[data-vol]");
+  if (s) { Engine.setLayerVolume(s.dataset.vol, +s.value / 100); savePrefs(); }
+});
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    tab = btn.id.replace("tab-", "");
+    document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b === btn)));
+    $("#search").value = ""; query = "";
+    renderGrid();
+  });
+});
+$("#search").addEventListener("input", e => { query = e.target.value; renderGrid(); });
+
+$("#btnPlay").addEventListener("click", async () => {
+  if (Engine.running) Engine.pause(); else await Engine.start();
+  updateStatus();
+});
+$("#btnStop").addEventListener("click", () => {
+  Engine.clear(); Engine.pause();
+  grid.querySelectorAll('.card[aria-pressed="true"]').forEach(c => c.setAttribute("aria-pressed", "false"));
+  setTimer(0); $("#timer").value = "0";
+  renderRack(); updateStatus(); savePrefs();
+});
+
+$("#vol").addEventListener("input", e => {
+  const v = +e.target.value / 100;
+  $("#volVal").textContent = e.target.value + "%";
+  Engine.setVolume(v); savePrefs();
+});
+$("#pitch").addEventListener("input", e => {
+  const st = +e.target.value;
+  Engine.params.pitch = Math.pow(2, st / 12);
+  const txt = (st > 0 ? "+" : st < 0 ? "" : "±") + st;
+  $("#pitchVal").textContent = txt + " 半音";
+  $("#stPitch").textContent = txt;
+  savePrefs();
+});
+$("#tempo").addEventListener("input", e => {
+  Engine.params.tempo = +e.target.value / 100;
+  $("#tempoVal").textContent = "×" + Engine.params.tempo.toFixed(1);
+  savePrefs();
+});
+
+/* 睡眠定时：结束前 20 秒淡出 */
+function setTimer(minutes) {
+  clearInterval(Engine.timerId); Engine.timerId = null;
+  $("#stTimerWrap").hidden = !minutes;
+  if (!minutes) return;
+  Engine.timerEnd = Date.now() + minutes * 60000;
+  Engine.timerId = setInterval(() => {
+    const left = Engine.timerEnd - Date.now();
+    if (left <= 0) {
+      clearInterval(Engine.timerId); Engine.timerId = null;
+      $("#stTimerWrap").hidden = true; $("#timer").value = "0";
+      Engine.pause(); updateStatus();
+      return;
+    }
+    if (left < 20000 && Engine.ctx && Engine.running) {
+      Engine.master.gain.setTargetAtTime(0.0001, Engine.ctx.currentTime, 6);
+    }
+    const m = Math.floor(left / 60000), s = Math.floor(left % 60000 / 1000);
+    $("#stTimer").textContent = m + ":" + String(s).padStart(2, "0");
+  }, 500);
+}
+$("#timer").addEventListener("change", e => setTimer(+e.target.value));
+
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input, select, textarea")) return;
+  if (e.code === "Space") { e.preventDefault(); $("#btnPlay").click(); }
+  if (e.key === "Escape") $("#btnStop").click();
+});
+
+/* =========================================================
+   7. 声谱瀑布图
+   ========================================================= */
+const scope = $("#scope"), sctx = scope.getContext("2d");
+let ramp = [], dpr = 1, THEME = null;
+
+function themeColors() {
+  const dark = document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  return dark
+    ? { bg: [10, 16, 14], stops: [[10, 16, 14], [26, 62, 58], [72, 179, 162], [229, 161, 60], [255, 244, 224]] }
+    : { bg: [237, 241, 234], stops: [[237, 241, 234], [193, 214, 204], [28, 122, 108], [178, 106, 11], [40, 26, 8]] };
+}
+function buildRamp() {
+  THEME = themeColors();
+  const stops = THEME.stops;
+  ramp = [];
+  for (let i = 0; i < 256; i++) {
+    const x = i / 255 * (stops.length - 1), i0 = Math.floor(x), i1 = Math.min(stops.length - 1, i0 + 1), f = x - i0;
+    const c = [0, 1, 2].map(j => Math.round(stops[i0][j] + (stops[i1][j] - stops[i0][j]) * f));
+    ramp.push(`rgb(${c[0]},${c[1]},${c[2]})`);
+  }
+}
+function resizeScope() {
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  scope.width = Math.max(1, Math.floor(scope.clientWidth * dpr));
+  scope.height = Math.max(1, Math.floor(scope.clientHeight * dpr));
+  const bg = THEME.bg;
+  sctx.fillStyle = `rgb(${bg[0]},${bg[1]},${bg[2]})`;
+  sctx.fillRect(0, 0, scope.width, scope.height);
+}
+window.addEventListener("resize", resizeScope);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { buildRamp(); resizeScope(); });
+
+const STEP = 2;
+let freqData = null;
+function draw() {
+  requestAnimationFrame(draw);
+  const w = scope.width, h = scope.height;
+  if (!w || !h) return;
+  sctx.drawImage(scope, -STEP, 0);
+  const bg = THEME.bg;
+  if (!Engine.analyser || !Engine.running) {
+    sctx.fillStyle = `rgb(${bg[0]},${bg[1]},${bg[2]})`;
+    sctx.fillRect(w - STEP, 0, STEP, h);
+    return;
+  }
+  const n = Engine.analyser.frequencyBinCount;
+  if (!freqData || freqData.length !== n) freqData = new Uint8Array(n);
+  Engine.analyser.getByteFrequencyData(freqData);
+  const nyq = Engine.ctx.sampleRate / 2, minF = 60, maxF = 12000;
+  const lmin = Math.log(minF), lmax = Math.log(maxF);
+  for (let y = 0; y < h; y++) {
+    const f = Math.exp(lmin + (lmax - lmin) * (1 - y / h));
+    const bin = Math.min(n - 1, Math.round(f / nyq * n));
+    sctx.fillStyle = ramp[freqData[bin]] || ramp[0];
+    sctx.fillRect(w - STEP, y, STEP, 1);
+  }
+}
+
+/* =========================================================
+   8. 启动
+   ========================================================= */
+(function boot() {
+  buildRamp();
+  const p = loadPrefs();
+  if (p) {
+    if (typeof p.volume === "number") { $("#vol").value = Math.round(p.volume * 100); $("#vol").dispatchEvent(new Event("input")); }
+    if (typeof p.pitch === "number") { $("#pitch").value = p.pitch; $("#pitch").dispatchEvent(new Event("input")); }
+    if (typeof p.tempo === "number") { $("#tempo").value = p.tempo; $("#tempo").dispatchEvent(new Event("input")); }
+    /* 恢复上次的混音：此时音频上下文是挂起的，按下播放前不会发声 */
+    (p.layers || []).forEach(l => {
+      if (!byId(l.id)) return;
+      const inst = Engine.add(l.id);
+      if (inst && typeof l.v === "number") { inst.volume = l.v; inst.gain.gain.value = l.v; }
+    });
+  }
+  renderGrid();
+  renderRack();
+  requestAnimationFrame(() => { resizeScope(); draw(); });
+  updateStatus();
+})();
+</script>
+</body>
+</html>
