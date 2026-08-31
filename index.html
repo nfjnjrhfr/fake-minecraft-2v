@@ -280,13 +280,15 @@ class Kit {
   constructor(ctx, out, params) { this.ctx = ctx; this.out = out; this.params = params; }
   get pitch() { return this.params.pitch; }
 
-  env(t, dur, gain, attack, release) {
+  /* sustain < 1 时，音量在音体内一路衰减到 peak*sustain，而不是平直保持 */
+  env(t, dur, gain, attack, release, sustain) {
     const ctx = this.ctx, g = ctx.createGain();
     const a = Math.max(0.002, attack), r = Math.max(0.02, release);
     const peak = Math.max(0.0004, gain), body = Math.max(a, dur);
     g.gain.setValueAtTime(0.0002, t);
     g.gain.exponentialRampToValueAtTime(peak, t + a);
-    g.gain.setValueAtTime(peak, t + body);
+    if (sustain != null && sustain < 1) g.gain.exponentialRampToValueAtTime(Math.max(0.0004, peak * sustain), t + body);
+    else g.gain.setValueAtTime(peak, t + body);
     g.gain.exponentialRampToValueAtTime(0.0002, t + body + r);
     g.gain.setValueAtTime(0, t + body + r + 0.004);
     return { node: g, end: t + body + r + 0.01 };
@@ -313,7 +315,7 @@ class Kit {
       if (o.filter.to) bq.frequency.exponentialRampToValueAtTime(Math.max(20, o.filter.to * pit), t + dur);
       node.connect(bq); node = bq;
     }
-    const e = this.env(t, dur, o.gain == null ? 0.3 : o.gain, o.attack == null ? 0.008 : o.attack, o.release == null ? 0.06 : o.release);
+    const e = this.env(t, dur, o.gain == null ? 0.3 : o.gain, o.attack == null ? 0.008 : o.attack, o.release == null ? 0.06 : o.release, o.sustain);
     node.connect(e.node); e.node.connect(o.to || this.out);
     if (o.vibrato) {
       const lfo = ctx.createOscillator(), lg = ctx.createGain();
@@ -342,7 +344,7 @@ class Kit {
       if (f.to) bq.frequency.exponentialRampToValueAtTime(Math.max(20, f.to), t + dur);
       node.connect(bq); node = bq;
     });
-    const e = this.env(t, dur, o.gain == null ? 0.2 : o.gain, o.attack == null ? 0.006 : o.attack, o.release == null ? 0.08 : o.release);
+    const e = this.env(t, dur, o.gain == null ? 0.2 : o.gain, o.attack == null ? 0.006 : o.attack, o.release == null ? 0.08 : o.release, o.sustain);
     node.connect(e.node); e.node.connect(o.to || this.out);
     src.start(t, Math.random() * 2); src.stop(e.end);
     return e.end;
@@ -612,24 +614,31 @@ const ANIMALS = [
     }
   },
   {
-    id: "cow", name: "黄牛", latin: "Bos taurus", emoji: "🐄", band: "100–1000 Hz",
-    note: "拖长的“哞——”，母牛呼唤小牛的叫法；牛群听见通常会抬头张望并应声。", tags: "牛 奶牛 哞 moo 牧场 农场 牛群",
+    id: "cow", name: "黄牛", latin: "Bos taurus", emoji: "🐄", band: "160–1800 Hz",
+    note: "拖长的“哞——”：缓缓涨起、尾音长长滑落；母牛呼唤小牛的叫法，牛群听见会抬头应声。", tags: "牛 奶牛 哞 moo 牧场 农场 牛群",
     interval: [4, 9],
     call(k, t) {
       const moo = (t0, f0, dur, vol) => {
-        /* 起音的鼻息 */
-        k.noise({ t: t0, dur: 0.09, color: "white", filters: [{ type: "bandpass", freq: 900, q: 0.8, to: 500 }], gain: 0.05 * vol, attack: 0.02, release: 0.09 });
-        const sweep = [[0.12, f0 * 1.14], [0.45, f0 * 1.05], [1, f0 * 0.74]];
-        /* 两个共振峰 + 基频本体，构成牛叫特有的厚而闷的音色 */
-        k.tone({ t: t0, dur, type: "sawtooth", freq: f0, sweep, gain: 0.13 * vol, attack: 0.09, release: 0.3, vibrato: { rate: 6.5, depth: 3 }, filter: { type: "bandpass", freq: 470, q: 2.2 } });
-        k.tone({ t: t0, dur, type: "sawtooth", freq: f0, sweep, gain: 0.05 * vol, attack: 0.12, release: 0.28, vibrato: { rate: 6.5, depth: 3 }, filter: { type: "bandpass", freq: 1020, q: 3 } });
-        k.tone({ t: t0, dur, type: "sine", freq: f0, sweep, gain: 0.10 * vol, attack: 0.1, release: 0.32 });
-        /* 收音的呼气 */
-        k.noise({ t: t0 + dur * 0.82, dur: 0.22, color: "pink", filters: [{ type: "bandpass", freq: 700, q: 1, to: 320 }], gain: 0.045 * vol, attack: 0.06, release: 0.3 });
+        /* 音高弧线：先涨到 1.22 倍稳住，最后一路滑落——牛叫的“拖腔”全在这条线上 */
+        const sweep = [[0.14, f0 * 1.22], [0.34, f0 * 1.17], [0.74, f0 * 1.02], [1, f0 * 0.78]];
+        const vib = { rate: 5.2, depth: f0 * 0.022 };
+        /* 起音：喉部气流，很轻，只为让音头不是“啪”地出现 */
+        k.noise({ t: t0, dur: 0.16, color: "pink", filters: [{ type: "lowpass", freq: 700, q: 0.7, to: 380 }], gain: 0.018 * vol, attack: 0.07, release: 0.14 });
+        /* 音体：三角波补基频厚度，压掉高次谐波，别让它盖住共振峰 */
+        k.tone({ t: t0, dur, type: "triangle", freq: f0, sweep, gain: 0.055 * vol, attack: 0.24, release: 0.6, sustain: 0.5, vibrato: vib, filter: { type: "lowpass", freq: 900, q: 0.7 } });
+        /* 第一共振峰 ~620 Hz：“哞”的鼻腔音，牛味主要来自这一层。
+           带通会把锯齿波在该频点的谐波压掉一个数量级，所以增益要给得比音体大得多。 */
+        k.tone({ t: t0, dur, type: "sawtooth", freq: f0, sweep, gain: 0.27 * vol, attack: 0.28, release: 0.55, sustain: 0.4, vibrato: vib, filter: { type: "bandpass", freq: 620, q: 1.2 } });
+        /* 第二共振峰 ~1.15 kHz：把声音“张开”，避免闷在低频 */
+        k.tone({ t: t0, dur, type: "sawtooth", freq: f0, sweep, gain: 0.19 * vol, attack: 0.32, release: 0.5, sustain: 0.32, vibrato: vib, filter: { type: "bandpass", freq: 1150, q: 1.6 } });
+        /* 第三共振峰 ~2.1 kHz：一点明亮度，隔着一段距离仍听得出是牛 */
+        k.tone({ t: t0, dur, type: "sawtooth", freq: f0, sweep, gain: 0.085 * vol, attack: 0.34, release: 0.45, sustain: 0.25, filter: { type: "bandpass", freq: 2100, q: 2.2 } });
+        /* 收尾的呼气 */
+        k.noise({ t: t0 + dur * 0.9, dur: 0.2, color: "pink", filters: [{ type: "lowpass", freq: 850, q: 0.7, to: 380 }], gain: 0.02 * vol, attack: 0.1, release: 0.4 });
       };
-      const f0 = rnd(112, 148), d = rnd(1.1, 1.8);
+      const f0 = rnd(152, 188), d = rnd(1.3, 2.0);
       moo(t, f0, d, 1);
-      if (Math.random() < 0.35) moo(t + d + rnd(0.5, 1.1), f0 * rnd(0.94, 1.06), d * rnd(0.6, 0.9), 0.75);
+      if (Math.random() < 0.3) moo(t + d + rnd(0.7, 1.3), f0 * rnd(0.95, 1.05), d * rnd(0.6, 0.85), 0.7);
     }
   },
   {
