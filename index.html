@@ -612,6 +612,27 @@ const ANIMALS = [
     }
   },
   {
+    id: "cow", name: "黄牛", latin: "Bos taurus", emoji: "🐄", band: "100–1000 Hz",
+    note: "拖长的“哞——”，母牛呼唤小牛的叫法；牛群听见通常会抬头张望并应声。", tags: "牛 奶牛 哞 moo 牧场 农场 牛群",
+    interval: [4, 9],
+    call(k, t) {
+      const moo = (t0, f0, dur, vol) => {
+        /* 起音的鼻息 */
+        k.noise({ t: t0, dur: 0.09, color: "white", filters: [{ type: "bandpass", freq: 900, q: 0.8, to: 500 }], gain: 0.05 * vol, attack: 0.02, release: 0.09 });
+        const sweep = [[0.12, f0 * 1.14], [0.45, f0 * 1.05], [1, f0 * 0.74]];
+        /* 两个共振峰 + 基频本体，构成牛叫特有的厚而闷的音色 */
+        k.tone({ t: t0, dur, type: "sawtooth", freq: f0, sweep, gain: 0.13 * vol, attack: 0.09, release: 0.3, vibrato: { rate: 6.5, depth: 3 }, filter: { type: "bandpass", freq: 470, q: 2.2 } });
+        k.tone({ t: t0, dur, type: "sawtooth", freq: f0, sweep, gain: 0.05 * vol, attack: 0.12, release: 0.28, vibrato: { rate: 6.5, depth: 3 }, filter: { type: "bandpass", freq: 1020, q: 3 } });
+        k.tone({ t: t0, dur, type: "sine", freq: f0, sweep, gain: 0.10 * vol, attack: 0.1, release: 0.32 });
+        /* 收音的呼气 */
+        k.noise({ t: t0 + dur * 0.82, dur: 0.22, color: "pink", filters: [{ type: "bandpass", freq: 700, q: 1, to: 320 }], gain: 0.045 * vol, attack: 0.06, release: 0.3 });
+      };
+      const f0 = rnd(112, 148), d = rnd(1.1, 1.8);
+      moo(t, f0, d, 1);
+      if (Math.random() < 0.35) moo(t + d + rnd(0.5, 1.1), f0 * rnd(0.94, 1.06), d * rnd(0.6, 0.9), 0.75);
+    }
+  },
+  {
     id: "goat", name: "山羊", latin: "Capra hircus", emoji: "🐐", band: "300–800 Hz",
     note: "抖动得像颤音的“咩——”，羊群会齐声回应。", tags: "羊 咩 农场 颤音",
     interval: [2.5, 6],
