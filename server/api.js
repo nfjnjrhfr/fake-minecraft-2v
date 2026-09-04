@@ -1,4 +1,5 @@
 import { BUILTIN_APPS, CATALOG, SOURCES, catalogFor, findApp, findSource } from './catalog.js';
+import { BrowseError, fetchPage, normalizeUrl } from './browser.js';
 
 export class HttpError extends Error {
   constructor(status, message) {
@@ -36,6 +37,13 @@ export function defaultState() {
     // 各來源作業系統的相容層開關：關閉後該來源的 App 會被暫停，但不會被移除
     runtimes: { ios: true, android: true, harmony: true, windows: false, macos: false, linux: false, web: true },
     installed: [],
+    bookmarks: [
+      { id: 1, title: '範例網頁', url: 'https://example.com/' },
+      { id: 2, title: '維基百科：作業系統', url: 'https://en.wikipedia.org/wiki/Operating_system' },
+      { id: 3, title: 'Hacker News', url: 'https://news.ycombinator.com/' },
+      { id: 4, title: 'MDN：HTTP', url: 'https://developer.mozilla.org/en-US/docs/Web/HTTP' },
+    ],
+    history: [],
     notes: [
       {
         id: 1,
@@ -55,6 +63,8 @@ function ensureShape(db) {
   data.device = { ...base.device, ...(data.device ?? {}) };
   data.runtimes = { ...base.runtimes, ...(data.runtimes ?? {}) };
   data.installed = Array.isArray(data.installed) ? data.installed : [];
+  data.bookmarks = Array.isArray(data.bookmarks) ? data.bookmarks : base.bookmarks;
+  data.history = Array.isArray(data.history) ? data.history : [];
   data.notes = Array.isArray(data.notes) ? data.notes : [];
   return data;
 }
@@ -105,6 +115,8 @@ function snapshot(db) {
     installed: installedApps(db),
     storage: storage(db),
     wallpapers: WALLPAPERS,
+    bookmarks: data.bookmarks,
+    history: data.history,
     notes: [...data.notes].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
   };
 }
@@ -278,6 +290,66 @@ export const routes = [
       data.runtimes[os] = Boolean(body.enabled);
       db.save();
       return { status: 200, body: { state: snapshot(db) } };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/browse',
+    async handler({ db, body }) {
+      const data = ensureShape(db);
+      let page;
+      try {
+        page = await fetchPage(body.url);
+      } catch (err) {
+        if (err instanceof BrowseError) throw new HttpError(err.code === 'blocked' ? 403 : 400, err.message);
+        throw err;
+      }
+      // 同一個網址只留最新一筆，最多 40 筆
+      data.history = [
+        { url: page.url, title: page.title, host: page.host, at: page.fetchedAt },
+        ...data.history.filter((h) => h.url !== page.url),
+      ].slice(0, 40);
+      db.save();
+      return { status: 200, body: { page, history: data.history } };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/bookmarks',
+    handler({ db, body }) {
+      const data = ensureShape(db);
+      let url;
+      try {
+        url = normalizeUrl(body.url).href;
+      } catch (err) {
+        throw new HttpError(400, err.message);
+      }
+      if (data.bookmarks.some((b) => b.url === url)) throw new HttpError(409, '這個網址已經在書籤裡了');
+      const bookmark = db.insert('bookmarks', {
+        title: str(body.title, '書籤名稱', { max: 120, required: false }) || url,
+        url,
+      });
+      return { status: 201, body: { bookmark, bookmarks: data.bookmarks } };
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/bookmarks/:id',
+    handler({ db, params }) {
+      const data = ensureShape(db);
+      const id = Number(params.id);
+      if (!db.remove('bookmarks', (b) => b.id === id)) throw new HttpError(404, '找不到這個書籤');
+      return { status: 200, body: { bookmarks: data.bookmarks } };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/history/clear',
+    handler({ db }) {
+      const data = ensureShape(db);
+      data.history = [];
+      db.save();
+      return { status: 200, body: { history: [] } };
     },
   },
   {

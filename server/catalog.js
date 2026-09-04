@@ -161,10 +161,11 @@ const APPS = {
 
 /** 系統內建 App：永遠已安裝、不可移除 */
 export const BUILTIN_APPS = [
-  { id: 'store', name: '萬象商店', en: 'OmniStore', category: '應用商店', glyph: '🧭', color: '#2f8fff', kind: 'native', size: 0, os: 'tide', dock: 0 },
-  { id: 'notes', name: '備忘錄', en: 'Notes', category: '效率', glyph: '📒', color: '#f6b93b', kind: 'native', size: 0, os: 'tide', dock: 1 },
+  { id: 'store', name: '萬象商店', en: 'OmniStore', category: '應用商店', glyph: '🛍', color: '#5b8cff', kind: 'native', size: 0, os: 'tide', dock: 0 },
+  { id: 'browser', name: '瀏覽器', en: 'OmniWeb', category: '網路', glyph: '🧭', color: '#2f8fff', kind: 'native', size: 0, os: 'tide', dock: 1 },
+  { id: 'notes', name: '備忘錄', en: 'Notes', category: '效率', glyph: '📒', color: '#f6b93b', kind: 'native', size: 0, os: 'tide', dock: 2 },
   { id: 'calculator', name: '計算機', en: 'Calculator', category: '工具', glyph: '🧮', color: '#4b5563', kind: 'native', size: 0, os: 'tide' },
-  { id: 'terminal', name: '終端機', en: 'Terminal', category: '開發', glyph: '⌘', color: '#1f2937', kind: 'native', size: 0, os: 'tide', dock: 2 },
+  { id: 'terminal', name: '終端機', en: 'Terminal', category: '開發', glyph: '⌘', color: '#1f2937', kind: 'native', size: 0, os: 'tide' },
   { id: 'photos', name: '相片', en: 'Photos', category: '媒體', glyph: '🌄', color: '#ec4899', kind: 'native', size: 0, os: 'tide' },
   { id: 'clock', name: '時鐘', en: 'Clock', category: '工具', glyph: '⏰', color: '#111827', kind: 'native', size: 0, os: 'tide' },
   { id: 'settings', name: '設定', en: 'Settings', category: '系統', glyph: '⚙️', color: '#6b7280', kind: 'native', size: 0, os: 'tide', dock: 3 },

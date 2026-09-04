@@ -185,6 +185,218 @@ function storeRow(app, source, ctx, redraw) {
   return row;
 }
 
+/* ============================ 瀏覽器 ============================ */
+const SEARCH_URL = 'https://duckduckgo.com/html/?q=';
+
+/** 網址列輸入 → 要瀏覽的網址；看起來不像網址就丟去搜尋 */
+function toTarget(input) {
+  const raw = input.trim();
+  if (!raw) return '';
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) return raw;
+  if (/^[^\s/]+\.[^\s/]{2,}([/?#].*)?$/.test(raw) || raw.startsWith('localhost')) return raw;
+  return SEARCH_URL + encodeURIComponent(raw);
+}
+
+const browser = {
+  id: 'browser',
+  render(ctx) {
+    const session = (ctx.memo.browser ??= { stack: [], index: -1, page: null });
+
+    const root = el(`<div style="display:flex;flex-direction:column;height:100%">
+      <div style="display:flex;gap:7px;padding:10px 12px;align-items:center;border-bottom:1px solid var(--win-sep);flex:0 0 auto">
+        <button class="nav-btn" data-act="back" title="上一頁">‹</button>
+        <button class="nav-btn" data-act="forward" title="下一頁">›</button>
+        <button class="nav-btn" data-act="reload" title="重新整理">⟳</button>
+        <input class="field" style="flex:1;padding:8px 12px;font-size:13px" placeholder="搜尋或輸入網址"
+               autocapitalize="off" autocomplete="off" spellcheck="false" />
+        <button class="nav-btn" data-act="star" title="加入書籤">☆</button>
+      </div>
+      <div class="app-body" style="flex:1"></div>
+    </div>`);
+    const bar = root.querySelector('input');
+    const view = root.querySelector('.app-body');
+    const btn = (act) => root.querySelector(`[data-act="${act}"]`);
+
+    const syncChrome = () => {
+      btn('back').disabled = session.index <= 0;
+      btn('forward').disabled = session.index >= session.stack.length - 1;
+      btn('reload').disabled = !session.page;
+      const marked = session.page && ctx.state.bookmarks.some((b) => b.url === session.page.url);
+      btn('star').textContent = marked ? '★' : '☆';
+      btn('star').disabled = !session.page;
+      btn('star').style.color = marked ? '#f6b93b' : '';
+    };
+
+    const startPage = () => {
+      view.replaceChildren();
+      view.append(el(`<div class="hero" style="margin:14px">
+        <h3>🧭 OmniWeb</h3>
+        <p>裝置本身沒有排版引擎：網頁由系統在伺服端取回、抽成可閱讀的區塊後，
+           再交給 OmniUI 畫出來。內文裡的連結一樣可以點。</p>
+      </div>`));
+
+      view.append(el('<div class="section-title">書籤</div>'));
+      const marks = el('<div class="list"></div>');
+      if (!ctx.state.bookmarks.length) marks.append(el('<p class="section-title">還沒有書籤</p>'));
+      ctx.state.bookmarks.forEach((b) => {
+        const row = el(`<div class="list-item">
+          <span style="font-size:17px;width:24px;text-align:center">🔖</span>
+          <div class="grow"><div class="t">${esc(b.title)}</div><div class="d">${esc(b.url)}</div></div>
+        </div>`);
+        row.querySelector('.grow').style.cursor = 'pointer';
+        row.querySelector('.grow').addEventListener('click', () => go(b.url));
+        const del = el('<button class="pill-btn ghost">移除</button>');
+        del.addEventListener('click', async () => {
+          const res = await api(`/api/bookmarks/${b.id}`, { method: 'DELETE' });
+          ctx.setState({ ...ctx.state, bookmarks: res.bookmarks });
+          startPage();
+        });
+        row.append(del);
+        marks.append(row);
+      });
+      view.append(marks);
+
+      const head = el('<div class="section-title" style="display:flex;align-items:center">最近瀏覽</div>');
+      if (ctx.state.history.length) {
+        const clear = el('<button class="pill-btn ghost" style="margin-left:auto;padding:3px 10px;font-size:11.5px">清除</button>');
+        clear.addEventListener('click', async () => {
+          const res = await api('/api/history/clear', { method: 'POST' });
+          ctx.setState({ ...ctx.state, history: res.history });
+          startPage();
+        });
+        head.append(clear);
+      }
+      view.append(head);
+
+      if (!ctx.state.history.length) {
+        view.append(el('<p class="section-title">還沒有瀏覽紀錄</p>'));
+        return;
+      }
+      const hist = el('<div class="list"></div>');
+      ctx.state.history.slice(0, 12).forEach((h) => {
+        const row = el(`<button class="list-item">
+          <span style="font-size:15px;width:24px;text-align:center">🕘</span>
+          <div class="grow"><div class="t">${esc(h.title)}</div><div class="d">${esc(h.host ?? h.url)}</div></div>
+          <span style="opacity:.4">›</span></button>`);
+        row.addEventListener('click', () => go(h.url));
+        hist.append(row);
+      });
+      view.append(hist);
+    };
+
+    const renderPage = (page) => {
+      view.replaceChildren();
+      view.scrollTop = 0;
+      view.append(el(`<div class="runtime-bar">
+        <span class="dot" style="background:${page.secure ? '#34d399' : '#f6b93b'};box-shadow:none"></span>
+        <span class="name">${page.secure ? '🔒' : '⚠️'} ${esc(page.host)}</span>
+        <span class="sep">${page.blocks.length} 個區塊 · ${(page.bytes / 1024).toFixed(0)} KB</span>
+      </div>`));
+
+      const article = el('<article class="reader"></article>');
+      article.append(el(`<h1 style="font-size:21px;line-height:1.35">${esc(page.title)}</h1>`));
+
+      const STYLE = {
+        h1: 'font-size:18px;margin-top:10px', h2: 'font-size:17px;margin-top:10px',
+        h3: 'font-size:15.5px;margin-top:8px', h4: 'font-size:14.5px;margin-top:6px',
+        h5: 'font-size:14px', h6: 'font-size:13.5px',
+        p: 'font-size:14px;line-height:1.75', li: 'font-size:14px;line-height:1.7;padding-left:14px;position:relative',
+        blockquote: 'font-size:14px;line-height:1.7;padding-left:12px;border-left:3px solid var(--win-line);color:var(--win-sub)',
+        pre: 'font:12px/1.7 ui-monospace,Menlo,monospace;background:#0d1017;color:#d5dbe8;padding:12px;border-radius:10px;overflow-x:auto;white-space:pre-wrap',
+      };
+
+      page.blocks.forEach((block) => {
+        const tag = /^h[1-6]$/.test(block.type) ? block.type : 'div';
+        const node = el(`<${tag} style="${STYLE[block.type] ?? STYLE.p}"></${tag}>`);
+        if (block.type === 'li') node.append(el('<span style="position:absolute;left:0;opacity:.45">•</span>'));
+        block.runs.forEach((run, i) => {
+          if (i) node.append(document.createTextNode(' '));
+          if (!run.href) {
+            node.append(document.createTextNode(run.text));
+            return;
+          }
+          const link = el(`<button style="color:#2f8fff;text-align:left;padding:0;text-decoration:underline;text-underline-offset:2px">${esc(run.text)}</button>`);
+          link.addEventListener('click', () => go(run.href));
+          node.append(link);
+        });
+        article.append(node);
+      });
+      view.append(article);
+    };
+
+    const go = async (input) => {
+      const target = toTarget(String(input));
+      if (!target) return;
+      bar.value = target;
+      bar.blur();
+      view.replaceChildren(el('<p class="section-title" style="text-align:center;padding:60px 0">載入中…</p>'));
+      try {
+        const res = await api('/api/browse', { method: 'POST', body: { url: target } });
+        session.page = res.page;
+        // 從歷史往回走之後又開新頁，就把前面的分支丟掉
+        session.stack = [...session.stack.slice(0, session.index + 1), res.page.url];
+        session.index = session.stack.length - 1;
+        bar.value = res.page.url;
+        ctx.setState({ ...ctx.state, history: res.history });
+        renderPage(res.page);
+      } catch (err) {
+        view.replaceChildren(el(`<div class="hero" style="margin:14px;background:rgba(239,68,68,.14)">
+          <h3>打不開這個網頁</h3>
+          <p>${esc(err.message)}</p>
+        </div>`));
+        session.page = null;
+      }
+      syncChrome();
+    };
+
+    const jump = async (delta) => {
+      const next = session.index + delta;
+      if (next < 0 || next >= session.stack.length) return;
+      session.index = next;
+      const url = session.stack[next];
+      bar.value = url;
+      view.replaceChildren(el('<p class="section-title" style="text-align:center;padding:60px 0">載入中…</p>'));
+      try {
+        const res = await api('/api/browse', { method: 'POST', body: { url } });
+        session.page = res.page;
+        ctx.setState({ ...ctx.state, history: res.history });
+        renderPage(res.page);
+      } catch (err) {
+        ctx.notify('瀏覽器', err.message);
+      }
+      syncChrome();
+    };
+
+    btn('back').addEventListener('click', () => jump(-1));
+    btn('forward').addEventListener('click', () => jump(1));
+    btn('reload').addEventListener('click', () => session.page && go(session.page.url));
+    btn('star').addEventListener('click', async () => {
+      if (!session.page) return;
+      const marked = ctx.state.bookmarks.find((b) => b.url === session.page.url);
+      try {
+        const res = marked
+          ? await api(`/api/bookmarks/${marked.id}`, { method: 'DELETE' })
+          : await api('/api/bookmarks', { method: 'POST', body: { url: session.page.url, title: session.page.title } });
+        ctx.setState({ ...ctx.state, bookmarks: res.bookmarks });
+        ctx.notify('瀏覽器', marked ? '已移除書籤' : '已加入書籤');
+      } catch (err) {
+        ctx.notify('瀏覽器', err.message);
+      }
+      syncChrome();
+    });
+    bar.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(bar.value); });
+
+    if (session.page) {
+      bar.value = session.page.url;
+      renderPage(session.page);
+    } else {
+      startPage();
+    }
+    syncChrome();
+    return root;
+  },
+};
+
 /* ============================ 設定 ============================ */
 const settings = {
   id: 'settings',
@@ -473,6 +685,7 @@ const terminal = {
           '  fetch <os|all> [分類]  撈取整包 App，例如 fetch ios 遊戲',
           '  uninstall <app-id>  移除 App',
           '  open <app-id>       開啟 App',
+          '  browse <網址>       用 reader 模式抓一個網頁下來看',
           '  df                  儲存空間',
           '  uname               系統資訊',
           '  clear               清空畫面'].join('\n'),
@@ -528,6 +741,17 @@ const terminal = {
         if (!app) return `找不到 App：${id}`;
         setTimeout(() => ctx.openApp(app.id), 120);
         return `正在開啟 ${app.name}…`;
+      },
+      async browse(...rest) {
+        const url = rest.join(' ');
+        if (!url) return '用法：browse <網址>，例如 browse example.com';
+        const { page } = await api('/api/browse', { method: 'POST', body: { url: toTarget(url) } });
+        const head = `${page.title}\n${page.url}\n${'─'.repeat(28)}`;
+        const text = page.blocks
+          .slice(0, 12)
+          .map((b) => (b.type.startsWith('h') ? `\n## ` : '') + b.runs.map((r) => r.text + (r.href ? ' ↗' : '')).join(' '))
+          .join('\n');
+        return `${head}\n${text}\n${'─'.repeat(28)}\n共 ${page.blocks.length} 個區塊，完整內容請用「瀏覽器」開啟`;
       },
       echo: (...rest) => rest.join(' '),
       date: () => new Date().toLocaleString('zh-TW'),
@@ -626,5 +850,5 @@ const clock = {
 };
 
 export const NATIVE_APPS = Object.fromEntries(
-  [store, settings, notes, calculator, terminal, photos, clock].map((a) => [a.id, a]),
+  [store, browser, settings, notes, calculator, terminal, photos, clock].map((a) => [a.id, a]),
 );

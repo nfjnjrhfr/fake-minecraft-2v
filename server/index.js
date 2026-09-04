@@ -100,7 +100,7 @@ export function createApp(db = new Db(undefined, defaultState)) {
 
       const body = req.method === 'GET' || req.method === 'DELETE' ? {} : await readJsonBody(req);
 
-      const result = match.route.handler({
+      const result = await match.route.handler({
         db,
         params: match.params,
         query: Object.fromEntries(url.searchParams),

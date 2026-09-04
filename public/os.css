@@ -330,7 +330,7 @@ p { margin: 0; }
 .runtime-bar .sep { margin-left: auto; }
 
 /* 模擬 App 介面的通用零件 */
-.mock { padding: 14px; display: grid; gap: 12px; color: var(--win-ink); }
+.mock { padding: 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; color: var(--win-ink); }
 .mock-card { background: var(--win-card); border: 1px solid var(--win-sep); border-radius: 14px; padding: 12px; display: grid; gap: 8px; }
 .mock-row { display: flex; align-items: center; gap: 10px; }
 .mock-av { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(160deg, var(--c1), var(--c2)); flex: 0 0 auto; }
@@ -359,7 +359,7 @@ p { margin: 0; }
 .switch.on::after { transform: translateX(18px); }
 
 /* ---------------- 原生 App 通用 ---------------- */
-.list { display: grid; }
+.list { display: grid; grid-template-columns: minmax(0, 1fr); }
 .list-item {
   display: flex;
   align-items: center;
@@ -415,6 +415,21 @@ p { margin: 0; }
   text-align: center;
 }
 .big-btn:disabled { opacity: .5; }
+/* reader 模式的內文：grid 項目預設 min-width:auto，會被最寬的區塊撐破版面 */
+.reader { padding: 16px 16px 40px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 11px; }
+.reader > * { min-width: 0; overflow-wrap: anywhere; }
+
+.nav-btn {
+  width: 30px; height: 30px;
+  border-radius: 9px;
+  background: var(--win-fill);
+  color: var(--win-ink);
+  font-size: 15px;
+  flex: 0 0 auto;
+  line-height: 1;
+}
+.nav-btn:disabled { opacity: .35; cursor: default; }
+
 .field { width: 100%; padding: 10px 13px; border-radius: 12px; background: var(--win-fill); border: 1px solid var(--win-sep); outline: none; color: var(--win-ink); }
 .field:focus { border-color: #2f8fff; }
 .bar-track { height: 8px; border-radius: 99px; background: var(--win-line); overflow: hidden; }
