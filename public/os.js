@@ -39,11 +39,11 @@ function setState(next) {
   state = next;
   applyDevice();
   renderHome();
-  if (openId) renderAppHeader(findApp(openId));
+  if (openId) renderAppHeader(deviceApp(openId));
 }
 
 const allApps = () => [...(state?.builtins ?? []), ...(state?.installed ?? [])];
-const findApp = (id) => allApps().find((a) => a.id === id) ?? null;
+const deviceApp = (id) => allApps().find((a) => a.id === id) ?? null;
 const sourceOf = (os) => state.sources.find((s) => s.os === os);
 
 /* ---------------- 裝置外觀 ---------------- */
@@ -158,7 +158,7 @@ ui.pages.addEventListener('pointerup', (e) => {
 
 /* ---------------- App 視窗 ---------------- */
 function openApp(id) {
-  const app = findApp(id);
+  const app = deviceApp(id);
   if (!app) return;
   if (app.active === false) {
     const s = sourceOf(app.os);
@@ -396,7 +396,7 @@ $('#status-right').addEventListener('click', () => toggleControl());
 function toggleSwitcher(force) {
   const show = force ?? ui.switcher.hidden;
   if (show) {
-    const cards = recents.map(findApp).filter(Boolean);
+    const cards = recents.map(deviceApp).filter(Boolean);
     ui.switcher.replaceChildren(
       el('<div class="card-close">點卡片切換 App · 點空白處關閉</div>'),
       ...(cards.length

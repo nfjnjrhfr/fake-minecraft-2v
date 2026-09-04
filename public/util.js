@@ -53,6 +53,8 @@ export function readImageAsDataUrl(file, maxSide = 1400) {
 }
 
 export async function api(path, { method = 'GET', body } = {}) {
+  // 網頁版沒有伺服器，改用打包進來的本機狀態層
+  if (globalThis.__TIDE_LOCAL_API__) return globalThis.__TIDE_LOCAL_API__(path, { method, body });
   const res = await fetch(path, {
     method,
     headers: body ? { 'content-type': 'application/json' } : {},

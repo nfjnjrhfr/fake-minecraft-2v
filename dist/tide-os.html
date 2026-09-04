@@ -1,0 +1,3060 @@
+<title>潮汐 OS</title>
+<style>
+/* 潮汐 OS 的介面層樣式：盡量貼近 iOS 的度量與設計語言 */
+:root {
+  --w: 393px;
+  --h: 852px;
+  --radius: 55px;
+  --ease: cubic-bezier(.32, .72, 0, 1);
+  --spring: cubic-bezier(.16, 1.02, .3, 1);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 44px;
+  padding: 28px;
+  flex-wrap: wrap;
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "PingFang SC",
+    "Microsoft JhengHei", "Helvetica Neue", system-ui, sans-serif;
+  color: #e8ecf4;
+  background:
+    radial-gradient(900px 520px at 16% -4%, #1c2a4d 0%, transparent 62%),
+    radial-gradient(760px 520px at 92% 104%, #0f3538 0%, transparent 60%),
+    #08090d;
+}
+
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; padding: 0; }
+input, textarea { font: inherit; color: inherit; }
+h1, h2, h3, h4 { margin: 0; font-weight: 600; }
+p { margin: 0; }
+
+/* ---------------- 裝置 ---------------- */
+.device {
+  position: relative;
+  width: var(--w);
+  height: var(--h);
+  border-radius: var(--radius);
+  padding: 10px;
+  background: linear-gradient(148deg, #5c6070, #17181d 30%, #26272e 70%, #62667a);
+  box-shadow: 0 54px 96px rgba(0, 0, 0, .62), 0 0 0 1px rgba(255, 255, 255, .08) inset;
+  flex: 0 0 auto;
+}
+.device::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: calc(var(--radius) - 4px);
+  box-shadow: 0 0 0 1.2px rgba(0, 0, 0, .85) inset;
+  pointer-events: none;
+}
+.btn-side, .btn-vol { position: absolute; width: 3px; background: linear-gradient(#3d414e, #23252d); }
+.btn-side.power { right: -3px; top: 196px; height: 96px; border-radius: 0 3px 3px 0; }
+.btn-vol { left: -3px; border-radius: 3px 0 0 3px; }
+.btn-vol.up { top: 172px; height: 62px; }
+.btn-vol.down { top: 246px; height: 62px; }
+
+.screen {
+  /* App 視窗的主題色，對應 iOS 的系統色 */
+  --blue: #007aff;
+  --green: #34c759;
+  --red: #ff3b30;
+  --orange: #ff9500;
+  --win-bg: #f2f2f7;
+  --win-card: #fff;
+  --win-head: rgba(249, 249, 249, .82);
+  --win-ink: #000;
+  --win-sub: rgba(60, 60, 67, .6);
+  --win-sep: rgba(60, 60, 67, .2);
+  --win-fill: rgba(118, 118, 128, .12);
+  --win-line: rgba(118, 118, 128, .24);
+
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: calc(var(--radius) - 10px);
+  overflow: hidden;
+  isolation: isolate;
+  background: #000;
+}
+.screen.dark {
+  --blue: #0a84ff;
+  --green: #30d158;
+  --red: #ff453a;
+  --orange: #ff9f0a;
+  --win-bg: #000;
+  --win-card: #1c1c1e;
+  --win-head: rgba(28, 28, 30, .8);
+  --win-ink: #fff;
+  --win-sub: rgba(235, 235, 245, .6);
+  --win-sep: rgba(84, 84, 88, .65);
+  --win-fill: rgba(118, 118, 128, .24);
+  --win-line: rgba(118, 118, 128, .36);
+}
+
+.wallpaper {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, var(--wp-from, #1b2a6b), var(--wp-to, #0b8f8f));
+  background-size: cover;
+  background-position: center;
+  transition: filter .35s ease;
+}
+.wallpaper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(115% 75% at 20% 0%, rgba(255, 255, 255, .16), transparent 58%),
+    radial-gradient(90% 55% at 88% 100%, rgba(0, 0, 0, .3), transparent 62%);
+}
+.wallpaper.photo::after { background: linear-gradient(rgba(0, 0, 0, .12), rgba(0, 0, 0, .28)); }
+
+.veil { position: absolute; inset: 0; background: #000; pointer-events: none; z-index: 60; opacity: 0; transition: opacity .2s; }
+
+/* ---------------- 狀態列 ---------------- */
+.statusbar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px 0 34px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: .1px;
+  color: #fff;
+  z-index: 40;
+}
+.island {
+  position: absolute;
+  top: 12px; left: 50%;
+  transform: translateX(-50%);
+  width: 124px; height: 36px;
+  background: #000;
+  border-radius: 22px;
+  z-index: 41;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #e9edf6;
+  transition: width .4s var(--spring), height .4s var(--spring);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.island.wide { width: 200px; height: 38px; }
+.status-right { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.battery { width: 25px; height: 13px; border: 1.3px solid rgba(255, 255, 255, .55); border-radius: 4px; padding: 1.5px; position: relative; }
+.battery::after { content: ''; position: absolute; right: -3.4px; top: 4px; width: 2px; height: 5px; background: rgba(255, 255, 255, .5); border-radius: 0 2px 2px 0; }
+.battery > i { display: block; height: 100%; background: #fff; border-radius: 2px; }
+
+/* ---------------- 鎖定畫面 ---------------- */
+.lock {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #fff;
+  padding-top: 84px;
+  cursor: pointer;
+  transition: transform .6s var(--ease), opacity .45s;
+}
+.lock.away { transform: translateY(-100%); opacity: 0; pointer-events: none; }
+.lock-date { font-size: 21px; font-weight: 600; letter-spacing: .2px; }
+.lock-time { font-size: 88px; font-weight: 600; letter-spacing: -3px; line-height: 1.02; margin-top: 2px; }
+.lock-note {
+  margin-top: 30px;
+  background: rgba(255, 255, 255, .16);
+  backdrop-filter: blur(22px) saturate(1.4);
+  border-radius: 20px;
+  padding: 14px 16px;
+  width: 78%;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.lock-note b { font-size: 13.5px; }
+.lock-hint { position: absolute; bottom: 40px; font-size: 13px; opacity: .8; animation: bob 2.6s ease-in-out infinite; }
+@keyframes bob { 0%, 100% { transform: translateY(0); opacity: .5 } 50% { transform: translateY(-7px); opacity: .95 } }
+.lock:not(.away) ~ .home { opacity: 0; pointer-events: none; }
+
+/* ---------------- 桌面 ---------------- */
+.home { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; padding-top: 62px; transition: opacity .4s var(--ease); }
+.pages { flex: 1; display: flex; overflow: hidden; }
+.page {
+  min-width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: min-content;
+  gap: 22px 0;
+  padding: 6px 16px;
+  align-content: start;
+}
+.dots { display: flex; justify-content: center; gap: 8px; padding: 4px 0 8px; }
+.dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, .32); cursor: pointer; transition: background .2s; }
+.dots i.on { background: rgba(255, 255, 255, .95); }
+
+.spotlight-pill {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .18);
+  backdrop-filter: blur(18px);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dock {
+  margin: 0 10px 14px;
+  padding: 10px 6px;
+  border-radius: 34px;
+  background: rgba(255, 255, 255, .17);
+  backdrop-filter: blur(28px) saturate(1.6);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+.dock .label { display: none; }
+.dock .app { gap: 0; }
+
+.app { display: flex; flex-direction: column; align-items: center; gap: 7px; position: relative; }
+.app:active .icon { transform: scale(.9); }
+.icon {
+  width: 60px; height: 60px;
+  border-radius: 13.5px; /* iOS 圖示的圓角比例約 0.2237 */
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  background: linear-gradient(165deg, var(--c1), var(--c2));
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .28), 0 0 0 .5px rgba(255, 255, 255, .12) inset;
+  transition: transform .18s var(--spring);
+  position: relative;
+}
+.app .label {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .45);
+  max-width: 78px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.badge-os {
+  position: absolute;
+  right: -4px; bottom: -4px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: rgba(18, 20, 26, .92);
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  border: 1.5px solid rgba(255, 255, 255, .25);
+}
+.app.paused .icon { filter: grayscale(1) brightness(.5); }
+.app.paused .label { opacity: .5; }
+.empty-page { grid-column: 1 / -1; text-align: center; color: rgba(255, 255, 255, .78); padding: 64px 26px; font-size: 13.5px; line-height: 1.9; }
+
+/* Spotlight 搜尋 */
+.spotlight {
+  position: absolute;
+  inset: 0;
+  z-index: 48;
+  background: rgba(10, 12, 18, .4);
+  backdrop-filter: blur(30px) saturate(1.5);
+  padding: 64px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.spotlight input {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 0;
+  outline: 0;
+  background: rgba(255, 255, 255, .22);
+  color: #fff;
+  font-size: 15px;
+}
+.spotlight input::placeholder { color: rgba(255, 255, 255, .6); }
+.spot-results { flex: 1; overflow-y: auto; display: grid; gap: 2px; align-content: start; }
+.spot-row { display: flex; align-items: center; gap: 12px; padding: 8px 6px; border-radius: 12px; color: #fff; text-align: left; }
+.spot-row:hover { background: rgba(255, 255, 255, .14); }
+.spot-row .icon { width: 42px; height: 42px; font-size: 21px; border-radius: 9.5px; }
+.spot-row .sub { font-size: 11.5px; opacity: .65; }
+
+/* ---------------- App 視窗 ---------------- */
+.appwin {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: var(--win-bg);
+  color: var(--win-ink);
+  display: flex;
+  flex-direction: column;
+  animation: openApp .42s var(--spring);
+  overflow: hidden;
+}
+.appwin.closing { animation: closeApp .3s var(--ease) forwards; }
+@keyframes openApp { from { transform: scale(.28); opacity: 0; border-radius: 44px } to { transform: scale(1); opacity: 1; border-radius: 0 } }
+@keyframes closeApp { to { transform: scale(.32); opacity: 0; border-radius: 44px } }
+
+/* iOS 導覽列 */
+.app-head {
+  padding: 58px 16px 9px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--win-head);
+  backdrop-filter: blur(24px) saturate(1.6);
+  border-bottom: .5px solid var(--win-sep);
+  flex: 0 0 auto;
+}
+.app-head .mini { width: 28px; height: 28px; border-radius: 6.5px; display: grid; place-items: center; font-size: 14px; background: linear-gradient(165deg, var(--c1), var(--c2)); }
+.app-head h2 { font-size: 16px; font-weight: 600; letter-spacing: -.2px; }
+.app-head .sub { font-size: 11px; color: var(--win-sub); }
+.app-head .right { margin-left: auto; display: flex; gap: 14px; align-items: center; }
+.app-head .right button { color: var(--blue); font-size: 15px; }
+.app-head .right button.strong { font-weight: 600; }
+
+.app-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+.app-body::-webkit-scrollbar { width: 0; }
+
+.homebar {
+  position: absolute;
+  bottom: 8px; left: 50%;
+  transform: translateX(-50%);
+  width: 140px; height: 5px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, .9);
+  z-index: 55;
+  cursor: pointer;
+  mix-blend-mode: difference;
+}
+
+/* ---------------- 相容層執行畫面 ---------------- */
+.runtime-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  font-size: 10.5px;
+  background: var(--win-fill);
+  color: var(--win-sub);
+  border-bottom: .5px solid var(--win-sep);
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.runtime-bar .name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.runtime-bar .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.runtime-bar .sep { margin-left: auto; }
+
+.mock { padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; color: var(--win-ink); }
+.mock-card { background: var(--win-card); border-radius: 12px; padding: 13px; display: grid; gap: 8px; box-shadow: 0 .5px 0 var(--win-sep) inset; }
+.mock-row { display: flex; align-items: center; gap: 10px; }
+.mock-av { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(160deg, var(--c1), var(--c2)); flex: 0 0 auto; }
+.mock-line { height: 9px; border-radius: 99px; background: var(--win-line); }
+.mock-img { height: 108px; border-radius: 12px; background: linear-gradient(140deg, var(--c1), var(--c2)); }
+.mock-title { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
+.mock-sub { font-size: 12px; color: var(--win-sub); }
+.mock-pill { padding: 5px 12px; border-radius: 999px; background: var(--win-fill); font-size: 12px; font-weight: 500; }
+.mock-btn { padding: 11px 14px; border-radius: 12px; background: linear-gradient(160deg, var(--c1), var(--c2)); color: #fff; font-size: 14px; font-weight: 600; text-align: center; }
+.bubble { max-width: 74%; padding: 9px 14px; border-radius: 19px; font-size: 14px; background: var(--win-fill); }
+.bubble.me { margin-left: auto; background: linear-gradient(160deg, var(--c1), var(--c2)); color: #fff; }
+.bars { display: flex; align-items: end; gap: 7px; height: 108px; }
+.bars i { flex: 1; border-radius: 5px 5px 0 0; background: linear-gradient(180deg, var(--c1), var(--c2)); }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.grid3 > div { aspect-ratio: 1; border-radius: 10px; }
+.code { font: 11.5px/1.75 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 13px 15px; white-space: pre; overflow-x: auto; background: #0d1017; color: #d5dbe8; border-radius: 12px; }
+.code .k { color: #c792ea } .code .s { color: #a5e075 } .code .c { color: #6b7a90 } .code .f { color: #61afef }
+.progress { height: 4px; border-radius: 99px; background: var(--win-line); overflow: hidden; }
+.progress > i { display: block; height: 100%; background: var(--c1); animation: play 12s linear infinite; }
+@keyframes play { from { width: 4% } to { width: 100% } }
+.toggle-row { display: flex; align-items: center; gap: 10px; }
+
+/* iOS 開關 */
+.switch { width: 51px; height: 31px; border-radius: 99px; background: var(--win-line); position: relative; flex: 0 0 auto; transition: background .25s; cursor: pointer; }
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 27px; height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .16), 0 1px 1px rgba(0, 0, 0, .1);
+  transition: transform .25s var(--spring);
+}
+.switch.on { background: var(--green); }
+.switch.on::after { transform: translateX(20px); }
+
+/* ---------------- iOS 分組列表 ---------------- */
+.list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0 16px 18px;
+  background: var(--win-card);
+  border-radius: 11px;
+  overflow: hidden;
+}
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 14px;
+  text-align: left;
+  width: 100%;
+  color: var(--win-ink);
+  background: none;
+  position: relative;
+}
+.list-item + .list-item::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 14px; right: 0;
+  height: .5px;
+  background: var(--win-sep);
+}
+.list-item.tap:active { background: var(--win-fill); }
+.list-item .grow { flex: 1; min-width: 0; }
+.list-item .t { font-size: 15.5px; letter-spacing: -.2px; display: flex; align-items: center; gap: 6px; }
+.list-item .d { font-size: 12.5px; color: var(--win-sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-item .chev { color: rgba(60, 60, 67, .3); font-size: 17px; }
+.screen.dark .list-item .chev { color: rgba(235, 235, 245, .3); }
+.li-icon {
+  width: 29px; height: 29px;
+  border-radius: 6.5px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  flex: 0 0 auto;
+  background: var(--win-fill);
+}
+.section-title { padding: 20px 16px 7px; font-size: 12.5px; color: var(--win-sub); letter-spacing: .1px; }
+.foot-note { padding: 0 20px 8px; font-size: 12px; color: var(--win-sub); line-height: 1.5; margin-top: -12px; }
+
+.pill-btn {
+  padding: 6px 15px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  background: var(--win-fill);
+  color: var(--blue);
+  flex: 0 0 auto;
+}
+.pill-btn.ghost { background: var(--win-fill); color: var(--blue); }
+.pill-btn.danger { background: var(--win-fill); color: var(--red); }
+.pill-btn:disabled { opacity: .4; cursor: default; }
+
+.tabs-os { display: flex; gap: 8px; padding: 11px 16px; overflow-x: auto; flex: 0 0 auto; }
+.tabs-os::-webkit-scrollbar { height: 0; }
+.tab-os {
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: var(--win-fill);
+  color: var(--win-ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab-os.on { background: var(--blue); color: #fff; font-weight: 600; }
+.tab-os .count { font-size: 11px; opacity: .7; }
+
+.hero {
+  margin: 14px 16px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--win-card);
+  display: grid;
+  gap: 10px;
+}
+.hero h3 { font-size: 17px; letter-spacing: -.3px; }
+.hero p { font-size: 13px; color: var(--win-sub); line-height: 1.55; }
+.big-btn { padding: 12px; border-radius: 12px; background: var(--blue); color: #fff; font-weight: 600; font-size: 15px; text-align: center; }
+.big-btn:disabled { opacity: .4; }
+
+.field {
+  width: 100%;
+  padding: 9px 13px;
+  border-radius: 10px;
+  background: var(--win-fill);
+  border: 0;
+  outline: none;
+  color: var(--win-ink);
+  font-size: 15px;
+}
+.bar-track { height: 8px; border-radius: 99px; background: var(--win-line); overflow: hidden; }
+.bar-track > i { display: block; height: 100%; background: var(--blue); }
+
+/* iOS 滑桿 */
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: none; }
+input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 99px; background: var(--win-line); }
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px; height: 26px;
+  margin-top: -11px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .18), 0 1px 1px rgba(0, 0, 0, .12);
+}
+input[type=range]::-moz-range-track { height: 4px; border-radius: 99px; background: var(--win-line); }
+input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .18); }
+
+/* reader 模式的內文 */
+.reader { padding: 16px 16px 44px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.reader > * { min-width: 0; overflow-wrap: anywhere; }
+.nav-btn { width: 31px; height: 31px; border-radius: 9px; background: var(--win-fill); color: var(--blue); font-size: 17px; flex: 0 0 auto; line-height: 1; }
+.nav-btn:disabled { opacity: .3; cursor: default; }
+
+/* ---------------- 控制中心 ---------------- */
+.control {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: rgba(10, 12, 18, .3);
+  backdrop-filter: blur(34px) saturate(1.5);
+  padding: 62px 12px 16px;
+  display: grid;
+  gap: 11px;
+  align-content: start;
+  animation: sheetIn .4s var(--spring);
+}
+@keyframes sheetIn { from { opacity: 0; transform: translateY(-18px) } }
+.cc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 11px; }
+.cc-tile { background: rgba(255, 255, 255, .16); border-radius: 22px; padding: 14px; display: grid; gap: 10px; align-content: start; color: #fff; }
+.cc-tile.span2 { grid-column: span 2; }
+.cc-toggle { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+.cc-dot { width: 36px; height: 36px; border-radius: 50%; background: rgba(255, 255, 255, .22); display: grid; place-items: center; font-size: 16px; flex: 0 0 auto; }
+.cc-dot.on { background: var(--blue); }
+.cc-dot.on.g { background: var(--green); }
+.cc-vert { grid-column: span 1; padding: 0; background: none; }
+.vslider {
+  position: relative;
+  height: 172px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, .16);
+  overflow: hidden;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.vslider > i { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; }
+.vslider > span { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 19px; color: rgba(0, 0, 0, .35); pointer-events: none; }
+.cc-note { color: rgba(255, 255, 255, .82); font-size: 12px; text-align: center; line-height: 1.6; }
+
+/* ---------------- App 切換器 ---------------- */
+.switcher {
+  position: absolute;
+  inset: 0;
+  z-index: 52;
+  background: rgba(6, 8, 14, .66);
+  backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 24px;
+  overflow-x: auto;
+}
+.card-app {
+  min-width: 196px; height: 396px;
+  border-radius: 30px;
+  background: #17181d;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, .4);
+}
+.card-app .cap { padding: 13px; display: flex; gap: 9px; align-items: center; font-size: 13px; color: #fff; }
+.card-app .body { flex: 1; background: linear-gradient(160deg, var(--c1), var(--c2)); display: grid; place-items: center; font-size: 48px; }
+.card-close { position: absolute; bottom: 28px; left: 0; right: 0; text-align: center; font-size: 12.5px; color: rgba(255, 255, 255, .65); }
+
+/* ---------------- 通知 ---------------- */
+.banner {
+  position: absolute;
+  top: 60px; left: 11px; right: 11px;
+  z-index: 58;
+  background: rgba(38, 38, 42, .72);
+  backdrop-filter: blur(24px) saturate(1.6);
+  border-radius: 22px;
+  padding: 12px 15px;
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  animation: dropIn .42s var(--spring);
+  color: #fff;
+}
+@keyframes dropIn { from { transform: translateY(-80px); opacity: 0 } }
+.banner .ico { width: 30px; height: 30px; border-radius: 7px; display: grid; place-items: center; background: linear-gradient(160deg, #4aa3ff, #0a84ff); font-size: 15px; flex: 0 0 auto; }
+.banner .txt { line-height: 1.35; min-width: 0; }
+.banner .txt b { display: block; font-size: 13.5px; font-weight: 600; }
+.banner .txt span { color: rgba(255, 255, 255, .75); font-size: 12.5px; }
+
+/* ---------------- 旁邊的說明 ---------------- */
+.sidehint { width: min(330px, 100%); display: grid; gap: 14px; }
+.sidehint h1 { font-size: 22px; letter-spacing: -.2px; }
+.sidehint .tagline { color: #93a3bd; font-size: 13px; line-height: 1.75; }
+.sidehint .box { background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08); border-radius: 14px; padding: 14px 16px; }
+.sidehint .box h4 { font-size: 12.5px; color: #cfd8e8; margin-bottom: 8px; }
+.sidehint kbd { background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .16); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; font: 11.5px ui-monospace, Menlo, monospace; }
+.sidehint ul { margin: 0; padding-left: 18px; color: #93a3bd; font-size: 12.5px; line-height: 1.95; }
+.sidehint .note { font-size: 11.5px; color: #6f7d95; line-height: 1.7; }
+
+@media (max-width: 820px) {
+  body { padding: 14px; gap: 20px; }
+  .device { transform: scale(.9); transform-origin: top center; }
+}
+
+</style>
+
+<div class="device" id="device">
+      <span class="btn-vol up"></span>
+      <span class="btn-vol down"></span>
+      <span class="btn-side power"></span>
+
+      <div class="screen" id="screen">
+        <div class="wallpaper" id="wallpaper"></div>
+        <div class="veil" id="veil"></div>
+
+        <div class="statusbar">
+          <span id="status-time">9:41</span>
+          <span class="status-right" id="status-right" title="開啟控制中心">
+            <span id="status-net">5G</span>
+            <svg id="status-wifi" width="16" height="12" viewBox="0 0 16 12" aria-label="Wi-Fi">
+              <path d="M8 10.6 5.9 8.3a3 3 0 0 1 4.2 0L8 10.6Z" fill="currentColor" />
+              <path d="M3.7 6.1a6.3 6.3 0 0 1 8.6 0" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" />
+              <path d="M1.4 3.7a9.7 9.7 0 0 1 13.2 0" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" />
+            </svg>
+            <span class="battery"><i id="battery-fill" style="width:82%"></i></span>
+          </span>
+        </div>
+        <div class="island" id="island"></div>
+
+        <!-- 鎖定畫面 -->
+        <section class="lock" id="lock">
+          <div class="lock-date" id="lock-date"></div>
+          <div class="lock-time" id="lock-time"></div>
+          <div class="lock-note" id="lock-note"></div>
+          <div class="lock-hint">點一下解鎖</div>
+        </section>
+
+        <!-- 桌面 -->
+        <section class="home" id="home">
+          <div class="pages" id="pages"></div>
+          <div class="dots" id="dots"></div>
+          <div class="dock" id="dock"></div>
+        </section>
+
+        <!-- App 視窗 -->
+        <section class="appwin" id="appwin" hidden></section>
+
+        <!-- 控制中心 -->
+        <div class="control" id="control" hidden></div>
+
+        <!-- App 切換器 -->
+        <div class="switcher" id="switcher" hidden></div>
+
+        <!-- 通知橫幅 -->
+        <div class="banner" id="banner" hidden></div>
+
+        <div class="homebar" id="homebar" title="點一下回桌面，連點兩下開 App 切換器"></div>
+      </div>
+    </div>
+
+    <aside class="sidehint">
+      <div>
+        <h1>潮汐 OS <span style="opacity:.5;font-size:14px">1.0 萬象</span></h1>
+        <p class="tagline">
+          一台電子產品的行動作業系統原型。系統本身只有一套原生介面層 OmniUI，
+          <strong>萬象相容層</strong>負責把 iOS、Android、HarmonyOS、Windows、macOS、
+          Linux、Web 的 App 全部撈進同一個桌面。
+        </p>
+      </div>
+
+      <div class="box">
+        <h4>怎麼玩</h4>
+        <ul>
+          <li>點畫面解鎖，點 App 圖示開啟</li>
+          <li>開「萬象商店」→ 選來源系統 → <strong>一鍵撈取全部</strong></li>
+          <li>撈進來的 App 圖示右下角有來源系統的角標</li>
+          <li>「設定 → 萬象相容層」可以開關各系統的執行環境</li>
+        </ul>
+      </div>
+
+      <div class="box">
+        <h4>操作</h4>
+        <ul>
+          <li><kbd>Esc</kbd> 回桌面 · <kbd>空白鍵</kbd> 解鎖／鎖定</li>
+          <li>點底部白條回桌面，連點兩下開切換器</li>
+          <li>點右上角狀態列開控制中心</li>
+        </ul>
+      </div>
+
+      <p class="note">
+        說明：這是一套可互動的系統原型 —— 桌面、視窗、控制中心、商店與相容層的狀態都是真的，存在你這台瀏覽器裡（localStorage），重新整理也還在。外來 App 的畫面是相容層的模擬渲染，不是真的在執行 APK 或 PE 執行檔。這個網頁版跑在沙箱裡、沒有對外連線的權限，所以內建的瀏覽器只能逛 omni.tide 那幾個內建頁面；要瀏覽真實網站，請跑本機版本（npm start），那一版會由伺服端把網頁真的抓回來。
+      </p>
+    </aside>
+
+<script type="module">
+/* ===== public/util.js ===== */
+const $ = (sel, root = document) => root.querySelector(sel);
+
+function el(html) {
+  const t = document.createElement('template');
+  t.innerHTML = html.trim();
+  return t.content.firstElementChild;
+}
+
+const esc = (s) =>
+  String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+  );
+
+/** 把十六進位色調亮或調暗，用來生成圖示的漸層 */
+function shade(hex, percent) {
+  const n = parseInt(String(hex).replace('#', ''), 16);
+  const mix = (channel) => {
+    const v = percent < 0 ? channel * (1 + percent) : channel + (255 - channel) * percent;
+    return Math.max(0, Math.min(255, Math.round(v)));
+  };
+  const r = mix((n >> 16) & 255);
+  const g = mix((n >> 8) & 255);
+  const b = mix(n & 255);
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+}
+
+const tint = (app) => `--c1:${app.color};--c2:${shade(app.color, -0.42)}`;
+
+const fmtSize = (mb) =>
+  mb >= 1024 ? `${(mb / 1024).toFixed(mb >= 10240 ? 0 : 1)} GB` : `${mb} MB`;
+
+/** 讀一張圖片並縮到合理大小，避免整張原圖塞進裝置狀態 */
+function readImageAsDataUrl(file, maxSide = 1400) {
+  return new Promise((resolve, reject) => {
+    if (!/^image\//.test(file.type)) return reject(new Error('請選一個圖片檔'));
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('讀不到這個檔案'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('這個圖片無法解碼'));
+      img.onload = () => {
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function api(path, { method = 'GET', body } = {}) {
+  // 網頁版沒有伺服器，改用打包進來的本機狀態層
+  if (globalThis.__TIDE_LOCAL_API__) return globalThis.__TIDE_LOCAL_API__(path, { method, body });
+  const res = await fetch(path, {
+    method,
+    headers: body ? { 'content-type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `請求失敗（${res.status}）`);
+  return data;
+}
+
+/* ===== server/catalog.js ===== */
+/**
+ * 萬象相容層（OmniLayer）的 App 來源目錄。
+ *
+ * 每個來源作業系統對應一套執行期轉譯方案（runtime adapter）：潮汐 OS 本身只有一套
+ * 原生介面層 OmniUI，外來 App 由各自的 runtime 把它的介面與系統呼叫轉譯過來。
+ */
+
+const SOURCES = [
+  {
+    os: 'tide',
+    name: '潮汐 OS',
+    short: '原生',
+    glyph: '🌊',
+    accent: '#2f8fff',
+    runtime: 'OmniUI · 原生執行',
+    detail: '系統內建 App，直接以原生介面層執行，不經過任何轉譯。',
+    builtin: true,
+  },
+  {
+    os: 'ios',
+    name: 'iOS',
+    short: 'iOS',
+    glyph: '📱',
+    accent: '#0a84ff',
+    runtime: 'DarwinBridge · UIKit 轉譯層',
+    detail: 'UIKit 的畫面樹會被即時映射成 OmniUI 節點，手勢與動畫曲線一併轉換。',
+  },
+  {
+    os: 'android',
+    name: 'Android',
+    short: 'Android',
+    glyph: '🤖',
+    accent: '#3ddc84',
+    runtime: 'ArtVM · ART 位元碼相容層',
+    detail: 'dex 位元碼在沙箱內由 ArtVM 直譯，View 階層轉為 OmniUI，權限逐項對映。',
+  },
+  {
+    os: 'harmony',
+    name: 'HarmonyOS',
+    short: 'Harmony',
+    glyph: '🪷',
+    accent: '#ff6b5b',
+    runtime: 'ArkBridge · ArkTS 執行環境',
+    detail: 'ArkTS 宣告式 UI 與潮汐 OS 的組件模型高度相近，轉譯成本最低。',
+  },
+  {
+    os: 'windows',
+    name: 'Windows',
+    short: 'Win',
+    glyph: '🪟',
+    accent: '#4aa3ff',
+    runtime: 'Win32Layer · PE 載入器 + 視窗轉譯',
+    detail: '桌面視窗會被摺疊成單一全螢幕頁面，選單改以長按喚出。',
+  },
+  {
+    os: 'macos',
+    name: 'macOS',
+    short: 'macOS',
+    glyph: '💻',
+    accent: '#9aa0a6',
+    runtime: 'DarwinBridge · AppKit 轉譯層',
+    detail: 'AppKit 與 UIKit 共用同一組 Darwin 系統呼叫轉接表。',
+  },
+  {
+    os: 'linux',
+    name: 'Linux',
+    short: 'Linux',
+    glyph: '🐧',
+    accent: '#f2a33c',
+    runtime: 'ElfBox · GTK/Qt 轉譯',
+    detail: 'ELF 執行檔在使用者態沙箱執行，GTK/Qt 繪製指令改走 OmniUI 後端。',
+  },
+  {
+    os: 'web',
+    name: 'Web / PWA',
+    short: 'Web',
+    glyph: '🌐',
+    accent: '#7c6cf0',
+    runtime: 'OmniWeb · 內建瀏覽器核心',
+    detail: '安裝後與原生 App 同級：可離線、可推播、可放上桌面。',
+  },
+];
+
+// [id, 名稱, 英文名, 分類, 圖示, 主色, 介面型態, 體積(MB), 類型（遊戲才有）]
+const APPS = {
+  ios: [
+    ['lumo', '光影', 'Lumo', '攝影修圖', '📷', '#ff7a59', 'photo', 186],
+    ['verse', '晨誦', 'Verse', '閱讀', '📖', '#c98a4b', 'doc', 74],
+    ['pulse', '節拍', 'Pulse', '健身紀錄', '🏃', '#ff4d6d', 'stats', 112],
+    ['ledger', '帳本', 'Ledger', '記帳理財', '💰', '#2fbf71', 'stats', 58],
+    ['cloudmap', '雲圖', 'Cloudmap', '地圖導航', '🗺', '#3aa7ff', 'map', 240],
+    ['calmly', '靜心', 'Calmly', '冥想放鬆', '🧘', '#6c8cff', 'player', 96],
+    ['snapcut', '快剪', 'SnapCut', '影片剪輯', '🎬', '#8b5cf6', 'tool', 318],
+    // 遊戲
+    ['starlap', '星軌競速', 'StarLap', '遊戲', '🏎', '#e11d48', 'game', 2480, '競速'],
+    ['blockmaze', '方塊迷城', 'BlockMaze', '遊戲', '🧩', '#f59e0b', 'game', 320, '益智'],
+    ['bladerealm', '幻界之刃', 'BladeRealm', '遊戲', '⚔️', '#7c3aed', 'game', 3240, '角色扮演'],
+    ['rhythmring', '節奏光輪', 'RhythmRing', '遊戲', '🎵', '#ec4899', 'game', 1120, '音樂節奏'],
+    ['kingdomcraft', '王國築夢', 'KingdomCraft', '遊戲', '🏰', '#0ea5e9', 'game', 1860, '模擬經營'],
+    ['deepdrift', '深空棄艦', 'DeepDrift', '遊戲', '🚀', '#1d4ed8', 'game', 2960, '太空冒險'],
+    ['catcafe', '貓咪咖啡屋', 'CatCafé', '遊戲', '🐱', '#f97316', 'game', 460, '休閒'],
+    ['fruitpop', '三消果園', 'FruitPop', '遊戲', '🍓', '#22c55e', 'game', 280, '消除'],
+    ['shadowstep', '暗影潛行', 'ShadowStep', '遊戲', '🥷', '#334155', 'game', 2140, '動作'],
+    ['tacticgrid', '棋盤戰記', 'TacticGrid', '遊戲', '♟', '#0f766e', 'game', 640, '策略'],
+  ],
+  android: [
+    ['linkr', '訊聯', 'Linkr', '即時通訊', '💬', '#22c55e', 'chat', 148],
+    ['podbox', '播客盒', 'PodBox', '播客', '🎧', '#f97316', 'player', 88],
+    ['scanpro', '掃描王', 'ScanPro', '文件掃描', '🖨', '#0ea5e9', 'tool', 64],
+    ['transly', '譯言', 'Transly', '翻譯', '🌐', '#14b8a6', 'tool', 132],
+    ['lanego', '車道', 'LaneGo', '車機導航', '🚗', '#4f7cff', 'map', 276],
+    ['grain', '米粒', 'Grain', '短影音', '📱', '#ec4899', 'feed', 194],
+    ['keepr', '存物', 'Keepr', '雲端備份', '☁️', '#64748b', 'tool', 52],
+  ],
+  harmony: [
+    ['homehub', '智家', 'HomeHub', '智慧家庭', '🏠', '#ff6b5b', 'panel', 96],
+    ['traveler', '隨行', 'Traveler', '出行票務', '🎫', '#f59e0b', 'doc', 78],
+    ['skyworks', '天工', 'Skyworks', '雲端文件', '📁', '#3b82f6', 'doc', 124],
+    ['dandelion', '蒲公英', 'Dandelion', '跨裝置流轉', '🔗', '#10b981', 'panel', 42],
+    ['vitaring', '健康圈', 'VitaRing', '健康監測', '❤️', '#ef4444', 'stats', 88],
+    ['autolink', '車機互聯', 'AutoLink', '車聯網', '🚙', '#0891b2', 'panel', 156],
+    ['metapen', '元筆', 'MetaPen', '手寫筆記', '✍️', '#8b5cf6', 'doc', 110],
+  ],
+  windows: [
+    ['craftdraw', '匠圖', 'CraftDraw', '向量繪圖', '🎨', '#e11d48', 'tool', 640],
+    ['finsheet', '財報通', 'FinSheet', '試算表', '📊', '#16a34a', 'stats', 420],
+    ['codekeep', '代碼堡', 'CodeKeep', '程式編輯', '⌨️', '#475569', 'code', 580],
+    ['screensmith', '錄屏師', 'ScreenSmith', '螢幕錄影', '🎥', '#7c3aed', 'tool', 210],
+    ['datakey', '資料鍵', 'DataKey', '資料庫工具', '🗄', '#0f766e', 'code', 336],
+    ['starfront', '星際爭鋒', 'StarFront', '遊戲', '🎮', '#1d4ed8', 'game', 1840, '即時戰略'],
+    ['flowchartx', '流程圖 X', 'FlowchartX', '圖表繪製', '🧩', '#ea580c', 'tool', 288],
+  ],
+  macos: [
+    ['tracklab', '音軌', 'TrackLab', '音訊工作站', '🎚', '#f43f5e', 'player', 920],
+    ['typeset', '排版局', 'TypeSet', '專業排版', '📐', '#0284c7', 'doc', 480],
+    ['pixelforge', '影像坊', 'PixelForge', '影像處理', '🖼', '#9333ea', 'photo', 760],
+    ['mailbox', '郵匣', 'MailBox', '郵件', '✉️', '#2563eb', 'feed', 96],
+    ['timeline', '時間線', 'Timeline', '專案管理', '📅', '#059669', 'stats', 168],
+    ['termplus', '終端加', 'TermPlus', '終端機', '🖥️', '#334155', 'code', 44],
+    ['lexica', '詞海', 'Lexica', '辭典', '📚', '#b45309', 'doc', 302],
+  ],
+  linux: [
+    ['syswatch', '監控台', 'SysWatch', '系統監控', '📈', '#22d3ee', 'stats', 28],
+    ['poddeck', '容器艙', 'PodDeck', '容器管理', '📦', '#3b82f6', 'code', 96],
+    ['netprobe', '網探', 'NetProbe', '網路分析', '🛰', '#a3e635', 'stats', 54],
+    ['openwrite', '文書坊', 'OpenWrite', '文書處理', '📝', '#f97316', 'doc', 268],
+    ['renderfarm', '圖形機', 'RenderFarm', '3D 渲染', '🧊', '#8b5cf6', 'tool', 1240],
+    ['keyvault', '密庫', 'KeyVault', '密碼管理', '🔐', '#eab308', 'panel', 36],
+    ['mailfetch', '郵遞員', 'MailFetch', '郵件收發', '📮', '#dc2626', 'feed', 22],
+  ],
+  web: [
+    ['boardly', '白板', 'Boardly', '協作白板', '🪄', '#6366f1', 'tool', 6],
+    ['formkit', '表單集', 'FormKit', '表單問卷', '🧾', '#0ea5e9', 'doc', 4],
+    ['kanflow', '看板', 'KanFlow', '任務看板', '🗂', '#f59e0b', 'panel', 5],
+    ['radiowave', '電台', 'RadioWave', '網路電台', '📻', '#ef4444', 'player', 3],
+    ['chartwiz', '圖表師', 'ChartWiz', '資料圖表', '📉', '#14b8a6', 'stats', 7],
+    ['stickywall', '便籤牆', 'StickyWall', '便籤', '🟨', '#eab308', 'panel', 2],
+    ['goplay', '棋道', 'GoPlay', '遊戲', '⚫', '#57534e', 'game', 9, '棋類'],
+  ],
+};
+
+/** 系統內建 App：永遠已安裝、不可移除 */
+const BUILTIN_APPS = [
+  { id: 'store', name: '萬象商店', en: 'OmniStore', category: '應用商店', glyph: '🛍', color: '#5b8cff', kind: 'native', size: 0, os: 'tide', dock: 0 },
+  { id: 'browser', name: '瀏覽器', en: 'OmniWeb', category: '網路', glyph: '🧭', color: '#2f8fff', kind: 'native', size: 0, os: 'tide', dock: 1 },
+  { id: 'notes', name: '備忘錄', en: 'Notes', category: '效率', glyph: '📒', color: '#f6b93b', kind: 'native', size: 0, os: 'tide', dock: 2 },
+  { id: 'calculator', name: '計算機', en: 'Calculator', category: '工具', glyph: '🧮', color: '#4b5563', kind: 'native', size: 0, os: 'tide' },
+  { id: 'terminal', name: '終端機', en: 'Terminal', category: '開發', glyph: '⌘', color: '#1f2937', kind: 'native', size: 0, os: 'tide' },
+  { id: 'photos', name: '相片', en: 'Photos', category: '媒體', glyph: '🌄', color: '#ec4899', kind: 'native', size: 0, os: 'tide' },
+  { id: 'clock', name: '時鐘', en: 'Clock', category: '工具', glyph: '⏰', color: '#111827', kind: 'native', size: 0, os: 'tide' },
+  { id: 'settings', name: '設定', en: 'Settings', category: '系統', glyph: '⚙️', color: '#6b7280', kind: 'native', size: 0, os: 'tide', dock: 3 },
+];
+
+const CATALOG = Object.entries(APPS).flatMap(([os, rows]) =>
+  rows.map(([id, name, en, category, glyph, color, kind, size, genre]) => ({
+    id: `${os}.${id}`,
+    os,
+    name,
+    en,
+    category,
+    glyph,
+    color,
+    kind,
+    size,
+    ...(genre ? { genre } : {}),
+  })),
+);
+
+const byId = new Map([
+  ...CATALOG.map((app) => [app.id, app]),
+  ...BUILTIN_APPS.map((app) => [app.id, app]),
+]);
+
+const findApp = (id) => byId.get(id) ?? null;
+const findSource = (os) => SOURCES.find((s) => s.os === os) ?? null;
+const catalogFor = (os) => CATALOG.filter((app) => app.os === os);
+
+/* ===== build/local-api.js ===== */
+/**
+ * 網頁版（Artifact）用的本機狀態層。
+ *
+ * 沒有伺服器可用，所以把 server/api.js 的規則搬到瀏覽器裡，狀態存在 localStorage。
+ * 介面與伺服器版完全一致，前端程式碼因此可以原封不動共用。
+ */
+const KEY = 'tideos.device.v1';
+
+const WALLPAPERS = [
+  { id: 'aurora', name: '極光', from: '#1b2a6b', to: '#0b8f8f' },
+  { id: 'dusk', name: '暮色', from: '#4a1d5e', to: '#c2455f' },
+  { id: 'tide', name: '潮汐', from: '#062b45', to: '#2f8fff' },
+  { id: 'graphite', name: '石墨', from: '#1a1a1f', to: '#4b5563' },
+  { id: 'citrus', name: '柑橘', from: '#b45309', to: '#f6b93b' },
+  { id: 'mint', name: '薄荷', from: '#064e3b', to: '#34d399' },
+];
+
+const STORAGE_TOTAL_MB = 128 * 1024;
+const SYSTEM_SIZE_MB = 9_640;
+
+/** 第一次打開時就有東西可看：iOS 與 Web 的 App 已經撈好了 */
+const PRESET = ['ios', 'web'];
+
+function defaultState() {
+  return {
+    device: {
+      name: '潮汐 One',
+      model: 'TIDE-A1',
+      osVersion: '潮汐 OS 1.0（萬象）',
+      wallpaper: 'aurora',
+      wallpaperImage: null,
+      wallpaperBlur: 0,
+      wallpaperDim: 0,
+      darkMode: false,
+      brightness: 82,
+      volume: 55,
+      wifi: true,
+      bluetooth: true,
+      dnd: false,
+    },
+    runtimes: { ios: true, android: true, harmony: true, windows: false, macos: false, linux: false, web: true },
+    installed: CATALOG.filter((a) => PRESET.includes(a.os)).map((a) => ({ id: a.id, installedAt: new Date().toISOString() })),
+    bookmarks: [
+      { id: 1, title: '潮汐 OS 說明', url: 'https://omni.tide/' },
+      { id: 2, title: '萬象相容層是什麼', url: 'https://omni.tide/compat' },
+      { id: 3, title: '全部 App 目錄', url: 'https://omni.tide/apps' },
+    ],
+    history: [],
+    notes: [
+      {
+        id: 1,
+        title: '萬象相容層備忘',
+        body: '在「萬象商店」裡挑一個來源作業系統，按「一鍵撈取全部」就能把該系統的 App 全部匯入桌面。\n\n關閉相容層不會刪除 App，只會讓它暫停。',
+        updatedAt: new Date().toISOString(),
+      },
+    ],
+  };
+}
+
+let data = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return { ...defaultState(), ...JSON.parse(raw) };
+  } catch { /* 讀不到就當第一次開 */ }
+  return defaultState();
+}
+
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(data));
+  } catch {
+    // 配額滿了通常是桌布太大，至少讓其他設定存得下去
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ ...data, device: { ...data.device, wallpaperImage: null } }));
+    } catch { /* 真的存不下就算了，這一次的變更只存在記憶體 */ }
+  }
+}
+
+const fail = (message) => { throw new Error(message); };
+const nextId = (rows) => rows.reduce((max, row) => Math.max(max, row.id ?? 0), 0) + 1;
+const clamp = (v) => Math.min(100, Math.max(0, Math.round(Number(v) || 0)));
+
+/* ---------------- 快照 ---------------- */
+function installedApps() {
+  return data.installed
+    .map((row) => {
+      const app = findApp(row.id);
+      return app ? { ...app, installedAt: row.installedAt, active: data.runtimes[app.os] !== false } : null;
+    })
+    .filter(Boolean);
+}
+
+function storage() {
+  const used = installedApps().reduce((sum, app) => sum + app.size, SYSTEM_SIZE_MB);
+  return {
+    totalMb: STORAGE_TOTAL_MB,
+    usedMb: used,
+    systemMb: SYSTEM_SIZE_MB,
+    freeMb: STORAGE_TOTAL_MB - used,
+    percent: Number(((used / STORAGE_TOTAL_MB) * 100).toFixed(1)),
+  };
+}
+
+function sourceSummary() {
+  const ids = new Set(data.installed.map((r) => r.id));
+  return SOURCES.map((source) => {
+    const apps = source.builtin ? BUILTIN_APPS : catalogFor(source.os);
+    return {
+      ...source,
+      enabled: source.builtin ? true : data.runtimes[source.os] !== false,
+      total: apps.length,
+      installed: source.builtin ? apps.length : apps.filter((a) => ids.has(a.id)).length,
+    };
+  });
+}
+
+const snapshot = () => ({
+  device: data.device,
+  runtimes: data.runtimes,
+  sources: sourceSummary(),
+  builtins: BUILTIN_APPS,
+  installed: installedApps(),
+  storage: storage(),
+  wallpapers: WALLPAPERS,
+  bookmarks: data.bookmarks,
+  history: data.history,
+  notes: [...data.notes].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
+});
+
+function installOne(id) {
+  const app = findApp(id);
+  if (!app) fail(`找不到 App：${id}`);
+  if (app.os === 'tide') fail('系統內建 App 無需安裝');
+  if (data.runtimes[app.os] === false) fail(`${findSource(app.os).name} 相容層尚未啟用，請先到「設定 → 萬象相容層」開啟`);
+  if (data.installed.some((row) => row.id === id)) return 'already';
+  data.installed.push({ id, installedAt: new Date().toISOString() });
+  return 'installed';
+}
+
+/* ---------------- 內建網站 ---------------- */
+const p = (...runs) => ({ type: 'p', runs: runs.map((r) => (typeof r === 'string' ? { text: r } : r)) });
+const h = (type, text) => ({ type, runs: [{ text }] });
+const li = (text) => ({ type: 'li', runs: [{ text }] });
+const link = (text, href) => ({ text, href });
+
+const SITES = {
+  '/': () => ({
+    title: '潮汐 OS · 萬象相容層',
+    blocks: [
+      h('h1', '潮汐 OS 1.0（萬象）'),
+      p('一台電子產品的行動作業系統。系統本身只有一套原生介面層 OmniUI，萬象相容層負責把其他七套作業系統的 App 全部撈進同一個桌面。'),
+      h('h2', '可以看看'),
+      p(link('萬象相容層是什麼', 'https://omni.tide/compat')),
+      p(link('全部 App 目錄', 'https://omni.tide/apps')),
+      h('h2', '關於這個瀏覽器'),
+      p('這台裝置沒有排版引擎：網頁會先被抽成標題、段落、清單這些區塊，再交給 OmniUI 畫出來。'),
+      p('你現在看到的網頁版跑在 Claude 的 Artifact 沙箱裡，沒有對外連線的權限，所以只能瀏覽這幾個內建頁面。想瀏覽真實網站，請跑本機版本（npm start）—— 那一版會由伺服端真的把網頁抓回來。'),
+    ],
+  }),
+  '/compat': () => ({
+    title: '萬象相容層',
+    blocks: [
+      h('h1', '萬象相容層（OmniLayer）'),
+      p('每一套來源作業系統都有自己的執行期轉譯方案，把它的介面與系統呼叫翻譯成 OmniUI 看得懂的東西。'),
+      ...SOURCES.filter((s) => !s.builtin).flatMap((s) => [h('h3', `${s.glyph} ${s.name}`), p(s.runtime), p(s.detail)]),
+      h('h2', '暫停，不是刪除'),
+      p('關閉某一套相容層時，已經撈進來的 App 會留在桌面上，只是變成暫停狀態。重新啟用就會恢復。'),
+    ],
+  }),
+  '/apps': () => ({
+    title: '全部 App 目錄',
+    blocks: [
+      h('h1', `全部 App 目錄（${CATALOG.length} 個）`),
+      p('這是萬象相容層目前接得到的所有 App。要撈進桌面請開「萬象商店」。'),
+      ...SOURCES.filter((s) => !s.builtin).flatMap((s) => [
+        h('h2', `${s.glyph} ${s.name}`),
+        ...catalogFor(s.os).map((a) => li(`${a.name}（${a.en}）· ${a.genre ?? a.category} · ${a.size} MB`)),
+      ]),
+    ],
+  }),
+};
+
+function browse(input) {
+  const raw = String(input ?? '').trim();
+  if (!raw) fail('請輸入網址');
+  let url;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    fail(`看不懂這個網址：${raw}`);
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    fail(`瀏覽器只支援 http 與 https，不支援 ${url.protocol.replace(':', '')}`);
+  }
+  const site = url.hostname === 'omni.tide' ? SITES[url.pathname] : null;
+  if (!site) {
+    fail(
+      `這個網頁版跑在 Claude 的 Artifact 沙箱裡，沙箱不允許頁面對外連線，所以連不到 ${url.hostname}。`
+      + '　內建頁面（omni.tide）可以瀏覽；要瀏覽真實網站，請執行本機版本 npm start，那一版會由伺服端把網頁抓回來。',
+    );
+  }
+  const built = site();
+  const page = {
+    url: url.href,
+    host: url.hostname,
+    title: built.title,
+    blocks: built.blocks,
+    secure: true,
+    bytes: JSON.stringify(built.blocks).length,
+    fetchedAt: new Date().toISOString(),
+  };
+  data.history = [
+    { url: page.url, title: page.title, host: page.host, at: page.fetchedAt },
+    ...data.history.filter((h2) => h2.url !== page.url),
+  ].slice(0, 40);
+  save();
+  return { page, history: data.history };
+}
+
+/* ---------------- 路由 ---------------- */
+function route(path, { method = 'GET', body = {} } = {}) {
+  const url = new URL(path, 'http://local');
+  const q = Object.fromEntries(url.searchParams);
+  const seg = url.pathname.split('/').filter(Boolean); // ['api', ...]
+  const at = (i) => seg[i];
+
+  if (url.pathname === '/api/state') return snapshot();
+
+  if (url.pathname === '/api/catalog') {
+    const ids = new Set(data.installed.map((r) => r.id));
+    let apps = CATALOG;
+    if (q.os) {
+      if (!findSource(q.os) || q.os === 'tide') fail('未知的來源作業系統');
+      apps = catalogFor(q.os);
+    }
+    if (q.category) {
+      apps = apps.filter((a) => a.category === q.category);
+      if (!apps.length) fail(`找不到分類：${q.category}`);
+    }
+    if (q.q) {
+      const needle = q.q.toLowerCase();
+      apps = apps.filter((a) => [a.name, a.en, a.category, a.genre].some((f) => String(f ?? '').toLowerCase().includes(needle)));
+    }
+    return {
+      sources: sourceSummary(),
+      apps: apps.map((a) => ({ ...a, installed: ids.has(a.id), enabled: data.runtimes[a.os] !== false })),
+    };
+  }
+
+  if (url.pathname === '/api/apps/install') {
+    if (installOne(body.id) === 'already') fail('這個 App 已經在裝置上了');
+    save();
+    return { app: findApp(body.id), state: snapshot() };
+  }
+
+  if (url.pathname === '/api/apps/install-all') {
+    const targets = body.os ? [String(body.os)] : SOURCES.filter((s) => !s.builtin).map((s) => s.os);
+    const category = body.category ? String(body.category) : null;
+    targets.forEach((os) => {
+      const source = findSource(os);
+      if (!source || source.builtin) fail(`未知的來源作業系統：${os}`);
+    });
+    const pick = (os) => catalogFor(os).filter((app) => !category || app.category === category);
+    if (category && !targets.some((os) => pick(os).length)) fail(`找不到分類：${category}`);
+    if (body.os && data.runtimes[targets[0]] === false) {
+      fail(`${findSource(targets[0]).name} 相容層尚未啟用，請先到「設定 → 萬象相容層」開啟`);
+    }
+    let installed = 0;
+    let already = 0;
+    const skipped = [];
+    for (const os of targets) {
+      if (!pick(os).length) continue;
+      if (data.runtimes[os] === false) { skipped.push(findSource(os).name); continue; }
+      for (const app of pick(os)) {
+        if (installOne(app.id) === 'installed') installed += 1;
+        else already += 1;
+      }
+    }
+    save();
+    return { installed, already, skipped, category, state: snapshot() };
+  }
+
+  if (url.pathname === '/api/apps/uninstall') {
+    const app = findApp(body.id);
+    if (!app) fail(`找不到 App：${body.id}`);
+    if (app.os === 'tide') fail('系統內建 App 無法移除');
+    const before = data.installed.length;
+    data.installed = data.installed.filter((row) => row.id !== body.id);
+    if (data.installed.length === before) fail('這個 App 尚未安裝');
+    save();
+    return { state: snapshot() };
+  }
+
+  if (url.pathname === '/api/device' && method === 'PATCH') {
+    const d = data.device;
+    if ('wallpaperImage' in body) {
+      if (!body.wallpaperImage) {
+        d.wallpaperImage = null;
+        if (d.wallpaper === 'custom') d.wallpaper = WALLPAPERS[0].id;
+      } else {
+        if (!/^data:image\/(png|jpeg|jpg|webp|gif);base64,/.test(body.wallpaperImage)) fail('桌布必須是 png／jpeg／webp 圖片');
+        if (body.wallpaperImage.length > 4_000_000) fail('這張桌布太大了，請換一張小一點的');
+        d.wallpaperImage = body.wallpaperImage;
+        d.wallpaper = 'custom';
+      }
+    }
+    if ('wallpaper' in body) {
+      if (body.wallpaper === 'custom') {
+        if (!d.wallpaperImage) fail('還沒有選過自己的桌布');
+      } else if (!WALLPAPERS.some((w) => w.id === body.wallpaper)) fail('沒有這張桌布');
+      d.wallpaper = body.wallpaper;
+    }
+    for (const key of ['brightness', 'volume', 'wallpaperBlur', 'wallpaperDim']) {
+      if (key in body) d[key] = clamp(body[key]);
+    }
+    for (const key of ['darkMode', 'wifi', 'bluetooth', 'dnd']) {
+      if (key in body) d[key] = Boolean(body[key]);
+    }
+    save();
+    return { device: d };
+  }
+
+  if (url.pathname === '/api/runtimes' && method === 'PATCH') {
+    const source = findSource(body.os);
+    if (!source) fail('未知的來源作業系統');
+    if (source.builtin) fail('原生執行環境無法關閉');
+    data.runtimes[body.os] = Boolean(body.enabled);
+    save();
+    return { state: snapshot() };
+  }
+
+  if (url.pathname === '/api/browse') return browse(body.url);
+
+  if (url.pathname === '/api/bookmarks' && method === 'POST') {
+    let href;
+    try {
+      href = new URL(/^[a-z][a-z0-9+.-]*:/i.test(body.url ?? '') ? body.url : `https://${body.url}`).href;
+    } catch {
+      fail('看不懂這個網址');
+    }
+    if (data.bookmarks.some((b) => b.url === href)) fail('這個網址已經在書籤裡了');
+    const bookmark = { id: nextId(data.bookmarks), title: (body.title || href).slice(0, 120), url: href };
+    data.bookmarks.push(bookmark);
+    save();
+    return { bookmark, bookmarks: data.bookmarks };
+  }
+
+  if (at(1) === 'bookmarks' && method === 'DELETE') {
+    const id = Number(at(2));
+    const before = data.bookmarks.length;
+    data.bookmarks = data.bookmarks.filter((b) => b.id !== id);
+    if (data.bookmarks.length === before) fail('找不到這個書籤');
+    save();
+    return { bookmarks: data.bookmarks };
+  }
+
+  if (url.pathname === '/api/history/clear') {
+    data.history = [];
+    save();
+    return { history: [] };
+  }
+
+  if (url.pathname === '/api/notes' && method === 'GET') return { notes: snapshot().notes };
+
+  if (url.pathname === '/api/notes' && method === 'POST') {
+    const title = String(body.title ?? '').trim();
+    if (!title) fail('標題不能為空');
+    const note = { id: nextId(data.notes), title, body: String(body.body ?? ''), updatedAt: new Date().toISOString() };
+    data.notes.push(note);
+    save();
+    return { note };
+  }
+
+  if (at(1) === 'notes' && method === 'PATCH') {
+    const note = data.notes.find((n) => n.id === Number(at(2)));
+    if (!note) fail('找不到這則備忘錄');
+    if ('title' in body) {
+      const title = String(body.title).trim();
+      if (!title) fail('標題不能為空');
+      note.title = title;
+    }
+    if ('body' in body) note.body = String(body.body);
+    note.updatedAt = new Date().toISOString();
+    save();
+    return { note };
+  }
+
+  if (at(1) === 'notes' && method === 'DELETE') {
+    const before = data.notes.length;
+    data.notes = data.notes.filter((n) => n.id !== Number(at(2)));
+    if (data.notes.length === before) fail('找不到這則備忘錄');
+    save();
+    return { ok: true };
+  }
+
+  if (url.pathname === '/api/reset') {
+    data = defaultState();
+    save();
+    return { state: snapshot() };
+  }
+
+  fail(`介面不存在：${url.pathname}`);
+}
+
+globalThis.__TIDE_LOCAL_API__ = async (path, opts) => route(path, opts);
+
+/* ===== public/mocks.js ===== */
+/**
+ * 相容層執行畫面。
+ *
+ * 外來 App 的介面由各自 runtime 轉譯後交給 OmniUI 繪製；這裡依照 App 的介面型態
+ * （feed / chat / player …）渲染對應的畫面骨架 —— 這是相容層的模擬渲染，
+ * 不是真的在跑 dex 或 PE 執行檔。
+ */
+
+/** 由 App id 產生穩定的偽隨機序列，讓每個 App 的畫面長得不一樣但每次都一致 */
+function seeded(id) {
+  let h = 2166136261;
+  for (const ch of id) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 16777619);
+  }
+  return (min, max) => {
+    h = Math.imul(h ^ (h >>> 15), 2246822507);
+    h ^= h >>> 13;
+    return min + (Math.abs(h) % (max - min + 1));
+  };
+}
+
+const line = (w, extra = '') => `<div class="mock-line" style="width:${w}%;${extra}"></div>`;
+
+const KIND = {
+  feed(app, rnd) {
+    const cards = Array.from({ length: 3 }, () => `
+      <article class="mock-card">
+        <div class="mock-row">
+          <div class="mock-av"></div>
+          <div style="flex:1;display:grid;gap:6px">${line(rnd(45, 70))}${line(rnd(25, 40), 'opacity:.6')}</div>
+          <span class="mock-sub">${rnd(1, 23)} 分鐘前</span>
+        </div>
+        <div class="mock-img" style="height:${rnd(88, 132)}px"></div>
+        <div class="mock-row" style="gap:14px">
+          <span class="mock-sub">♡ ${rnd(20, 980)}</span>
+          <span class="mock-sub">💬 ${rnd(2, 88)}</span>
+          <span class="mock-sub">↗ 分享</span>
+        </div>
+      </article>`).join('');
+    return `<div class="mock">
+      <div class="mock-row"><h3 class="mock-title">${esc(app.name)}</h3><span class="mock-pill" style="margin-left:auto">推薦</span><span class="mock-pill">追蹤中</span></div>
+      ${cards}</div>`;
+  },
+
+  chat(app, rnd) {
+    const msgs = ['在嗎？剛把檔案傳給你了', '收到，我看一下', '這版把相容層的權限對映補完了', '👍 那我這邊直接測 Android 那條路徑'];
+    return `<div class="mock">
+      <div class="mock-row"><div class="mock-av"></div><div><div class="mock-title">工作群組</div><div class="mock-sub">${rnd(3, 12)} 人 · 線上</div></div></div>
+      <div style="display:grid;gap:9px;margin-top:4px">
+        ${msgs.map((m, i) => `<div class="bubble ${i % 2 ? 'me' : ''}">${esc(m)}</div>`).join('')}
+      </div>
+      <div class="mock-row" style="margin-top:6px">
+        <div class="field" style="flex:1;color:#8d99ae;font-size:13px">傳送訊息…</div>
+        <div class="mock-pill">＋</div>
+      </div>
+    </div>`;
+  },
+
+  player(app, rnd) {
+    const tracks = ['前奏 · Intro', '海潮 · Tide', '夜航 · Nightfall', '回聲 · Echoes'];
+    return `<div class="mock">
+      <div class="mock-img" style="height:180px;border-radius:18px"></div>
+      <div><div class="mock-title">${esc(app.name)} 精選輯</div><div class="mock-sub">${esc(app.category)} · ${rnd(8, 42)} 個項目</div></div>
+      <div class="progress"><i></i></div>
+      <div class="mock-row" style="justify-content:center;gap:26px;font-size:22px">⏮ <span style="font-size:30px">⏸</span> ⏭</div>
+      <div style="display:grid;gap:2px">
+        ${tracks.map((t, i) => `<div class="list-item" style="padding:10px 0"><span class="mock-sub" style="width:18px">${i + 1}</span><div class="grow"><div class="t" style="font-size:13px">${esc(t)}</div></div><span class="mock-sub">${rnd(2, 5)}:${String(rnd(10, 59))}</span></div>`).join('')}
+      </div>
+    </div>`;
+  },
+
+  tool(app, rnd) {
+    return `<div class="mock">
+      <div class="mock-row" style="gap:6px;flex-wrap:wrap">
+        ${['選取', '筆刷', '形狀', '文字', '圖層'].map((t, i) => `<span class="mock-pill" ${i === 1 ? 'style="background:linear-gradient(160deg,var(--c1),var(--c2))"' : ''}>${t}</span>`).join('')}
+      </div>
+      <div class="mock-card" style="height:230px;position:relative;overflow:hidden">
+        <svg viewBox="0 0 200 160" style="position:absolute;inset:0;width:100%;height:100%">
+          <circle cx="${rnd(50, 90)}" cy="60" r="34" fill="var(--c1)" opacity=".7" />
+          <rect x="${rnd(80, 110)}" y="70" width="62" height="62" rx="12" fill="var(--c2)" opacity=".85" />
+          <path d="M20 140 Q 70 ${rnd(80, 110)} 180 130" stroke="#fff" stroke-width="2.5" fill="none" opacity=".6" />
+        </svg>
+      </div>
+      <div class="mock-row"><span class="mock-sub">畫布 1920×1080</span><span class="mock-sub" style="margin-left:auto">縮放 ${rnd(60, 140)}%</span></div>
+      <div class="mock-btn">匯出</div>
+    </div>`;
+  },
+
+  doc(app, rnd) {
+    return `<div class="mock">
+      <div class="mock-card" style="background:rgba(255,255,255,.94);color:#1a1c22;padding:18px;display:grid;gap:9px">
+        <div style="font-size:16px;font-weight:700">${esc(app.name)} 文件</div>
+        ${Array.from({ length: 9 }, (_, i) => `<div class="mock-line" style="width:${i === 4 ? 62 : rnd(78, 100)}%;background:rgba(20,22,28,.13)"></div>`).join('')}
+        <div style="height:70px;border-radius:8px;background:linear-gradient(140deg,var(--c1),var(--c2));opacity:.75"></div>
+        ${Array.from({ length: 4 }, () => `<div class="mock-line" style="width:${rnd(70, 98)}%;background:rgba(20,22,28,.13)"></div>`).join('')}
+      </div>
+      <div class="mock-row"><span class="mock-sub">第 1 / ${rnd(3, 24)} 頁</span><span class="mock-sub" style="margin-left:auto">已自動儲存</span></div>
+    </div>`;
+  },
+
+  stats(app, rnd) {
+    const bars = Array.from({ length: 7 }, () => rnd(22, 100));
+    return `<div class="mock">
+      <div class="grid3" style="grid-template-columns:repeat(3,1fr)">
+        ${['本週', '平均', '目標'].map((t) => `<div class="mock-card" style="aspect-ratio:auto;padding:10px;gap:2px"><div class="mock-sub">${t}</div><div style="font-size:19px;font-weight:700">${rnd(12, 96)}</div></div>`).join('')}
+      </div>
+      <div class="mock-card">
+        <div class="mock-sub">近 7 日</div>
+        <div class="bars">${bars.map((b) => `<i style="height:${b}%"></i>`).join('')}</div>
+        <div class="mock-row" style="justify-content:space-between">${['一', '二', '三', '四', '五', '六', '日'].map((d) => `<span class="mock-sub">${d}</span>`).join('')}</div>
+      </div>
+      <div class="mock-card"><div class="mock-row"><span class="mock-title">總計</span><span class="mock-title" style="margin-left:auto">${rnd(120, 9800).toLocaleString()}</span></div>${line(72)}</div>
+    </div>`;
+  },
+
+  map(app, rnd) {
+    return `<div class="mock" style="padding:0">
+      <div style="position:relative;height:330px;background:linear-gradient(160deg,#1d2b3a,#0f1a24)">
+        <svg viewBox="0 0 200 300" style="position:absolute;inset:0;width:100%;height:100%">
+          ${Array.from({ length: 7 }, (_, i) => `<line x1="0" y1="${i * 45}" x2="200" y2="${i * 45 + rnd(-14, 14)}" stroke="rgba(255,255,255,.09)" stroke-width="7" />`).join('')}
+          ${Array.from({ length: 5 }, (_, i) => `<line x1="${i * 45}" y1="0" x2="${i * 45 + rnd(-14, 14)}" y2="300" stroke="rgba(255,255,255,.07)" stroke-width="6" />`).join('')}
+          <path d="M30 270 L 70 180 L 120 150 L 160 60" stroke="var(--c1)" stroke-width="5" fill="none" stroke-linecap="round" />
+          <circle cx="30" cy="270" r="7" fill="#fff" />
+          <circle cx="160" cy="60" r="8" fill="var(--c1)" stroke="#fff" stroke-width="2.5" />
+        </svg>
+        <div class="field" style="position:absolute;top:12px;left:12px;right:12px;width:auto;background:rgba(20,22,30,.8);font-size:13px;color:#93a0b6">搜尋地點</div>
+      </div>
+      <div class="mock-card" style="margin:12px">
+        <div class="mock-row"><span class="mock-title">建議路線</span><span class="mock-pill" style="margin-left:auto">${rnd(8, 46)} 分鐘</span></div>
+        <div class="mock-sub">${rnd(2, 18)}.${rnd(0, 9)} 公里 · 路況順暢</div>
+        <div class="mock-btn">開始導航</div>
+      </div>
+    </div>`;
+  },
+
+  photo(app, rnd) {
+    const cell = () => `<div style="background:linear-gradient(${rnd(20, 340)}deg,var(--c1),var(--c2));opacity:${(rnd(60, 100) / 100).toFixed(2)}"></div>`;
+    return `<div class="mock">
+      <div class="mock-row"><h3 class="mock-title">${esc(app.name)}</h3><span class="mock-sub" style="margin-left:auto">${rnd(120, 4800)} 個項目</span></div>
+      <div class="grid3">${Array.from({ length: 12 }, cell).join('')}</div>
+      <div class="mock-row" style="gap:6px;flex-wrap:wrap">${['原圖', '鮮豔', '黑白', '柔光', '復古'].map((t) => `<span class="mock-pill">${t}</span>`).join('')}</div>
+    </div>`;
+  },
+
+  panel(app, rnd) {
+    const items = [['連線', true], ['自動同步', true], ['背景執行', false], ['通知', true]];
+    return `<div class="mock">
+      <div class="mock-card">
+        <div class="mock-row"><span class="mock-title">${esc(app.name)}</span><span class="mock-pill" style="margin-left:auto">已連線 ${rnd(2, 9)} 台</span></div>
+        <div class="mock-sub">${esc(app.category)} · 最後同步 ${rnd(1, 30)} 分鐘前</div>
+      </div>
+      ${items.map(([t, on]) => `<div class="mock-card"><div class="toggle-row"><span style="font-size:13.5px">${t}</span><span class="switch ${on ? 'on' : ''}" style="margin-left:auto"></span></div></div>`).join('')}
+    </div>`;
+  },
+
+  code(app, rnd) {
+    return `<div class="mock" style="padding:0">
+      <div class="mock-row" style="padding:10px 14px;gap:6px;border-bottom:1px solid rgba(255,255,255,.08)">
+        <span class="mock-pill" style="background:linear-gradient(160deg,var(--c1),var(--c2))">main.c</span>
+        <span class="mock-pill">omni.h</span>
+        <span class="mock-sub" style="margin-left:auto">UTF-8 · LF</span>
+      </div>
+      <pre class="code"><span class="c">// 由 ${esc(app.en)} 於相容層中開啟</span>
+<span class="k">#include</span> <span class="s">&lt;omniui.h&gt;</span>
+
+<span class="k">int</span> <span class="f">main</span>(<span class="k">void</span>) {
+  omni_window *w = <span class="f">omni_create</span>(<span class="s">"${esc(app.name)}"</span>);
+  <span class="f">omni_bridge_attach</span>(w, BRIDGE_AUTO);
+  <span class="k">return</span> <span class="f">omni_run</span>(w);
+}</pre>
+      <div class="mock-row" style="padding:8px 14px;border-top:1px solid rgba(255,255,255,.08)">
+        <span class="mock-sub">第 ${rnd(1, 40)} 行</span><span class="mock-sub" style="margin-left:auto">0 個問題</span>
+      </div>
+    </div>`;
+  },
+
+  game(app, rnd) {
+    const genre = app.genre ?? '遊戲';
+    const stars = (n) => '★'.repeat(n) + '☆'.repeat(3 - n);
+
+    // 依遊戲類型換下半部的內容，讓每款遊戲的畫面不一樣
+    const BLOCKS = {
+      排行榜: () => `<div class="mock-card">
+        <div class="mock-title" style="font-size:13px">本週排行</div>
+        ${['Nova', 'Kite', '你', 'Rex', 'Mio'].map((n, i) => `<div class="mock-row" style="gap:10px">
+          <span class="mock-sub" style="width:16px">${i + 1}</span>
+          <span style="font-size:13px;flex:1;${n === '你' ? 'font-weight:700' : ''}">${n}</span>
+          <span class="mock-sub">${(9800 - i * rnd(120, 400)).toLocaleString()}</span></div>`).join('')}
+      </div>`,
+      關卡: () => `<div class="mock-card">
+        <div class="mock-title" style="font-size:13px">第 ${rnd(2, 9)} 章 · 關卡</div>
+        <div class="grid3" style="grid-template-columns:repeat(4,1fr);gap:8px">
+          ${Array.from({ length: 8 }, (_, i) => {
+            const done = i < 5;
+            return `<div style="aspect-ratio:1;border-radius:12px;display:grid;place-items:center;gap:2px;
+              background:${done ? 'linear-gradient(160deg,var(--c1),var(--c2))' : 'var(--win-fill)'};
+              font-size:13px;font-weight:700;color:${done ? '#fff' : 'inherit'};opacity:${done ? 1 : 0.5}">
+              ${i + 1}<span style="font-size:8px">${done ? stars(rnd(1, 3)) : '☆☆☆'}</span></div>`;
+          }).join('')}
+        </div>
+      </div>`,
+      隊伍: () => `<div class="mock-card">
+        <div class="mock-title" style="font-size:13px">出戰隊伍</div>
+        ${['狂風劍士', '暗夜遊俠', '星辰祭司'].map((n) => `<div class="mock-row" style="gap:10px">
+          <div class="mock-av" style="width:30px;height:30px;border-radius:9px"></div>
+          <div style="flex:1"><div style="font-size:12.5px">${n}</div>
+            <div class="progress" style="margin-top:4px"><i style="animation:none;width:${rnd(45, 96)}%"></i></div></div>
+          <span class="mock-sub">Lv.${rnd(18, 72)}</span></div>`).join('')}
+      </div>`,
+      曲目: () => `<div class="mock-card">
+        <div class="mock-title" style="font-size:13px">曲目</div>
+        ${['潮汐脈衝', '霓虹迴路', '深海節拍'].map((n) => `<div class="mock-row" style="gap:10px">
+          <span style="font-size:16px">🎼</span>
+          <div style="flex:1"><div style="font-size:12.5px">${n}</div><div class="mock-sub">難度 ${rnd(6, 14)} · 最佳 ${rnd(90, 99)}.${rnd(10, 99)}%</div></div>
+          <span class="mock-pill">FULL COMBO</span></div>`).join('')}
+      </div>`,
+      資源: () => `<div class="mock-card">
+        <div class="grid3">
+          ${[['💰', '金幣', rnd(12, 98) * 1000], ['⚡', '體力', `${rnd(20, 60)}/60`], ['🏗', '建築', rnd(4, 28)]]
+            .map(([ico, label, v]) => `<div style="aspect-ratio:auto;text-align:center">
+              <div style="font-size:19px">${ico}</div>
+              <div style="font-size:13px;font-weight:700">${typeof v === 'number' ? v.toLocaleString() : v}</div>
+              <div class="mock-sub">${label}</div></div>`).join('')}
+        </div>
+        <div class="mock-sub">下一次收成還有 ${rnd(2, 48)} 分鐘</div>
+      </div>`,
+    };
+    const PICK = {
+      競速: '排行榜', 即時戰略: '排行榜', 策略: '排行榜', 棋類: '排行榜',
+      益智: '關卡', 消除: '關卡',
+      角色扮演: '隊伍', 動作: '隊伍', 太空冒險: '隊伍',
+      音樂節奏: '曲目',
+      模擬經營: '資源', 休閒: '資源',
+    };
+    const block = BLOCKS[PICK[genre] ?? '關卡'];
+
+    return `<div class="mock" style="padding:0;gap:0">
+      <div style="padding:34px 16px 20px;text-align:center;background:radial-gradient(120% 90% at 50% 0%, var(--c1), var(--c2))">
+        <div style="font-size:52px;line-height:1">${app.glyph}</div>
+        <h3 style="font-size:22px;letter-spacing:2px;color:#fff;margin-top:6px">${esc(app.name)}</h3>
+        <div style="font-size:11.5px;color:rgba(255,255,255,.8);letter-spacing:1px">${esc(app.en)} · ${esc(genre)}</div>
+      </div>
+      <div style="padding:14px;display:grid;gap:12px">
+        <div class="grid3">
+          ${[['存檔', rnd(1, 3)], ['進度', `${rnd(12, 96)}%`], ['成就', `${rnd(3, 40)}/48`]]
+            .map(([t, v]) => `<div class="mock-card" style="aspect-ratio:auto;padding:10px;gap:2px;text-align:center">
+              <div style="font-size:16px;font-weight:700">${v}</div><div class="mock-sub">${t}</div></div>`).join('')}
+        </div>
+        <div class="mock-btn" style="padding:13px">▶　繼續遊戲</div>
+        ${block()}
+        <div class="mock-row" style="gap:8px">
+          <span class="mock-pill" style="flex:1;text-align:center">新遊戲</span>
+          <span class="mock-pill" style="flex:1;text-align:center">商城</span>
+          <span class="mock-pill" style="flex:1;text-align:center">設定</span>
+        </div>
+      </div>
+    </div>`;
+  },
+};
+
+function renderMock(app) {
+  const rnd = seeded(app.id);
+  const build = KIND[app.kind] ?? KIND.panel;
+  return `<div style="${tint(app)};min-height:100%">${build(app, rnd)}</div>`;
+}
+
+function runtimeStats(app) {
+  const rnd = seeded(app.id + 'r');
+  return { nodes: rnd(320, 4200), fps: rnd(56, 60), ram: rnd(48, 420) };
+}
+
+/* ===== public/apps.js ===== */
+/** iOS 設定裡那種彩色圓角小圖示 */
+const iconBox = (glyph, color) =>
+  `<span class="li-icon" style="background:${color};color:#fff">${glyph}</span>`;
+
+/* ============================ 萬象商店 ============================ */
+const store = {
+  id: 'store',
+  render(ctx) {
+    const root = el('<div></div>');
+    let osFilter = ctx.memo.storeFilter ?? 'all';
+    let category = ctx.memo.storeCategory ?? null;
+    let keyword = ctx.memo.storeKeyword ?? '';
+
+    const draw = async () => {
+      // 一次取回整份目錄（含已安裝狀態），來源與分類都在前端過濾，計數才會處處一致
+      const { sources, apps } = await api(`/api/catalog${keyword ? `?q=${encodeURIComponent(keyword)}` : ''}`);
+      const external = sources.filter((s) => !s.builtin);
+
+      const scope = apps.filter((a) => osFilter === 'all' || a.os === osFilter);
+      const categories = [...new Set(scope.map((a) => a.category))]
+        .map((name) => ({ name, count: scope.filter((a) => a.category === name).length }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-Hant'));
+      if (category && !categories.some((c) => c.name === category)) category = null;
+
+      const shown = scope.filter((a) => !category || a.category === category);
+      // 「一鍵撈取全部」的範圍：目前選到的分類，不受來源分頁影響
+      const wide = apps.filter((a) => !category || a.category === category);
+      const wideGot = wide.filter((a) => a.installed).length;
+      const label = category ?? 'App';
+
+      root.replaceChildren();
+
+      const hero = el(`<div class="hero">
+        <h3>把其他系統的${category ? esc(category) : ' App'}全部撈進來</h3>
+        <p>萬象相容層接上 ${external.length} 套作業系統${category ? `，其中「${esc(category)}」共 ${wide.length} 個` : `，共 ${apps.length} 個 App`}，
+           已在這台裝置上 ${wideGot} 個。未啟用相容層的來源會自動略過。</p>
+        <button class="big-btn" ${wideGot >= wide.length ? 'disabled' : ''}>
+          ${wideGot >= wide.length ? `全部${esc(label)}都撈完了` : `一鍵撈取全部${esc(label)}（還有 ${wide.length - wideGot} 個）`}
+        </button>
+      </div>`);
+      hero.querySelector('button').addEventListener('click', async (e) => {
+        e.target.disabled = true;
+        e.target.textContent = '撈取中…';
+        try {
+          const res = await api('/api/apps/install-all', { method: 'POST', body: category ? { category } : {} });
+          ctx.setState(res.state);
+          const skipped = res.skipped.length ? `，略過未啟用的 ${res.skipped.join('、')}` : '';
+          ctx.notify('萬象相容層', `已撈取 ${res.installed} 個${esc(label)}${skipped}`);
+        } catch (err) {
+          ctx.notify('撈取失敗', err.message);
+        }
+        await draw();
+      });
+      root.append(hero);
+
+      // 來源系統分頁
+      const tabs = el('<div class="tabs-os"></div>');
+      const mkTab = (key, text, extra = '') => {
+        const b = el(`<button class="tab-os ${osFilter === key ? 'on' : ''}">${text}${extra}</button>`);
+        b.addEventListener('click', () => { osFilter = key; ctx.memo.storeFilter = key; draw(); });
+        return b;
+      };
+      tabs.append(mkTab('all', '全部'));
+      external.forEach((s) =>
+        tabs.append(
+          mkTab(s.os, `${s.glyph} ${s.short}`, `<span class="count">${s.installed}/${s.total}</span>${s.enabled ? '' : ' ⏸'}`),
+        ),
+      );
+      root.append(tabs);
+
+      // 分類分頁
+      if (categories.length > 1) {
+        const chips = el('<div class="tabs-os" style="padding-top:0"></div>');
+        const mkChip = (name) => {
+          const on = category === name || (!category && name === null);
+          const count = name ? categories.find((c) => c.name === name).count : scope.length;
+          const chip = el(`<button class="tab-os ${on ? 'on' : ''}" style="font-size:12px">${
+            name ? esc(name) : '全部分類'
+          }<span class="count">${count}</span></button>`);
+          chip.addEventListener('click', () => {
+            category = name;
+            ctx.memo.storeCategory = name;
+            draw();
+          });
+          return chip;
+        };
+        chips.append(mkChip(null), ...categories.slice(0, 8).map((c) => mkChip(c.name)));
+        root.append(chips);
+      }
+
+      const search = el('<div style="padding:0 14px 8px"><input class="field" placeholder="搜尋 App 名稱或分類" /></div>');
+      const input = search.querySelector('input');
+      input.value = keyword;
+      input.addEventListener('input', (e) => {
+        keyword = e.target.value.trim();
+        ctx.memo.storeKeyword = keyword;
+        clearTimeout(input._t);
+        input._t = setTimeout(draw, 220);
+      });
+      root.append(search);
+
+      // 選定單一來源時，顯示它的相容層資訊與整包撈取
+      if (osFilter !== 'all') {
+        const s = external.find((x) => x.os === osFilter);
+        const got = shown.filter((a) => a.installed).length;
+        const card = el(`<div class="hero" style="background:linear-gradient(150deg, ${s.accent}33, rgba(127,127,127,.06))">
+          <h3>${s.glyph} ${esc(s.name)}${category ? ` · ${esc(category)}` : ''} · ${got}/${shown.length}</h3>
+          <p><strong>${esc(s.runtime)}</strong><br />${esc(s.detail)}</p>
+          <button class="big-btn" ${!s.enabled || got >= shown.length ? 'disabled' : ''}>
+            ${!s.enabled
+              ? '相容層未啟用（到「設定」開啟）'
+              : got >= shown.length
+                ? `已全部撈取`
+                : `撈取 ${esc(s.name)} 的全部 ${shown.length} 個${esc(category ?? ' App')}`}
+          </button>
+        </div>`);
+        card.querySelector('button').addEventListener('click', async (e) => {
+          e.target.disabled = true;
+          try {
+            const res = await api('/api/apps/install-all', {
+              method: 'POST',
+              body: category ? { os: osFilter, category } : { os: osFilter },
+            });
+            ctx.setState(res.state);
+            ctx.notify(s.name, `已撈取 ${res.installed} 個${esc(category ?? ' App')}到桌面`);
+          } catch (err) {
+            ctx.notify('撈取失敗', err.message);
+          }
+          await draw();
+        });
+        root.append(card);
+      }
+
+      if (!shown.length) {
+        root.append(el('<p class="section-title" style="text-align:center;padding:40px 0">找不到符合的 App</p>'));
+        return;
+      }
+
+      const list = el('<div class="list"></div>');
+      const bySource = new Map();
+      shown.forEach((a) => bySource.set(a.os, [...(bySource.get(a.os) ?? []), a]));
+      for (const [os, group] of bySource) {
+        const s = external.find((x) => x.os === os);
+        if (osFilter === 'all') list.append(el(`<div class="section-title">${s.glyph} ${esc(s.name)} · ${esc(s.runtime)}</div>`));
+        group.forEach((app) => list.append(storeRow(app, s, ctx, draw)));
+      }
+      root.append(list);
+    };
+
+    draw();
+    return root;
+  },
+};
+
+function storeRow(app, source, ctx, redraw) {
+  const row = el(`<div class="list-item">
+    <span class="icon" style="${tint(app)};width:44px;height:44px;border-radius:12px;font-size:21px">${app.glyph}</span>
+    <div class="grow">
+      <div class="t">${esc(app.name)} <span style="font-weight:400;opacity:.5;font-size:11.5px">${esc(app.en)}</span></div>
+      <div class="d">${esc(app.genre ?? app.category)} · ${fmtSize(app.size)}${app.enabled ? '' : ' · 相容層未啟用'}</div>
+    </div>
+  </div>`);
+
+  const btn = el(
+    app.installed
+      ? '<button class="pill-btn ghost">移除</button>'
+      : `<button class="pill-btn" ${app.enabled ? '' : 'disabled'}>撈取</button>`,
+  );
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      if (app.installed) {
+        const res = await api('/api/apps/uninstall', { method: 'POST', body: { id: app.id } });
+        ctx.setState(res.state);
+        ctx.notify(app.name, '已從裝置移除');
+      } else {
+        const res = await api('/api/apps/install', { method: 'POST', body: { id: app.id } });
+        ctx.setState(res.state);
+        ctx.notify(`${source.glyph} ${app.name}`, `已透過 ${source.runtime.split(' · ')[0]} 安裝到桌面`);
+      }
+    } catch (err) {
+      ctx.notify('操作失敗', err.message);
+    }
+    await redraw();
+  });
+  row.append(btn);
+  return row;
+}
+
+/* ============================ 瀏覽器 ============================ */
+const SEARCH_URL = 'https://duckduckgo.com/html/?q=';
+
+/** 網址列輸入 → 要瀏覽的網址；看起來不像網址就丟去搜尋 */
+function toTarget(input) {
+  const raw = input.trim();
+  if (!raw) return '';
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) return raw;
+  if (/^[^\s/]+\.[^\s/]{2,}([/?#].*)?$/.test(raw) || raw.startsWith('localhost')) return raw;
+  return SEARCH_URL + encodeURIComponent(raw);
+}
+
+const browser = {
+  id: 'browser',
+  render(ctx) {
+    const session = (ctx.memo.browser ??= { stack: [], index: -1, page: null });
+
+    const root = el(`<div style="display:flex;flex-direction:column;height:100%">
+      <div style="display:flex;gap:7px;padding:10px 12px;align-items:center;border-bottom:1px solid var(--win-sep);flex:0 0 auto">
+        <button class="nav-btn" data-act="back" title="上一頁">‹</button>
+        <button class="nav-btn" data-act="forward" title="下一頁">›</button>
+        <button class="nav-btn" data-act="reload" title="重新整理">⟳</button>
+        <input class="field" style="flex:1;padding:8px 12px;font-size:13px" placeholder="搜尋或輸入網址"
+               autocapitalize="off" autocomplete="off" spellcheck="false" />
+        <button class="nav-btn" data-act="star" title="加入書籤">☆</button>
+      </div>
+      <div class="app-body" style="flex:1"></div>
+    </div>`);
+    const bar = root.querySelector('input');
+    const view = root.querySelector('.app-body');
+    const btn = (act) => root.querySelector(`[data-act="${act}"]`);
+
+    const syncChrome = () => {
+      btn('back').disabled = session.index <= 0;
+      btn('forward').disabled = session.index >= session.stack.length - 1;
+      btn('reload').disabled = !session.page;
+      const marked = session.page && ctx.state.bookmarks.some((b) => b.url === session.page.url);
+      btn('star').textContent = marked ? '★' : '☆';
+      btn('star').disabled = !session.page;
+      btn('star').style.color = marked ? '#f6b93b' : '';
+    };
+
+    const startPage = () => {
+      view.replaceChildren();
+      view.append(el(`<div class="hero" style="margin:14px">
+        <h3>🧭 OmniWeb</h3>
+        <p>裝置本身沒有排版引擎：網頁由系統在伺服端取回、抽成可閱讀的區塊後，
+           再交給 OmniUI 畫出來。內文裡的連結一樣可以點。</p>
+      </div>`));
+
+      view.append(el('<div class="section-title">書籤</div>'));
+      const marks = el('<div class="list"></div>');
+      if (!ctx.state.bookmarks.length) marks.append(el('<p class="section-title">還沒有書籤</p>'));
+      ctx.state.bookmarks.forEach((b) => {
+        const row = el(`<div class="list-item">
+          <span style="font-size:17px;width:24px;text-align:center">🔖</span>
+          <div class="grow"><div class="t">${esc(b.title)}</div><div class="d">${esc(b.url)}</div></div>
+        </div>`);
+        row.querySelector('.grow').style.cursor = 'pointer';
+        row.querySelector('.grow').addEventListener('click', () => go(b.url));
+        const del = el('<button class="pill-btn ghost">移除</button>');
+        del.addEventListener('click', async () => {
+          const res = await api(`/api/bookmarks/${b.id}`, { method: 'DELETE' });
+          ctx.setState({ ...ctx.state, bookmarks: res.bookmarks });
+          startPage();
+        });
+        row.append(del);
+        marks.append(row);
+      });
+      view.append(marks);
+
+      const head = el('<div class="section-title" style="display:flex;align-items:center">最近瀏覽</div>');
+      if (ctx.state.history.length) {
+        const clear = el('<button class="pill-btn ghost" style="margin-left:auto;padding:3px 10px;font-size:11.5px">清除</button>');
+        clear.addEventListener('click', async () => {
+          const res = await api('/api/history/clear', { method: 'POST' });
+          ctx.setState({ ...ctx.state, history: res.history });
+          startPage();
+        });
+        head.append(clear);
+      }
+      view.append(head);
+
+      if (!ctx.state.history.length) {
+        view.append(el('<p class="section-title">還沒有瀏覽紀錄</p>'));
+        return;
+      }
+      const hist = el('<div class="list"></div>');
+      ctx.state.history.slice(0, 12).forEach((h) => {
+        const row = el(`<button class="list-item">
+          <span style="font-size:15px;width:24px;text-align:center">🕘</span>
+          <div class="grow"><div class="t">${esc(h.title)}</div><div class="d">${esc(h.host ?? h.url)}</div></div>
+          <span style="opacity:.4">›</span></button>`);
+        row.addEventListener('click', () => go(h.url));
+        hist.append(row);
+      });
+      view.append(hist);
+    };
+
+    const renderPage = (page) => {
+      view.replaceChildren();
+      view.scrollTop = 0;
+      view.append(el(`<div class="runtime-bar">
+        <span class="dot" style="background:${page.secure ? '#34d399' : '#f6b93b'};box-shadow:none"></span>
+        <span class="name">${page.secure ? '🔒' : '⚠️'} ${esc(page.host)}</span>
+        <span class="sep">${page.blocks.length} 個區塊 · ${(page.bytes / 1024).toFixed(0)} KB</span>
+      </div>`));
+
+      const article = el('<article class="reader"></article>');
+      article.append(el(`<h1 style="font-size:21px;line-height:1.35">${esc(page.title)}</h1>`));
+
+      const STYLE = {
+        h1: 'font-size:18px;margin-top:10px', h2: 'font-size:17px;margin-top:10px',
+        h3: 'font-size:15.5px;margin-top:8px', h4: 'font-size:14.5px;margin-top:6px',
+        h5: 'font-size:14px', h6: 'font-size:13.5px',
+        p: 'font-size:14px;line-height:1.75', li: 'font-size:14px;line-height:1.7;padding-left:14px;position:relative',
+        blockquote: 'font-size:14px;line-height:1.7;padding-left:12px;border-left:3px solid var(--win-line);color:var(--win-sub)',
+        pre: 'font:12px/1.7 ui-monospace,Menlo,monospace;background:#0d1017;color:#d5dbe8;padding:12px;border-radius:10px;overflow-x:auto;white-space:pre-wrap',
+      };
+
+      page.blocks.forEach((block) => {
+        const tag = /^h[1-6]$/.test(block.type) ? block.type : 'div';
+        const node = el(`<${tag} style="${STYLE[block.type] ?? STYLE.p}"></${tag}>`);
+        if (block.type === 'li') node.append(el('<span style="position:absolute;left:0;opacity:.45">•</span>'));
+        block.runs.forEach((run, i) => {
+          if (i) node.append(document.createTextNode(' '));
+          if (!run.href) {
+            node.append(document.createTextNode(run.text));
+            return;
+          }
+          const link = el(`<button style="color:#2f8fff;text-align:left;padding:0;text-decoration:underline;text-underline-offset:2px">${esc(run.text)}</button>`);
+          link.addEventListener('click', () => go(run.href));
+          node.append(link);
+        });
+        article.append(node);
+      });
+      view.append(article);
+    };
+
+    const go = async (input) => {
+      const target = toTarget(String(input));
+      if (!target) return;
+      bar.value = target;
+      bar.blur();
+      view.replaceChildren(el('<p class="section-title" style="text-align:center;padding:60px 0">載入中…</p>'));
+      try {
+        const res = await api('/api/browse', { method: 'POST', body: { url: target } });
+        session.page = res.page;
+        // 從歷史往回走之後又開新頁，就把前面的分支丟掉
+        session.stack = [...session.stack.slice(0, session.index + 1), res.page.url];
+        session.index = session.stack.length - 1;
+        bar.value = res.page.url;
+        ctx.setState({ ...ctx.state, history: res.history });
+        renderPage(res.page);
+      } catch (err) {
+        view.replaceChildren(el(`<div class="hero" style="margin:14px;background:rgba(239,68,68,.14)">
+          <h3>打不開這個網頁</h3>
+          <p>${esc(err.message)}</p>
+        </div>`));
+        session.page = null;
+      }
+      syncChrome();
+    };
+
+    const jump = async (delta) => {
+      const next = session.index + delta;
+      if (next < 0 || next >= session.stack.length) return;
+      session.index = next;
+      const url = session.stack[next];
+      bar.value = url;
+      view.replaceChildren(el('<p class="section-title" style="text-align:center;padding:60px 0">載入中…</p>'));
+      try {
+        const res = await api('/api/browse', { method: 'POST', body: { url } });
+        session.page = res.page;
+        ctx.setState({ ...ctx.state, history: res.history });
+        renderPage(res.page);
+      } catch (err) {
+        ctx.notify('瀏覽器', err.message);
+      }
+      syncChrome();
+    };
+
+    btn('back').addEventListener('click', () => jump(-1));
+    btn('forward').addEventListener('click', () => jump(1));
+    btn('reload').addEventListener('click', () => session.page && go(session.page.url));
+    btn('star').addEventListener('click', async () => {
+      if (!session.page) return;
+      const marked = ctx.state.bookmarks.find((b) => b.url === session.page.url);
+      try {
+        const res = marked
+          ? await api(`/api/bookmarks/${marked.id}`, { method: 'DELETE' })
+          : await api('/api/bookmarks', { method: 'POST', body: { url: session.page.url, title: session.page.title } });
+        ctx.setState({ ...ctx.state, bookmarks: res.bookmarks });
+        ctx.notify('瀏覽器', marked ? '已移除書籤' : '已加入書籤');
+      } catch (err) {
+        ctx.notify('瀏覽器', err.message);
+      }
+      syncChrome();
+    });
+    bar.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(bar.value); });
+
+    if (session.page) {
+      bar.value = session.page.url;
+      renderPage(session.page);
+    } else {
+      startPage();
+    }
+    syncChrome();
+    return root;
+  },
+};
+
+/* ============================ 設定 ============================ */
+const settings = {
+  id: 'settings',
+  render(ctx) {
+    const root = el('<div style="padding-bottom:40px"></div>');
+
+    const patch = async (body, { redraw = true } = {}) => {
+      try {
+        const res = await api('/api/device', { method: 'PATCH', body });
+        ctx.setState({ ...ctx.state, device: res.device });
+        if (redraw) draw();
+      } catch (err) {
+        ctx.notify('設定', err.message);
+      }
+    };
+
+    const row = (inner) => el(`<div class="list-item">${inner}</div>`);
+
+    const switchRow = (glyph, color, label, key) => {
+      const node = row(`${iconBox(glyph, color)}<div class="grow"><div class="t">${label}</div></div>
+        <span class="switch ${ctx.state.device[key] ? 'on' : ''}"></span>`);
+      node.querySelector('.switch').addEventListener('click', () => patch({ [key]: !ctx.state.device[key] }));
+      return node;
+    };
+
+    const sliderRow = (glyph, color, label, key) => {
+      const node = row(`${iconBox(glyph, color)}<div class="grow" style="display:grid;gap:2px">
+        <div class="t" style="font-size:13.5px;color:var(--win-sub)">${label}<b style="float:right;color:var(--win-ink)">${ctx.state.device[key]}</b></div>
+        <input type="range" min="0" max="100" value="${ctx.state.device[key]}" /></div>`);
+      const out = node.querySelector('b');
+      node.querySelector('input').addEventListener('input', (e) => {
+        const value = Number(e.target.value);
+        out.textContent = value;
+        ctx.state.device[key] = value;
+        ctx.setState(ctx.state);
+        clearTimeout(node._t);
+        node._t = setTimeout(() => patch({ [key]: value }, { redraw: false }), 220);
+      });
+      return node;
+    };
+
+    const draw = () => {
+      const { device, storage, sources, wallpapers, installed } = ctx.state;
+      root.replaceChildren();
+
+      root.append(el(`<div class="hero">
+        <h3>${esc(device.name)}</h3>
+        <p>${esc(device.osVersion)} · 型號 ${esc(device.model)}<br />
+           已撈取外來 App ${installed.length} 個 · ${fmtSize(storage.usedMb)} / ${fmtSize(storage.totalMb)}</p>
+        <div class="bar-track"><i style="width:${storage.percent}%"></i></div>
+      </div>`));
+
+      /* 萬象相容層 */
+      root.append(el('<div class="section-title">萬象相容層</div>'));
+      const rt = el('<div class="list"></div>');
+      sources.filter((s) => !s.builtin).forEach((s) => {
+        const node = row(`${iconBox(s.glyph, s.accent)}
+          <div class="grow"><div class="t">${esc(s.name)}</div><div class="d">${esc(s.runtime)} · 已撈取 ${s.installed}/${s.total}</div></div>
+          <span class="switch ${s.enabled ? 'on' : ''}"></span>`);
+        node.querySelector('.switch').addEventListener('click', async () => {
+          try {
+            const res = await api('/api/runtimes', { method: 'PATCH', body: { os: s.os, enabled: !s.enabled } });
+            ctx.setState(res.state);
+            ctx.notify(s.name, s.enabled ? '相容層已關閉，該來源的 App 暫停執行' : '相容層已啟用');
+            draw();
+          } catch (err) {
+            ctx.notify('設定', err.message);
+          }
+        });
+        rt.append(node);
+      });
+      root.append(rt, el('<p class="foot-note">關閉相容層不會刪除已撈取的 App，只會讓它們在桌面上暫停。</p>'));
+
+      /* 桌布 */
+      root.append(el('<div class="section-title">桌布</div>'));
+      const wall = el('<div class="list"></div>');
+
+      const pickRow = row(`${iconBox('🖼', '#34c759')}<div class="grow"><div class="t">選擇自己的照片</div>
+        <div class="d">從你的裝置挑一張圖片當背景</div></div><button class="pill-btn">選擇</button>`);
+      const file = el('<input type="file" accept="image/*" hidden />');
+      pickRow.append(file);
+      pickRow.querySelector('button').addEventListener('click', () => file.click());
+      file.addEventListener('change', async () => {
+        const chosen = file.files?.[0];
+        file.value = '';
+        if (!chosen) return;
+        try {
+          const dataUrl = await readImageAsDataUrl(chosen);
+          await patch({ wallpaperImage: dataUrl });
+          ctx.notify('桌布', '已換成你自己的照片');
+        } catch (err) {
+          ctx.notify('桌布', err.message);
+        }
+      });
+      wall.append(pickRow);
+
+      const swatchRow = el('<div class="list-item" style="display:block;padding:14px"><div class="d" style="margin-bottom:10px">內建桌布</div><div style="display:flex;gap:10px;flex-wrap:wrap"></div></div>');
+      const swatches = swatchRow.querySelector('div:last-child');
+      if (device.wallpaperImage) {
+        const own = el(`<button title="你自己的照片" style="width:46px;height:64px;border-radius:12px;background-image:url('${device.wallpaperImage}');background-size:cover;background-position:center;box-shadow:${
+          device.wallpaper === 'custom' ? '0 0 0 3px var(--blue)' : '0 0 0 1px var(--win-line)'
+        }"></button>`);
+        own.addEventListener('click', () => patch({ wallpaper: 'custom' }));
+        swatches.append(own);
+      }
+      wallpapers.forEach((w) => {
+        const sw = el(`<button title="${esc(w.name)}" style="width:46px;height:64px;border-radius:12px;background:linear-gradient(160deg,${w.from},${w.to});box-shadow:${
+          device.wallpaper === w.id ? '0 0 0 3px var(--blue)' : '0 0 0 1px var(--win-line)'
+        }"></button>`);
+        sw.addEventListener('click', () => patch({ wallpaper: w.id }));
+        swatches.append(sw);
+      });
+      wall.append(swatchRow, sliderRow('🌫', '#8e8e93', '桌布模糊', 'wallpaperBlur'), sliderRow('🌗', '#5856d6', '桌布變暗', 'wallpaperDim'));
+
+      if (device.wallpaperImage) {
+        const clear = row(`${iconBox('🗑', '#ff3b30')}<div class="grow"><div class="t" style="color:var(--red)">移除自己的桌布</div></div>`);
+        clear.classList.add('tap');
+        clear.addEventListener('click', () => patch({ wallpaperImage: null }));
+        wall.append(clear);
+      }
+      root.append(wall, el('<p class="foot-note">照片會縮到 1400 像素以內再存進裝置。相片 App 裡的每一張也可以直接設成桌布。</p>'));
+
+      /* 顯示與聲音 */
+      root.append(el('<div class="section-title">顯示與聲音</div>'));
+      const display = el('<div class="list"></div>');
+      display.append(
+        switchRow('🌙', '#5856d6', '深色模式', 'darkMode'),
+        sliderRow('🔆', '#007aff', '亮度', 'brightness'),
+        sliderRow('🔊', '#ff2d55', '音量', 'volume'),
+      );
+      root.append(display);
+
+      /* 連線 */
+      root.append(el('<div class="section-title">連線</div>'));
+      const conn = el('<div class="list"></div>');
+      conn.append(
+        switchRow('📶', '#007aff', 'Wi‑Fi', 'wifi'),
+        switchRow('🔵', '#0a84ff', '藍牙', 'bluetooth'),
+        switchRow('🌜', '#5e5ce6', '勿擾模式', 'dnd'),
+      );
+      root.append(conn);
+
+      /* 一般 */
+      root.append(el('<div class="section-title">一般</div>'));
+      const general = el('<div class="list"></div>');
+      general.append(row(`${iconBox('💾', '#8e8e93')}<div class="grow"><div class="t">儲存空間</div>
+        <div class="d">系統 ${fmtSize(storage.systemMb)} · App ${fmtSize(storage.usedMb - storage.systemMb)} · 剩餘 ${fmtSize(storage.freeMb)}</div></div>`));
+      const reset = row(`${iconBox('↺', '#ff3b30')}<div class="grow"><div class="t" style="color:var(--red)">回復原廠設定</div></div>`);
+      reset.classList.add('tap');
+      reset.addEventListener('click', async () => {
+        const res = await api('/api/reset', { method: 'POST' });
+        ctx.setState(res.state);
+        ctx.notify('潮汐 OS', '已回復原廠設定');
+        draw();
+      });
+      general.append(reset);
+      root.append(general);
+    };
+
+    draw();
+    return root;
+  },
+};
+
+/* ============================ 備忘錄 ============================ */
+const notes = {
+  id: 'notes',
+  render(ctx) {
+    const root = el('<div></div>');
+
+    const list = () => {
+      root.replaceChildren();
+      const add = el('<div style="padding:12px 14px"><button class="big-btn">＋ 新增備忘錄</button></div>');
+      add.querySelector('button').addEventListener('click', () => editor(null));
+      root.append(add);
+
+      if (!ctx.state.notes.length) {
+        root.append(el('<p class="section-title" style="text-align:center;padding:40px 0">還沒有備忘錄</p>'));
+        return;
+      }
+      const ul = el('<div class="list"></div>');
+      ctx.state.notes.forEach((note) => {
+        const row = el(`<button class="list-item">
+          <div class="grow"><div class="t">${esc(note.title)}</div>
+          <div class="d">${new Date(note.updatedAt).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${esc(note.body.slice(0, 30) || '無內容')}</div></div>
+          <span style="opacity:.4">›</span></button>`);
+        row.addEventListener('click', () => editor(note));
+        ul.append(row);
+      });
+      root.append(ul);
+    };
+
+    const editor = (note) => {
+      root.replaceChildren();
+      const form = el(`<div style="padding:14px;display:grid;gap:12px">
+        <input class="field" name="title" maxlength="80" placeholder="標題" value="${esc(note?.title ?? '')}" />
+        <textarea class="field" name="body" rows="12" placeholder="內容">${esc(note?.body ?? '')}</textarea>
+        <div style="display:flex;gap:9px">
+          <button class="pill-btn" style="flex:1;padding:10px">儲存</button>
+          <button class="pill-btn ghost" style="padding:10px 16px">返回</button>
+          ${note ? '<button class="pill-btn danger" style="padding:10px 16px">刪除</button>' : ''}
+        </div>
+      </div>`);
+      const [save, back, del] = form.querySelectorAll('button');
+
+      save.addEventListener('click', async () => {
+        const title = form.querySelector('[name=title]').value.trim();
+        const body = form.querySelector('[name=body]').value;
+        if (!title) return ctx.notify('備忘錄', '標題不能為空');
+        try {
+          if (note) await api(`/api/notes/${note.id}`, { method: 'PATCH', body: { title, body } });
+          else await api('/api/notes', { method: 'POST', body: { title, body } });
+          await ctx.reload();
+          ctx.notify('備忘錄', '已儲存');
+          list();
+        } catch (err) {
+          ctx.notify('儲存失敗', err.message);
+        }
+      });
+      back.addEventListener('click', list);
+      del?.addEventListener('click', async () => {
+        await api(`/api/notes/${note.id}`, { method: 'DELETE' });
+        await ctx.reload();
+        ctx.notify('備忘錄', '已刪除');
+        list();
+      });
+      root.append(form);
+    };
+
+    list();
+    return root;
+  },
+};
+
+/* ============================ 計算機 ============================ */
+const calculator = {
+  id: 'calculator',
+  render() {
+    const root = el(`<div style="display:flex;flex-direction:column;height:100%;padding:14px;gap:12px">
+      <output style="flex:1;display:flex;align-items:end;justify-content:end;font-size:56px;font-weight:250;letter-spacing:-2px;overflow:hidden">0</output>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px"></div>
+    </div>`);
+    const out = root.querySelector('output');
+    const pad = root.querySelector('div');
+
+    let current = '0';
+    let previous = null;
+    let op = null;
+    let fresh = true;
+
+    const show = (v) => {
+      const s = String(v);
+      out.textContent = s.length > 9 ? Number(v).toPrecision(7) : s;
+      out.style.fontSize = s.length > 7 ? '38px' : '56px';
+    };
+    const compute = () => {
+      const a = Number(previous);
+      const b = Number(current);
+      const r = { '+': a + b, '−': a - b, '×': a * b, '÷': b === 0 ? NaN : a / b }[op];
+      return Number.isFinite(r) ? Math.round(r * 1e9) / 1e9 : '錯誤';
+    };
+
+    const KEYS = [
+      ['AC', 'fn'], ['±', 'fn'], ['%', 'fn'], ['÷', 'op'],
+      ['7'], ['8'], ['9'], ['×', 'op'],
+      ['4'], ['5'], ['6'], ['−', 'op'],
+      ['1'], ['2'], ['3'], ['+', 'op'],
+      ['0', 'wide'], ['.'], ['=', 'op'],
+    ];
+
+    KEYS.forEach(([key, type]) => {
+      const bg = type === 'op' ? '#ff9f0a' : type === 'fn' ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.12)';
+      const btn = el(`<button style="${type === 'wide' ? 'grid-column:span 2;border-radius:34px;justify-content:start;padding-left:26px;' : 'border-radius:50%;'}
+        aspect-ratio:${type === 'wide' ? 'auto' : '1'};background:${bg};font-size:23px;display:flex;align-items:center;justify-content:${type === 'wide' ? 'flex-start' : 'center'};
+        color:${type === 'fn' ? '#111' : '#fff'}">${key}</button>`);
+      btn.addEventListener('click', () => {
+        if (/[0-9.]/.test(key)) {
+          if (key === '.' && current.includes('.')) return;
+          current = fresh ? (key === '.' ? '0.' : key) : current + key;
+          fresh = false;
+        } else if (key === 'AC') {
+          current = '0'; previous = null; op = null; fresh = true;
+        } else if (key === '±') {
+          current = String(-Number(current));
+        } else if (key === '%') {
+          current = String(Number(current) / 100);
+        } else if (key === '=') {
+          if (op !== null && previous !== null) {
+            current = String(compute());
+            previous = null; op = null; fresh = true;
+          }
+        } else {
+          if (op !== null && previous !== null && !fresh) current = String(compute());
+          previous = current; op = key; fresh = true;
+        }
+        show(current);
+      });
+      pad.append(btn);
+    });
+    return root;
+  },
+};
+
+/* ============================ 終端機 ============================ */
+const terminal = {
+  id: 'terminal',
+  render(ctx) {
+    const root = el(`<div style="display:flex;flex-direction:column;height:100%;background:#0a0c11">
+      <pre class="code" style="flex:1;overflow:auto;white-space:pre-wrap;margin:0"></pre>
+      <div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid rgba(255,255,255,.08)">
+        <span style="color:#34d399;font:12px ui-monospace,Menlo,monospace;align-self:center">tide $</span>
+        <input class="field" style="flex:1;font:12px ui-monospace,Menlo,monospace;padding:7px 10px" autocapitalize="off" autocomplete="off" spellcheck="false" />
+      </div>
+    </div>`);
+    const view = root.querySelector('pre');
+    const input = root.querySelector('input');
+
+    const write = (text) => {
+      view.textContent += text + '\n';
+      view.scrollTop = view.scrollHeight;
+    };
+
+    write('潮汐 OS 1.0（萬象）· OmniShell\n輸入 help 看可用指令。\n');
+
+    const commands = {
+      help: () =>
+        ['可用指令：',
+          '  apps                列出桌面上的 App',
+          '  sources             列出所有來源作業系統與相容層狀態',
+          '  ls <os> [分類]      列出某個系統可撈取的 App',
+          '  install <app-id>    撈取單一 App',
+          '  fetch <os|all> [分類]  撈取整包 App，例如 fetch ios 遊戲',
+          '  uninstall <app-id>  移除 App',
+          '  open <app-id>       開啟 App',
+          '  browse <網址>       用 reader 模式抓一個網頁下來看',
+          '  df                  儲存空間',
+          '  uname               系統資訊',
+          '  clear               清空畫面'].join('\n'),
+      uname: () => {
+        const d = ctx.state.device;
+        return `${d.osVersion}\n裝置 ${d.name}（${d.model}）\n核心 OmniKernel 6.1 · 介面層 OmniUI`;
+      },
+      df: () => {
+        const s = ctx.state.storage;
+        return `總容量 ${fmtSize(s.totalMb)}\n已使用 ${fmtSize(s.usedMb)}（系統 ${fmtSize(s.systemMb)}）\n剩餘   ${fmtSize(s.freeMb)}（${(100 - s.percent).toFixed(1)}%）`;
+      },
+      apps: () => {
+        const rows = [...ctx.state.builtins, ...ctx.state.installed];
+        return rows.map((a) => `${(a.id + '                    ').slice(0, 20)} ${a.name}${a.active === false ? '  [暫停]' : ''}`).join('\n');
+      },
+      sources: () =>
+        ctx.state.sources
+          .map((s) => `${(s.os + '        ').slice(0, 9)} ${s.enabled ? '啟用' : '停用'}  ${s.installed}/${s.total}  ${s.runtime}`)
+          .join('\n'),
+      clear: () => { view.textContent = ''; return ''; },
+      async ls(os, category) {
+        if (!os) return '用法：ls <os> [分類]，例如 ls ios 遊戲';
+        const q = `?os=${encodeURIComponent(os)}${category ? `&category=${encodeURIComponent(category)}` : ''}`;
+        const { apps } = await api(`/api/catalog${q}`);
+        return apps
+          .map((a) => `${(a.id + '                    ').slice(0, 20)} ${a.name}  ${a.genre ?? a.category}  ${fmtSize(a.size)}${a.installed ? '  [已安裝]' : ''}`)
+          .join('\n');
+      },
+      async install(id) {
+        if (!id) return '用法：install <app-id>';
+        const res = await api('/api/apps/install', { method: 'POST', body: { id } });
+        ctx.setState(res.state);
+        return `已撈取 ${res.app.name}`;
+      },
+      async uninstall(id) {
+        if (!id) return '用法：uninstall <app-id>';
+        const res = await api('/api/apps/uninstall', { method: 'POST', body: { id } });
+        ctx.setState(res.state);
+        return `已移除 ${id}`;
+      },
+      async fetch(os, category) {
+        if (!os) return '用法：fetch <os|all> [分類]，例如 fetch ios 遊戲';
+        const body = os === 'all' ? {} : { os };
+        if (category) body.category = category;
+        const res = await api('/api/apps/install-all', { method: 'POST', body });
+        ctx.setState(res.state);
+        const skip = res.skipped.length ? `，略過 ${res.skipped.join('、')}` : '';
+        return `已撈取 ${res.installed} 個${category ?? ' App'}，${res.already} 個原本就在${skip}`;
+      },
+      open(id) {
+        if (!id) return '用法：open <app-id>';
+        const app = [...ctx.state.builtins, ...ctx.state.installed].find((a) => a.id === id);
+        if (!app) return `找不到 App：${id}`;
+        setTimeout(() => ctx.openApp(app.id), 120);
+        return `正在開啟 ${app.name}…`;
+      },
+      async browse(...rest) {
+        const url = rest.join(' ');
+        if (!url) return '用法：browse <網址>，例如 browse example.com';
+        const { page } = await api('/api/browse', { method: 'POST', body: { url: toTarget(url) } });
+        const head = `${page.title}\n${page.url}\n${'─'.repeat(28)}`;
+        const text = page.blocks
+          .slice(0, 12)
+          .map((b) => (b.type.startsWith('h') ? `\n## ` : '') + b.runs.map((r) => r.text + (r.href ? ' ↗' : '')).join(' '))
+          .join('\n');
+        return `${head}\n${text}\n${'─'.repeat(28)}\n共 ${page.blocks.length} 個區塊，完整內容請用「瀏覽器」開啟`;
+      },
+      echo: (...rest) => rest.join(' '),
+      date: () => new Date().toLocaleString('zh-TW'),
+    };
+
+    input.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      const raw = input.value.trim();
+      input.value = '';
+      if (!raw) return;
+      write(`tide $ ${raw}`);
+      const [cmd, ...args] = raw.split(/\s+/);
+      const fn = commands[cmd];
+      if (!fn) {
+        write(`omnishell: 找不到指令 ${cmd}（試試 help）`);
+        return;
+      }
+      try {
+        const out = await fn(...args);
+        if (out) write(out);
+      } catch (err) {
+        write(`錯誤：${err.message}`);
+      }
+    });
+
+    setTimeout(() => input.focus(), 350);
+    return root;
+  },
+};
+
+/* ============================ 相片 ============================ */
+const PHOTO_PALETTE = ['#2f8fff', '#34d399', '#f6b93b', '#ec4899', '#8b5cf6', '#ef4444', '#14b8a6', '#f97316'];
+const photoStyle = (i) => `linear-gradient(${(i * 47) % 360}deg, ${PHOTO_PALETTE[i % PHOTO_PALETTE.length]}, ${shade(PHOTO_PALETTE[i % PHOTO_PALETTE.length], -0.5)})`;
+
+/** 把一張「相片」畫成圖檔，才能拿去當桌布 */
+function photoToDataUrl(i, w = 900, h = 1600) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx2d = canvas.getContext('2d');
+  const angle = ((i * 47) % 360) * (Math.PI / 180);
+  const x = Math.cos(angle) * w, y = Math.sin(angle) * h;
+  const grad = ctx2d.createLinearGradient((w - x) / 2, (h - y) / 2, (w + x) / 2, (h + y) / 2);
+  const base = PHOTO_PALETTE[i % PHOTO_PALETTE.length];
+  grad.addColorStop(0, base);
+  grad.addColorStop(1, shade(base, -0.5));
+  ctx2d.fillStyle = grad;
+  ctx2d.fillRect(0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
+
+const photos = {
+  id: 'photos',
+  render(ctx) {
+    const root = el('<div style="padding:12px"></div>');
+    const grid = el('<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px"></div>');
+
+    for (let i = 0; i < 24; i += 1) {
+      const cell = el(`<button style="aspect-ratio:1;border-radius:3px;background:${photoStyle(i)}"></button>`);
+      cell.addEventListener('click', () => {
+        const full = el(`<div style="position:absolute;inset:0;background:#000;z-index:5;display:grid;place-items:center">
+          <div style="width:84%;aspect-ratio:9/16;border-radius:14px;background:${photoStyle(i)}"></div>
+          <div style="position:absolute;top:60px;left:0;right:0;text-align:center;color:rgba(255,255,255,.75);font-size:12.5px">IMG_${String(1000 + i)}.HEIF · 900 × 1600</div>
+          <div style="position:absolute;bottom:52px;left:0;right:0;display:flex;justify-content:center;gap:12px"></div>
+        </div>`);
+        const bar = full.querySelector('div:last-child');
+        const setWall = el('<button class="pill-btn" style="background:rgba(255,255,255,.16);color:#fff">設為桌布</button>');
+        setWall.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          try {
+            const res = await api('/api/device', { method: 'PATCH', body: { wallpaperImage: photoToDataUrl(i) } });
+            ctx.setState({ ...ctx.state, device: res.device });
+            ctx.notify('桌布', '已設成這張相片');
+            full.remove();
+          } catch (err) {
+            ctx.notify('桌布', err.message);
+          }
+        });
+        const close = el('<button class="pill-btn" style="background:rgba(255,255,255,.16);color:#fff">關閉</button>');
+        close.addEventListener('click', () => full.remove());
+        bar.append(setWall, close);
+        root.append(full);
+      });
+      grid.append(cell);
+    }
+    root.append(el('<div class="section-title" style="padding:4px 2px 10px">最近項目 · 24 張</div>'), grid);
+    return root;
+  },
+};
+
+/* ============================ 時鐘 ============================ */
+const clock = {
+  id: 'clock',
+  render(ctx) {
+    const zones = [
+      ['台北', 'Asia/Taipei'],
+      ['東京', 'Asia/Tokyo'],
+      ['倫敦', 'Europe/London'],
+      ['紐約', 'America/New_York'],
+      ['舊金山', 'America/Los_Angeles'],
+    ];
+    const root = el(`<div style="padding:20px 16px;display:grid;gap:18px">
+      <div style="text-align:center">
+        <div id="ck-main" style="font-size:60px;font-weight:200;letter-spacing:-2px">--:--:--</div>
+        <div id="ck-date" style="color:#93a0b6;font-size:13px"></div>
+      </div>
+      <div class="list"></div>
+    </div>`);
+    const list = root.querySelector('.list');
+    zones.forEach(([name, tz]) =>
+      list.append(el(`<div class="list-item"><div class="grow"><div class="t">${name}</div><div class="d" data-off="${tz}"></div></div>
+        <div style="font-size:22px;font-weight:300" data-tz="${tz}">--:--</div></div>`)),
+    );
+
+    const tick = () => {
+      const now = new Date();
+      root.querySelector('#ck-main').textContent = now.toLocaleTimeString('zh-TW', { hour12: false });
+      root.querySelector('#ck-date').textContent = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+      root.querySelectorAll('[data-tz]').forEach((node) => {
+        node.textContent = now.toLocaleTimeString('zh-TW', { timeZone: node.dataset.tz, hour: '2-digit', minute: '2-digit', hour12: false });
+      });
+      root.querySelectorAll('[data-off]').forEach((node) => {
+        node.textContent = now.toLocaleDateString('zh-TW', { timeZone: node.dataset.off, month: 'numeric', day: 'numeric', weekday: 'short' });
+      });
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    ctx.onCleanup(() => clearInterval(timer));
+    return root;
+  },
+};
+
+const NATIVE_APPS = Object.fromEntries(
+  [store, browser, settings, notes, calculator, terminal, photos, clock].map((a) => [a.id, a]),
+);
+
+/* ===== public/os.js ===== */
+const PER_PAGE = 20;
+const memo = {}; // App 之間保留的暫存（例如商店選到哪個來源）
+
+const ui = {
+  screen: $('#screen'),
+  wallpaper: $('#wallpaper'),
+  veil: $('#veil'),
+  lock: $('#lock'),
+  home: $('#home'),
+  pages: $('#pages'),
+  dots: $('#dots'),
+  dock: $('#dock'),
+  appwin: $('#appwin'),
+  control: $('#control'),
+  switcher: $('#switcher'),
+  banner: $('#banner'),
+  island: $('#island'),
+  homebar: $('#homebar'),
+};
+
+let state = null;
+let page = 0;
+let openId = null;
+let recents = [];
+let cleanups = [];
+let bannerTimer;
+let islandTimer;
+
+/* ---------------- 狀態 ---------------- */
+async function reload() {
+  setState(await api('/api/state'));
+}
+
+function setState(next) {
+  state = next;
+  applyDevice();
+  renderHome();
+  if (openId) renderAppHeader(deviceApp(openId));
+}
+
+const allApps = () => [...(state?.builtins ?? []), ...(state?.installed ?? [])];
+const deviceApp = (id) => allApps().find((a) => a.id === id) ?? null;
+const sourceOf = (os) => state.sources.find((s) => s.os === os);
+
+/* ---------------- 裝置外觀 ---------------- */
+function applyDevice() {
+  const { device, wallpapers } = state;
+  const custom = device.wallpaper === 'custom' && device.wallpaperImage;
+  if (custom) {
+    ui.wallpaper.style.backgroundImage = `url("${device.wallpaperImage}")`;
+    ui.wallpaper.classList.add('photo');
+  } else {
+    const wp = wallpapers.find((w) => w.id === device.wallpaper) ?? wallpapers[0];
+    ui.wallpaper.style.backgroundImage = 'none';
+    ui.wallpaper.classList.remove('photo');
+    ui.wallpaper.style.setProperty('--wp-from', wp.from);
+    ui.wallpaper.style.setProperty('--wp-to', wp.to);
+  }
+  // 深色模式與使用者調整的模糊／變暗一起算進同一個 filter
+  const blur = (device.wallpaperBlur ?? 0) * 0.18;
+  const dim = (device.wallpaperDim ?? 0) / 100;
+  const dark = device.darkMode ? 0.38 : 0;
+  ui.wallpaper.style.filter = `blur(${blur.toFixed(1)}px) brightness(${(1 - Math.min(0.82, dim + dark)).toFixed(2)})${device.darkMode ? ' saturate(.85)' : ''}`;
+  ui.screen.classList.toggle('dark', device.darkMode);
+  ui.veil.style.opacity = String(Math.max(0, (85 - device.brightness) / 145));
+  $('#status-wifi').style.opacity = device.wifi ? '1' : '.3';
+  $('#status-net').textContent = device.dnd ? '🌜 5G' : '5G';
+  $('#battery-fill').style.width = '82%';
+}
+
+/* ---------------- 狀態列 / 鎖定畫面 ---------------- */
+function tickClock() {
+  const now = new Date();
+  const hhmm = now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
+  $('#status-time').textContent = hhmm;
+  $('#lock-time').textContent = hhmm;
+  $('#lock-date').textContent = now.toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'long' });
+}
+
+function renderLockNote() {
+  const note = state.notes[0];
+  const installed = state.installed.length;
+  $('#lock-note').innerHTML = note
+    ? `<b>📒 ${esc(note.title)}</b><br />${esc(note.body.split('\n')[0].slice(0, 46))}`
+    : `<b>🌊 潮汐 OS</b><br />桌面上有 ${installed} 個從其他系統撈來的 App`;
+}
+
+/* ---------------- 桌面 ---------------- */
+function renderHome() {
+  renderLockNote();
+  const dockIds = state.builtins.filter((a) => a.dock !== undefined).sort((a, b) => a.dock - b.dock);
+  const dockSet = new Set(dockIds.map((a) => a.id));
+  const gridApps = allApps().filter((a) => !dockSet.has(a.id));
+
+  const pageCount = Math.max(1, Math.ceil(gridApps.length / PER_PAGE));
+  page = Math.min(page, pageCount - 1);
+
+  ui.pages.replaceChildren();
+  for (let p = 0; p < pageCount; p += 1) {
+    const sheet = el('<div class="page"></div>');
+    const slice = gridApps.slice(p * PER_PAGE, (p + 1) * PER_PAGE);
+    if (!slice.length) {
+      sheet.append(el('<div class="empty-page">這裡還是空的。<br />打開「萬象商店」，<br />一鍵把其他系統的 App 撈進來。</div>'));
+    }
+    slice.forEach((app) => sheet.append(appIcon(app)));
+    ui.pages.append(sheet);
+  }
+  ui.pages.style.transform = `translateX(${-page * 100}%)`;
+  ui.pages.querySelectorAll('.page').forEach((el2) => { el2.style.transform = 'none'; });
+
+  ui.dots.replaceChildren();
+  if (pageCount > 1) {
+    for (let p = 0; p < pageCount; p += 1) {
+      const dot = el(`<i class="${p === page ? 'on' : ''}"></i>`);
+      dot.addEventListener('click', () => { page = p; renderHome(); });
+      ui.dots.append(dot);
+    }
+  }
+
+  ui.dock.replaceChildren(...dockIds.map(appIcon));
+
+  if (!ui.spotPill) {
+    ui.spotPill = el('<button class="spotlight-pill">🔍 搜尋</button>');
+    ui.spotPill.addEventListener('click', openSpotlight);
+    ui.dock.before(ui.spotPill);
+  }
+}
+
+function appIcon(app) {
+  const source = sourceOf(app.os);
+  const paused = app.active === false;
+  const node = el(`<button class="app ${paused ? 'paused' : ''}">
+    <span class="icon" style="${tint(app)}">${app.glyph}
+      ${app.os === 'tide' ? '' : `<span class="badge-os" title="來自 ${esc(source?.name ?? app.os)}">${source?.glyph ?? '?'}</span>`}
+    </span>
+    <span class="label">${esc(app.name)}</span>
+  </button>`);
+  node.addEventListener('click', () => openApp(app.id));
+  return node;
+}
+
+/* 桌面換頁：拖曳 */
+let dragX = null;
+ui.pages.addEventListener('pointerdown', (e) => { dragX = e.clientX; });
+ui.pages.addEventListener('pointerup', (e) => {
+  if (dragX === null) return;
+  const dx = e.clientX - dragX;
+  dragX = null;
+  const pageCount = ui.pages.children.length;
+  if (Math.abs(dx) < 40) return;
+  page = Math.min(pageCount - 1, Math.max(0, page + (dx < 0 ? 1 : -1)));
+  renderHome();
+});
+
+/* ---------------- App 視窗 ---------------- */
+function openApp(id) {
+  const app = deviceApp(id);
+  if (!app) return;
+  if (app.active === false) {
+    const s = sourceOf(app.os);
+    notify(`${app.name} 已暫停`, `${s.name} 相容層未啟用，到「設定 → 萬象相容層」開啟後才能執行`);
+    return;
+  }
+  cleanups.forEach((fn) => fn());
+  cleanups = [];
+  openId = id;
+  recents = [id, ...recents.filter((x) => x !== id)].slice(0, 6);
+
+  ui.appwin.hidden = false;
+  ui.appwin.classList.remove('closing');
+  ui.appwin.replaceChildren();
+  renderAppHeader(app);
+
+  const body = el('<div class="app-body"></div>');
+  if (app.os === 'tide') {
+    body.append(NATIVE_APPS[app.id].render(ctx()));
+  } else {
+    const stats = runtimeStats(app);
+    const s = sourceOf(app.os);
+    ui.appwin.append(el(`<div class="runtime-bar">
+      <span class="dot"></span>
+      <span class="name">${esc(s.runtime)}</span>
+      <span class="sep">${stats.nodes.toLocaleString()} 節點 · ${stats.fps} FPS · ${stats.ram} MB</span>
+    </div>`));
+    body.innerHTML = renderMock(app);
+  }
+  ui.appwin.append(body);
+
+  showIsland(`${app.glyph}　${app.name}`);
+}
+
+function renderAppHeader(app) {
+  if (!app) return;
+  const source = sourceOf(app.os);
+  const sub =
+    app.os === 'tide'
+      ? app.category
+      : `來自 ${source.name} · ${app.genre ? `${app.genre} · ` : ''}${fmtSize(app.size)}`;
+  const head = el(`<div class="app-head" style="${tint(app)}">
+    <span class="mini">${app.glyph}</span>
+    <div><h2>${esc(app.name)}</h2><div class="sub">${esc(sub)}</div></div>
+    <div class="right"></div>
+  </div>`);
+  const right = head.querySelector('.right');
+  if (app.os !== 'tide') {
+    const btn = el('<button>移除</button>');
+    btn.addEventListener('click', async () => {
+      try {
+        const res = await api('/api/apps/uninstall', { method: 'POST', body: { id: app.id } });
+        closeApp();
+        setState(res.state);
+        notify(app.name, '已從裝置移除');
+      } catch (err) {
+        notify('移除失敗', err.message);
+      }
+    });
+    right.append(btn);
+  }
+  const close = el('<button class="strong">完成</button>');
+  close.addEventListener('click', closeApp);
+  right.append(close);
+
+  const existing = ui.appwin.querySelector('.app-head');
+  if (existing) existing.replaceWith(head);
+  else ui.appwin.prepend(head);
+}
+
+function closeApp() {
+  if (!openId) return;
+  cleanups.forEach((fn) => fn());
+  cleanups = [];
+  openId = null;
+  ui.appwin.classList.add('closing');
+  setTimeout(() => {
+    ui.appwin.hidden = true;
+    ui.appwin.replaceChildren();
+    ui.appwin.classList.remove('closing');
+  }, 260);
+}
+
+function ctx() {
+  return {
+    get state() { return state; },
+    memo,
+    setState,
+    reload,
+    notify,
+    openApp,
+    closeApp,
+    onCleanup: (fn) => cleanups.push(fn),
+  };
+}
+
+/* ---------------- 通知橫幅 / 動態島 ---------------- */
+function notify(title, text) {
+  ui.banner.replaceChildren(
+    el(`<span class="ico">🌊</span>`),
+    el(`<div class="txt"><b>${esc(title)}</b><span>${esc(text)}</span></div>`),
+  );
+  ui.banner.hidden = false;
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => { ui.banner.hidden = true; }, 3400);
+}
+ui.banner.addEventListener('click', () => { ui.banner.hidden = true; });
+
+function showIsland(text) {
+  ui.island.textContent = text;
+  ui.island.classList.add('wide');
+  clearTimeout(islandTimer);
+  islandTimer = setTimeout(() => {
+    ui.island.classList.remove('wide');
+    ui.island.textContent = '';
+  }, 1600);
+}
+
+/* ---------------- 控制中心 ---------------- */
+function renderControl() {
+  const { device } = state;
+
+  const round = (key, ico, label, green = false) => {
+    const node = el(`<button class="cc-dot ${device[key] ? 'on' : ''} ${green ? 'g' : ''}" title="${label}">${ico}</button>`);
+    node.addEventListener('click', async () => {
+      const res = await api('/api/device', { method: 'PATCH', body: { [key]: !device[key] } });
+      setState({ ...state, device: res.device });
+      renderControl();
+    });
+    return node;
+  };
+
+  // 連線模組：2×2 的圓形按鈕，跟 iOS 一樣
+  const conn = el('<div class="cc-tile span2" style="height:172px;align-content:center"></div>');
+  const pad = el('<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;justify-items:center"></div>');
+  pad.append(round('wifi', '􀙇', 'Wi‑Fi'), round('bluetooth', '􀋎', '藍牙'), round('dnd', '🌙', '勿擾', true), round('darkMode', '🌓', '深色模式'));
+  pad.querySelectorAll('.cc-dot').forEach((dot, i) => {
+    if (i === 0) dot.textContent = '📶';
+    if (i === 1) dot.textContent = '🔵';
+  });
+  conn.append(pad);
+
+  const slider = (key, ico) => {
+    const wrap = el(`<div class="cc-vert"><div class="vslider"><i></i><span>${ico}</span></div></div>`);
+    const bar = wrap.querySelector('.vslider');
+    const fill = wrap.querySelector('i');
+    const paint = (v) => { fill.style.height = `${v}%`; };
+    paint(device[key]);
+
+    let dragging = false;
+    const set = (event) => {
+      const rect = bar.getBoundingClientRect();
+      const value = Math.round(Math.min(100, Math.max(0, ((rect.bottom - event.clientY) / rect.height) * 100)));
+      paint(value);
+      state.device[key] = value;
+      applyDevice();
+      clearTimeout(bar._t);
+      bar._t = setTimeout(() => api('/api/device', { method: 'PATCH', body: { [key]: value } }), 220);
+    };
+    bar.addEventListener('pointerdown', (e) => { dragging = true; bar.setPointerCapture(e.pointerId); set(e); });
+    bar.addEventListener('pointermove', (e) => dragging && set(e));
+    bar.addEventListener('pointerup', () => { dragging = false; });
+    bar.addEventListener('pointercancel', () => { dragging = false; });
+    return wrap;
+  };
+
+  const grid = el('<div class="cc-grid"></div>');
+  grid.append(conn, slider('brightness', '🔆'), slider('volume', '🔊'));
+
+  const layers = state.sources.filter((s) => !s.builtin);
+  const info = el(`<div class="cc-tile span4" style="grid-column:1/-1;gap:8px">
+    <div style="font-size:13.5px;font-weight:600">🌊 萬象相容層</div>
+    <div style="font-size:12.5px;opacity:.85;line-height:1.7">
+      ${layers.map((s) => `${s.glyph}${s.enabled ? '' : '⏸'} ${s.installed}/${s.total}`).join('　')}
+    </div>
+    <div style="font-size:12.5px;opacity:.85">儲存空間 ${fmtSize(state.storage.usedMb)} / ${fmtSize(state.storage.totalMb)}</div>
+  </div>`);
+  grid.append(info);
+
+  ui.control.replaceChildren(grid, el('<p class="cc-note">點空白處關閉</p>'));
+}
+
+/* ---------------- Spotlight 搜尋 ---------------- */
+function openSpotlight() {
+  const overlay = el(`<div class="spotlight">
+    <input placeholder="搜尋 App" autocapitalize="off" autocomplete="off" spellcheck="false" />
+    <div class="spot-results"></div>
+  </div>`);
+  const input = overlay.querySelector('input');
+  const results = overlay.querySelector('.spot-results');
+
+  const draw = () => {
+    const q = input.value.trim().toLowerCase();
+    const hits = allApps()
+      .filter((app) =>
+        !q || [app.name, app.en, app.category, app.genre].some((f) => String(f ?? '').toLowerCase().includes(q)),
+      )
+      .slice(0, 24);
+    results.replaceChildren(
+      ...(hits.length
+        ? hits.map((app) => {
+            const source = sourceOf(app.os);
+            const row = el(`<button class="spot-row">
+              <span class="icon" style="${tint(app)}">${app.glyph}</span>
+              <span><span style="font-size:14.5px">${esc(app.name)}</span>
+              <span class="sub" style="display:block">${esc(app.genre ?? app.category)}${app.os === 'tide' ? '' : ` · 來自 ${esc(source.name)}`}</span></span>
+            </button>`);
+            row.addEventListener('click', () => { overlay.remove(); openApp(app.id); });
+            return row;
+          })
+        : [el('<p style="color:rgba(255,255,255,.65);text-align:center;padding:30px 0;font-size:13px">找不到 App</p>')]),
+    );
+  };
+
+  input.addEventListener('input', draw);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') overlay.remove();
+    if (e.key === 'Enter') results.querySelector('.spot-row')?.click();
+  });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  draw();
+  ui.screen.append(overlay);
+  setTimeout(() => input.focus(), 60);
+}
+
+function toggleControl(force) {
+  const show = force ?? ui.control.hidden;
+  if (show) renderControl();
+  ui.control.hidden = !show;
+}
+ui.control.addEventListener('click', (e) => { if (e.target === ui.control) toggleControl(false); });
+$('#status-right').addEventListener('click', () => toggleControl());
+
+/* ---------------- App 切換器 ---------------- */
+function toggleSwitcher(force) {
+  const show = force ?? ui.switcher.hidden;
+  if (show) {
+    const cards = recents.map(deviceApp).filter(Boolean);
+    ui.switcher.replaceChildren(
+      el('<div class="card-close">點卡片切換 App · 點空白處關閉</div>'),
+      ...(cards.length
+        ? cards.map((app) => {
+            const card = el(`<div class="card-app" style="${tint(app)}">
+              <div class="cap"><span class="icon" style="${tint(app)};width:26px;height:26px;border-radius:8px;font-size:13px">${app.glyph}</span>${esc(app.name)}</div>
+              <div class="body">${app.glyph}</div></div>`);
+            card.addEventListener('click', () => { toggleSwitcher(false); openApp(app.id); });
+            return card;
+          })
+        : [el('<p style="margin:auto;opacity:.6;font-size:13px">還沒有最近使用的 App</p>')]),
+    );
+  }
+  ui.switcher.hidden = !show;
+}
+ui.switcher.addEventListener('click', (e) => { if (e.target === ui.switcher) toggleSwitcher(false); });
+
+/* ---------------- 鎖定 / 解鎖 / Home 條 ---------------- */
+const unlock = () => ui.lock.classList.add('away');
+const lock = () => { closeApp(); toggleControl(false); toggleSwitcher(false); ui.lock.classList.remove('away'); };
+ui.lock.addEventListener('click', unlock);
+
+let lastTap = 0;
+ui.homebar.addEventListener('click', () => {
+  const now = Date.now();
+  if (now - lastTap < 320) {
+    toggleSwitcher(true);
+  } else {
+    if (!ui.switcher.hidden) toggleSwitcher(false);
+    else if (!ui.control.hidden) toggleControl(false);
+    else closeApp();
+  }
+  lastTap = now;
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.target.matches('input, textarea')) return;
+  if (e.key === 'Escape') {
+    if (!ui.switcher.hidden) toggleSwitcher(false);
+    else if (!ui.control.hidden) toggleControl(false);
+    else closeApp();
+  }
+  if (e.key === ' ') {
+    e.preventDefault();
+    ui.lock.classList.contains('away') ? lock() : unlock();
+  }
+});
+
+/* ---------------- 開機 ---------------- */
+tickClock();
+setInterval(tickClock, 10_000);
+
+reload()
+  .then(() => {
+    showIsland('🌊　潮汐 OS 已就緒');
+    if (!state.installed.length) {
+      setTimeout(() => notify('萬象相容層', '已接上 7 套作業系統，到「萬象商店」一鍵撈取 App'), 900);
+    }
+  })
+  .catch((err) => {
+    document.body.prepend(el(`<p style="color:#ff6b6b">無法連上系統服務：${esc(err.message)}</p>`));
+  });
+</script>

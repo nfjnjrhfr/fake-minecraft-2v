@@ -8,10 +8,23 @@ Windows、macOS、Linux、Web 七套作業系統的 App **全部撈進同一個�
 
 ```bash
 npm start          # 啟動，預設 http://localhost:3000
-npm test           # 16 個測試
+npm test           # 35 個測試
+npm run build      # 打包成單一 HTML（dist/tide-os.html），不需要伺服器就能開
 PORT=8080 npm start
 DB_FILE=/path/device.json npm start   # 指定裝置狀態檔位置
 ```
+
+## 兩種跑法
+
+| | `npm start`（伺服器版） | `npm run build`（單檔網頁版） |
+| --- | --- | --- |
+| 狀態存在哪 | 伺服器上的 JSON 檔 | 你這台瀏覽器的 localStorage |
+| 瀏覽器 App | **真的連到外面的網站**（伺服端 reader 模式代抓） | 只能逛內建的 omni.tide 頁面 |
+| 其他功能 | 全部一樣 | 全部一樣 |
+
+單檔版之所以不能瀏覽真實網站，是因為它會被放在沙箱頁面裡執行，
+沙箱的內容安全政策不允許頁面對外連線 —— 這是環境限制，不是功能沒做。
+前端程式碼兩邊完全共用，差別只在 `api()` 走 `fetch` 還是走 `build/local-api.js`。
 
 ## 這台裝置能做什麼
 
@@ -39,7 +52,10 @@ DB_FILE=/path/device.json npm start   # 指定裝置狀態檔位置
 - 鎖定畫面（時間、日期、備忘錄預覽）、分頁桌面、Dock、App 開關動畫
 - 動態島、狀態列、通知橫幅、控制中心（Wi‑Fi／藍牙／勿擾／深色模式／亮度／音量）
 - App 切換器、Home 條手勢（點一下回桌面、連點兩下開切換器）
-- 真正的深色／淺色主題切換、六款桌布、亮度會實際調暗螢幕
+- 真正的深色／淺色主題切換、亮度會實際調暗螢幕
+- **桌布可以換成自己的照片**（前端縮到 1400 像素以內再存），另有六款內建桌布，
+  以及桌布模糊與變暗；相片 App 裡每一張也能直接設成桌布
+- Spotlight 搜尋（桌面下方的搜尋列）可以搜全部 App
 
 **瀏覽器（OmniWeb）—— 唯一會真的連到系統外面的東西**
 - 網址列、上一頁／下一頁、重新整理、書籤、瀏覽紀錄
@@ -83,10 +99,13 @@ server/
 public/
   index.html   裝置外框與系統外殼
   os.css       外殼樣式 + 深／淺色主題變數
-  os.js        桌面、視窗、控制中心、切換器、通知
+  os.js        桌面、視窗、控制中心、Spotlight、切換器、通知
   apps.js      七個原生 App 的實作
   mocks.js     相容層執行畫面（依 App 介面型態渲染）
   util.js      共用小工具
+build/
+  bundle.mjs   把整套打包成單一 HTML
+  local-api.js 單檔版用的本機狀態層（把伺服端規則搬到 localStorage）
 test/os.test.js
 data/device.json   裝置狀態（已在 .gitignore，首次啟動自動生成）
 ```
@@ -100,7 +119,7 @@ data/device.json   裝置狀態（已在 .gitignore，首次啟動自動生成�
 | POST | `/api/apps/install` | 撈取單一 App |
 | POST | `/api/apps/install-all` | 一鍵撈取；帶 `os` 只撈那一套，帶 `category` 只撈那個分類，兩個都不帶就撈全部 |
 | POST | `/api/apps/uninstall` | 移除 App |
-| PATCH | `/api/device` | 桌布、深色模式、亮度、音量、連線 |
+| PATCH | `/api/device` | 桌布（含自己的照片）、模糊與變暗、深色模式、亮度、音量、連線 |
 | PATCH | `/api/runtimes` | 開關某一套相容層 |
 | GET／POST／PATCH／DELETE | `/api/notes` | 備忘錄 |
 | POST | `/api/browse` | 取回一個網頁並抽成可閱讀的區塊 |

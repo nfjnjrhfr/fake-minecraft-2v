@@ -6,6 +6,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
+    "build": "node build/bundle.mjs",
     "test": "node --test"
   },
   "engines": {
