@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>电子产品课程作业系统</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>⚡</text></svg>" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- 登录页 -->
+    <section id="login-view" class="login-view">
+      <form id="login-form" class="login-card">
+        <div class="brand"><span class="brand-mark">⚡</span></div>
+        <h1>电子产品课程作业系统</h1>
+        <p class="muted">Electronics Course Assignment System</p>
+
+        <label>
+          <span>用户名</span>
+          <input name="username" autocomplete="username" placeholder="teacher 或 S2301" required />
+        </label>
+        <label>
+          <span>密码</span>
+          <input name="password" type="password" autocomplete="current-password" required />
+        </label>
+
+        <p id="login-error" class="error" hidden></p>
+        <button class="primary" type="submit">登录</button>
+
+        <div class="demo-hint">
+          <p>演示账号（点击填入）：</p>
+          <button type="button" class="chip" data-user="teacher" data-pass="teacher123">教师 · teacher</button>
+          <button type="button" class="chip" data-user="S2301" data-pass="student123">学生 · 王小明</button>
+          <button type="button" class="chip" data-user="S2304" data-pass="student123">学生 · 孙可欣</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- 主界面 -->
+    <div id="app-view" hidden>
+      <header class="topbar">
+        <div class="topbar-left">
+          <span class="brand-mark small">⚡</span>
+          <strong>电子产品课程作业系统</strong>
+        </div>
+        <nav id="tabs" class="tabs"></nav>
+        <div class="topbar-right">
+          <span id="who" class="who"></span>
+          <button id="logout" class="ghost">退出</button>
+        </div>
+      </header>
+
+      <main id="main" class="main"></main>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+
+    <!-- 弹窗 -->
+    <div id="modal" class="modal" hidden>
+      <div class="modal-card">
+        <header class="modal-head">
+          <h2 id="modal-title"></h2>
+          <button id="modal-close" class="ghost" aria-label="关闭">✕</button>
+        </header>
+        <div id="modal-body" class="modal-body"></div>
+      </div>
+    </div>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

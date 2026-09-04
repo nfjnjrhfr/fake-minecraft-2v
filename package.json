@@ -1,0 +1,17 @@
+{
+  "name": "electronics-assignment-system",
+  "version": "1.0.0",
+  "description": "电子产品课程作业系统：教师布置与批改作业，学生在线提交",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "seed": "node server/seed.js --force",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "private": true
+}

@@ -1,2 +1,92 @@
-# fake-minecraft-2v
-u8ujujujujujujujujujuujuujujujujuujujujujujjujjujujujuujjunjerivcfv dnds xdfbdehbhebhbdehbhbhrhbehebhderbhrvrdfgvfrfrevefvfegfhdevegdervgedryegehwrwehgerhwhrbhdbhdbdhbedbdiuheiuhur4ury4yeeyurheu4u44uyy56t4rueyrjdhjddbhdjebbhjejbhdwehjhejrhjedhjdjdndejndjnsdsjndsjndsjkkd.                                                                             67
+# 电子产品课程作业系统
+
+面向《电子产品设计与制作》类课程的在线作业系统：教师布置作业、批改打分，学生在线提交、查看成绩与评语。
+
+零第三方依赖 —— 只用 Node.js 内置模块 + 原生前端，`git clone` 之后直接就能跑。
+
+## 快速开始
+
+```bash
+npm start          # 启动服务，默认 http://localhost:3000
+```
+
+首次启动会自动写入一套演示数据（1 位教师、4 名学生、5 份作业、5 条提交记录）。
+
+演示账号：
+
+| 角色 | 用户名 | 密码 |
+| --- | --- | --- |
+| 教师（李工） | `teacher` | `teacher123` |
+| 学生（王小明，电子2301班） | `S2301` | `student123` |
+| 学生（陈思远，电子2301班） | `S2302` | `student123` |
+| 学生（赵一诺，电子2301班） | `S2303` | `student123` |
+| 学生（孙可欣，电子2302班） | `S2304` | `student123` |
+
+其他命令：
+
+```bash
+npm test           # 运行接口与权限测试（15 个用例）
+npm run seed       # 清库并重新写入演示数据
+PORT=8080 npm start
+DB_FILE=/path/to/db.json npm start   # 指定数据文件位置
+```
+
+## 功能
+
+**教师**
+- 新建 / 编辑 / 删除作业，草稿与发布状态可随时切换（草稿对学生不可见）
+- 六类作业分类：元器件识别、电路设计、PCB制版、嵌入式开发、产品测试、拆解分析
+- 设置满分、截止时间、是否允许逾期补交
+- 按作业查看全班提交情况（含未交名单），逐人打分并写评语
+- 概览页统计：提交率、待批改数量、平均得分率
+
+**学生**
+- 只看得到已发布的作业，按截止时间排序，状态一目了然（待提交 / 已提交 / 已批改 / 已逾期）
+- 提交作业内容与附件链接；未批改前可反复修改，逾期提交会标记为「补交」
+- 查看教师给出的分数与评语
+- 概览页统计：累计得分、得分率、逾期未交数量
+
+**规则约束**（均有测试覆盖）
+- 密码用 `scrypt` 加盐散列存储，接口返回的用户信息永不含密码字段
+- 会话令牌 12 小时过期，退出登录后立即失效
+- 学生不能创建作业、不能批改；教师不能替学生提交
+- 截止后能否提交由作业的「允许补交」开关决定；已批改的作业不能再改提交内容
+- 打分范围限制在 0 ~ 该作业满分之间
+- 删除作业会级联删除其下所有提交记录
+
+## 项目结构
+
+```
+server/
+  index.js   HTTP 服务：路由匹配、静态资源、错误处理
+  api.js     业务逻辑：作业、提交、批改、统计（纯函数，便于测试）
+  auth.js    密码散列、会话令牌
+  db.js      JSON 文件存储（读入内存，写入时原子替换）
+  seed.js    演示数据
+public/      前端单页应用（原生 HTML / CSS / ES Module，无构建步骤）
+test/        基于 node:test 的接口测试
+data/db.json 数据文件（已在 .gitignore 中，首次启动自动生成）
+```
+
+## 接口一览
+
+所有 `/api` 接口用 `Authorization: Bearer <token>` 认证，返回 JSON。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/login` | 登录，返回令牌 |
+| POST | `/api/logout` | 退出登录 |
+| GET | `/api/me` | 当前用户与可用分类 |
+| GET | `/api/assignments` | 作业列表（教师含草稿与提交统计，学生含自己的提交状态）|
+| POST | `/api/assignments` | 新建作业（教师）|
+| GET | `/api/assignments/:id` | 作业详情 |
+| PATCH | `/api/assignments/:id` | 修改作业（教师）|
+| DELETE | `/api/assignments/:id` | 删除作业及其提交（教师）|
+| GET | `/api/assignments/:id/submissions` | 全班提交情况（教师）|
+| POST | `/api/assignments/:id/submissions` | 提交或更新作业（学生）|
+| POST | `/api/submissions/:id/grade` | 打分与评语（教师）|
+| GET | `/api/stats` | 按角色返回统计数据 |
+
+## 说明
+
+数据存放在单个 JSON 文件里，适合一个班级规模的教学演示；若要用于真实教务场景，建议替换 `server/db.js` 为数据库实现，并把令牌改为 HttpOnly Cookie 承载。
