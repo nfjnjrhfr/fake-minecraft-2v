@@ -1,6 +1,4 @@
-import { createSession, destroySession, hashPassword, publicUser, verifyPassword } from './auth.js';
-
-export const CATEGORIES = ['元器件识别', '电路设计', 'PCB制版', '嵌入式开发', '产品测试', '拆解分析'];
+import { BUILTIN_APPS, CATALOG, SOURCES, catalogFor, findApp, findSource } from './catalog.js';
 
 export class HttpError extends Error {
   constructor(status, message) {
@@ -9,341 +7,316 @@ export class HttpError extends Error {
   }
 }
 
-const bad = (msg) => new HttpError(400, msg);
-const forbidden = (msg = '没有权限执行该操作') => new HttpError(403, msg);
-const notFound = (msg = '资源不存在') => new HttpError(404, msg);
+const STORAGE_TOTAL_MB = 128 * 1024;
+const SYSTEM_SIZE_MB = 9_640;
 
-function requireUser(ctx) {
-  if (!ctx.user) throw new HttpError(401, '请先登录');
-  return ctx.user;
+export const WALLPAPERS = [
+  { id: 'aurora', name: '極光', from: '#1b2a6b', to: '#0b8f8f' },
+  { id: 'dusk', name: '暮色', from: '#4a1d5e', to: '#c2455f' },
+  { id: 'tide', name: '潮汐', from: '#062b45', to: '#2f8fff' },
+  { id: 'graphite', name: '石墨', from: '#1a1a1f', to: '#4b5563' },
+  { id: 'citrus', name: '柑橘', from: '#b45309', to: '#f6b93b' },
+  { id: 'mint', name: '薄荷', from: '#064e3b', to: '#34d399' },
+];
+
+export function defaultState() {
+  return {
+    device: {
+      name: '潮汐 One',
+      model: 'TIDE-A1',
+      osVersion: '潮汐 OS 1.0（萬象）',
+      wallpaper: 'aurora',
+      darkMode: false,
+      brightness: 82,
+      volume: 55,
+      wifi: true,
+      bluetooth: true,
+      dnd: false,
+    },
+    // 各來源作業系統的相容層開關：關閉後該來源的 App 會被暫停，但不會被移除
+    runtimes: { ios: true, android: true, harmony: true, windows: false, macos: false, linux: false, web: true },
+    installed: [],
+    notes: [
+      {
+        id: 1,
+        title: '萬象相容層備忘',
+        body: '在「萬象商店」裡挑一個來源作業系統，按「一鍵撈取全部」就能把該系統的 App 全部匯入桌面。\n\n關閉相容層不會刪除 App，只會讓它暫停。',
+        updatedAt: new Date().toISOString(),
+      },
+    ],
+  };
 }
 
-function requireTeacher(ctx) {
-  const user = requireUser(ctx);
-  if (user.role !== 'teacher') throw forbidden('仅教师可执行该操作');
-  return user;
+/* ---------------- 工具 ---------------- */
+
+function ensureShape(db) {
+  const data = db.data;
+  const base = defaultState();
+  data.device = { ...base.device, ...(data.device ?? {}) };
+  data.runtimes = { ...base.runtimes, ...(data.runtimes ?? {}) };
+  data.installed = Array.isArray(data.installed) ? data.installed : [];
+  data.notes = Array.isArray(data.notes) ? data.notes : [];
+  return data;
 }
 
-function requireStudent(ctx) {
-  const user = requireUser(ctx);
-  if (user.role !== 'student') throw forbidden('仅学生可执行该操作');
-  return user;
+function installedApps(db) {
+  const data = ensureShape(db);
+  return data.installed
+    .map((row) => {
+      const app = findApp(row.id);
+      if (!app) return null;
+      return { ...app, installedAt: row.installedAt, active: data.runtimes[app.os] !== false };
+    })
+    .filter(Boolean);
 }
 
-function str(value, field, { max = 2000, required = true } = {}) {
+function storage(db) {
+  const used = installedApps(db).reduce((sum, app) => sum + app.size, SYSTEM_SIZE_MB);
+  return {
+    totalMb: STORAGE_TOTAL_MB,
+    usedMb: used,
+    systemMb: SYSTEM_SIZE_MB,
+    freeMb: STORAGE_TOTAL_MB - used,
+    percent: Number(((used / STORAGE_TOTAL_MB) * 100).toFixed(1)),
+  };
+}
+
+function sourceSummary(db) {
+  const data = ensureShape(db);
+  const installedIds = new Set(data.installed.map((r) => r.id));
+  return SOURCES.map((source) => {
+    const apps = source.builtin ? BUILTIN_APPS : catalogFor(source.os);
+    return {
+      ...source,
+      enabled: source.builtin ? true : data.runtimes[source.os] !== false,
+      total: apps.length,
+      installed: source.builtin ? apps.length : apps.filter((a) => installedIds.has(a.id)).length,
+    };
+  });
+}
+
+function snapshot(db) {
+  const data = ensureShape(db);
+  return {
+    device: data.device,
+    runtimes: data.runtimes,
+    sources: sourceSummary(db),
+    builtins: BUILTIN_APPS,
+    installed: installedApps(db),
+    storage: storage(db),
+    wallpapers: WALLPAPERS,
+    notes: [...data.notes].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
+  };
+}
+
+function str(value, field, { max = 4000, required = true } = {}) {
   const text = typeof value === 'string' ? value.trim() : '';
-  if (!text) {
-    if (required) throw bad(`${field}不能为空`);
-    return '';
-  }
-  if (text.length > max) throw bad(`${field}不能超过 ${max} 个字符`);
+  if (!text && required) throw new HttpError(400, `${field}不能為空`);
+  if (text.length > max) throw new HttpError(400, `${field}不能超過 ${max} 個字`);
   return text;
 }
 
-function parseDueAt(value) {
-  const time = Date.parse(value);
-  if (Number.isNaN(time)) throw bad('截止时间格式不正确');
-  return new Date(time).toISOString();
+function clamp(value, field) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) throw new HttpError(400, `${field}必須是數字`);
+  return Math.min(100, Math.max(0, Math.round(n)));
 }
 
-function assignmentInput(body, { partial = false } = {}) {
-  const patch = {};
-  const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
-
-  if (!partial || has('title')) patch.title = str(body.title, '作业标题', { max: 120 });
-  if (!partial || has('description')) {
-    patch.description = str(body.description, '作业要求', { max: 5000, required: !partial });
+/** 安裝單一 App，回傳 'installed' | 'already' */
+function installOne(db, id) {
+  const data = ensureShape(db);
+  const app = findApp(id);
+  if (!app) throw new HttpError(404, `找不到 App：${id}`);
+  if (app.os === 'tide') throw new HttpError(400, '系統內建 App 無需安裝');
+  if (data.runtimes[app.os] === false) {
+    throw new HttpError(409, `${findSource(app.os).name} 相容層尚未啟用，請先到「設定 → 萬象相容層」開啟`);
   }
-  if (!partial || has('category')) {
-    const category = str(body.category, '作业分类', { max: 40 });
-    if (!CATEGORIES.includes(category)) throw bad(`作业分类必须是：${CATEGORIES.join('、')}`);
-    patch.category = category;
-  }
-  if (!partial || has('maxScore')) {
-    const maxScore = Number(body.maxScore);
-    if (!Number.isFinite(maxScore) || maxScore <= 0 || maxScore > 1000) {
-      throw bad('满分必须是 0 到 1000 之间的数字');
-    }
-    patch.maxScore = maxScore;
-  }
-  if (!partial || has('dueAt')) patch.dueAt = parseDueAt(body.dueAt);
-  if (has('published')) patch.published = Boolean(body.published);
-  if (has('allowLate')) patch.allowLate = Boolean(body.allowLate);
-  return patch;
+  if (data.installed.some((row) => row.id === id)) return 'already';
+  data.installed.push({ id, installedAt: new Date().toISOString() });
+  return 'installed';
 }
 
-/** 学生视角下某份作业的状态 */
-function statusOf(assignment, submission, now = Date.now()) {
-  if (submission?.score !== null && submission?.score !== undefined) return 'graded';
-  if (submission) return 'submitted';
-  if (Date.parse(assignment.dueAt) < now) return 'overdue';
-  return 'pending';
-}
-
-function decorate(db, assignment, viewer) {
-  const submissions = db.filter('submissions', (s) => s.assignmentId === assignment.id);
-  const base = {
-    ...assignment,
-    teacherName: db.find('users', (u) => u.id === assignment.createdBy)?.name ?? '未知',
-  };
-  if (viewer.role === 'teacher') {
-    const graded = submissions.filter((s) => s.score !== null && s.score !== undefined);
-    const studentCount = db.filter('users', (u) => u.role === 'student').length;
-    return {
-      ...base,
-      submissionCount: submissions.length,
-      gradedCount: graded.length,
-      studentCount,
-      averageScore: graded.length
-        ? Number((graded.reduce((sum, s) => sum + s.score, 0) / graded.length).toFixed(2))
-        : null,
-    };
-  }
-  const mine = submissions.find((s) => s.studentId === viewer.id) ?? null;
-  return { ...base, submission: mine, status: statusOf(assignment, mine) };
-}
+/* ---------------- 路由 ---------------- */
 
 export const routes = [
   {
-    method: 'POST',
-    path: '/api/login',
-    handler({ db, body }) {
-      const username = str(body.username, '用户名', { max: 60 });
-      const password = str(body.password, '密码', { max: 200 });
-      const user = db.find('users', (u) => u.username === username);
-      if (!user || !verifyPassword(password, user.password)) {
-        throw new HttpError(401, '用户名或密码错误');
+    method: 'GET',
+    path: '/api/state',
+    handler: ({ db }) => ({ status: 200, body: snapshot(db) }),
+  },
+  {
+    method: 'GET',
+    path: '/api/catalog',
+    handler({ db, query }) {
+      const data = ensureShape(db);
+      const installedIds = new Set(data.installed.map((r) => r.id));
+      let apps = CATALOG;
+      if (query.os) {
+        if (!findSource(query.os) || query.os === 'tide') throw new HttpError(404, '未知的來源作業系統');
+        apps = catalogFor(query.os);
       }
-      const token = createSession(db, user.id);
-      return { status: 200, body: { token, user: publicUser(user) } };
+      if (query.q) {
+        const q = String(query.q).toLowerCase();
+        apps = apps.filter((a) =>
+          [a.name, a.en, a.category].some((field) => field.toLowerCase().includes(q)),
+        );
+      }
+      return {
+        status: 200,
+        body: {
+          sources: sourceSummary(db),
+          apps: apps.map((app) => ({
+            ...app,
+            installed: installedIds.has(app.id),
+            enabled: data.runtimes[app.os] !== false,
+          })),
+        },
+      };
     },
   },
   {
     method: 'POST',
-    path: '/api/logout',
-    handler({ db, token }) {
-      destroySession(db, token);
-      return { status: 200, body: { ok: true } };
-    },
-  },
-  {
-    method: 'GET',
-    path: '/api/me',
-    handler(ctx) {
-      return { status: 200, body: { user: publicUser(requireUser(ctx)), categories: CATEGORIES } };
-    },
-  },
-  {
-    method: 'GET',
-    path: '/api/assignments',
-    handler(ctx) {
-      const user = requireUser(ctx);
-      const visible = ctx.db
-        .filter('assignments', (a) => user.role === 'teacher' || a.published)
-        .map((a) => decorate(ctx.db, a, user))
-        .sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt));
-      return { status: 200, body: { assignments: visible } };
+    path: '/api/apps/install',
+    handler({ db, body }) {
+      const id = str(body.id, 'App id', { max: 80 });
+      const result = installOne(db, id);
+      if (result === 'already') throw new HttpError(409, '這個 App 已經在裝置上了');
+      db.save();
+      return { status: 201, body: { app: findApp(id), state: snapshot(db) } };
     },
   },
   {
     method: 'POST',
-    path: '/api/assignments',
-    handler(ctx) {
-      const teacher = requireTeacher(ctx);
-      const input = assignmentInput(ctx.body);
-      const created = ctx.db.insert('assignments', {
-        ...input,
-        published: input.published ?? false,
-        allowLate: input.allowLate ?? false,
-        createdBy: teacher.id,
-        createdAt: new Date().toISOString(),
-      });
-      return { status: 201, body: { assignment: decorate(ctx.db, created, teacher) } };
+    path: '/api/apps/install-all',
+    handler({ db, body }) {
+      const data = ensureShape(db);
+      const targets = body.os ? [String(body.os)] : SOURCES.filter((s) => !s.builtin).map((s) => s.os);
+
+      for (const os of targets) {
+        const source = findSource(os);
+        if (!source || source.builtin) throw new HttpError(404, `未知的來源作業系統：${os}`);
+      }
+      // 只指定單一來源時，相容層沒開就直接報錯；批次撈取全部時自動略過未啟用的來源
+      if (body.os && data.runtimes[targets[0]] === false) {
+        throw new HttpError(409, `${findSource(targets[0]).name} 相容層尚未啟用，請先到「設定 → 萬象相容層」開啟`);
+      }
+
+      let installed = 0;
+      let already = 0;
+      const skipped = [];
+      for (const os of targets) {
+        if (data.runtimes[os] === false) {
+          skipped.push(findSource(os).name);
+          continue;
+        }
+        for (const app of catalogFor(os)) {
+          if (installOne(db, app.id) === 'installed') installed += 1;
+          else already += 1;
+        }
+      }
+      db.save();
+      return { status: 200, body: { installed, already, skipped, state: snapshot(db) } };
     },
   },
   {
-    method: 'GET',
-    path: '/api/assignments/:id',
-    handler(ctx) {
-      const user = requireUser(ctx);
-      const assignment = getAssignment(ctx);
-      if (user.role !== 'teacher' && !assignment.published) throw notFound('作业不存在');
-      return { status: 200, body: { assignment: decorate(ctx.db, assignment, user) } };
+    method: 'POST',
+    path: '/api/apps/uninstall',
+    handler({ db, body }) {
+      const data = ensureShape(db);
+      const id = str(body.id, 'App id', { max: 80 });
+      const app = findApp(id);
+      if (!app) throw new HttpError(404, `找不到 App：${id}`);
+      if (app.os === 'tide') throw new HttpError(403, '系統內建 App 無法移除');
+      const removed = db.remove('installed', (row) => row.id === id);
+      if (!removed) throw new HttpError(404, '這個 App 尚未安裝');
+      void data;
+      return { status: 200, body: { state: snapshot(db) } };
     },
   },
   {
     method: 'PATCH',
-    path: '/api/assignments/:id',
-    handler(ctx) {
-      const teacher = requireTeacher(ctx);
-      const assignment = getAssignment(ctx);
-      const patch = assignmentInput(ctx.body, { partial: true });
-      const updated = ctx.db.update('assignments', assignment.id, patch);
-      return { status: 200, body: { assignment: decorate(ctx.db, updated, teacher) } };
+    path: '/api/device',
+    handler({ db, body }) {
+      const data = ensureShape(db);
+      const patch = {};
+      if ('wallpaper' in body) {
+        const id = str(body.wallpaper, '桌布', { max: 40 });
+        if (!WALLPAPERS.some((w) => w.id === id)) throw new HttpError(400, '沒有這張桌布');
+        patch.wallpaper = id;
+      }
+      if ('brightness' in body) patch.brightness = clamp(body.brightness, '亮度');
+      if ('volume' in body) patch.volume = clamp(body.volume, '音量');
+      for (const key of ['darkMode', 'wifi', 'bluetooth', 'dnd']) {
+        if (key in body) patch[key] = Boolean(body[key]);
+      }
+      if ('name' in body) patch.name = str(body.name, '裝置名稱', { max: 40 });
+      Object.assign(data.device, patch);
+      db.save();
+      return { status: 200, body: { device: data.device } };
+    },
+  },
+  {
+    method: 'PATCH',
+    path: '/api/runtimes',
+    handler({ db, body }) {
+      const data = ensureShape(db);
+      const os = str(body.os, '來源作業系統', { max: 20 });
+      const source = findSource(os);
+      if (!source) throw new HttpError(404, '未知的來源作業系統');
+      if (source.builtin) throw new HttpError(400, '原生執行環境無法關閉');
+      data.runtimes[os] = Boolean(body.enabled);
+      db.save();
+      return { status: 200, body: { state: snapshot(db) } };
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/notes',
+    handler: ({ db }) => ({ status: 200, body: { notes: snapshot(db).notes } }),
+  },
+  {
+    method: 'POST',
+    path: '/api/notes',
+    handler({ db, body }) {
+      const note = {
+        title: str(body.title, '標題', { max: 80 }),
+        body: str(body.body, '內容', { max: 20000, required: false }),
+        updatedAt: new Date().toISOString(),
+      };
+      return { status: 201, body: { note: db.insert('notes', note) } };
+    },
+  },
+  {
+    method: 'PATCH',
+    path: '/api/notes/:id',
+    handler({ db, params, body }) {
+      const id = Number(params.id);
+      if (!Number.isInteger(id)) throw new HttpError(400, '備忘錄 id 不正確');
+      if (!db.find('notes', (n) => n.id === id)) throw new HttpError(404, '找不到這則備忘錄');
+      const patch = { updatedAt: new Date().toISOString() };
+      if ('title' in body) patch.title = str(body.title, '標題', { max: 80 });
+      if ('body' in body) patch.body = str(body.body, '內容', { max: 20000, required: false });
+      return { status: 200, body: { note: db.update('notes', id, patch) } };
     },
   },
   {
     method: 'DELETE',
-    path: '/api/assignments/:id',
-    handler(ctx) {
-      requireTeacher(ctx);
-      const assignment = getAssignment(ctx);
-      ctx.db.remove('submissions', (s) => s.assignmentId === assignment.id);
-      ctx.db.remove('assignments', (a) => a.id === assignment.id);
+    path: '/api/notes/:id',
+    handler({ db, params }) {
+      const id = Number(params.id);
+      if (!db.remove('notes', (n) => n.id === id)) throw new HttpError(404, '找不到這則備忘錄');
       return { status: 200, body: { ok: true } };
     },
   },
   {
-    method: 'GET',
-    path: '/api/assignments/:id/submissions',
-    handler(ctx) {
-      requireTeacher(ctx);
-      const assignment = getAssignment(ctx);
-      const students = ctx.db.filter('users', (u) => u.role === 'student');
-      const rows = students.map((student) => {
-        const submission =
-          ctx.db.find(
-            'submissions',
-            (s) => s.assignmentId === assignment.id && s.studentId === student.id,
-          ) ?? null;
-        return {
-          student: publicUser(student),
-          submission,
-          status: statusOf(assignment, submission),
-        };
-      });
-      return { status: 200, body: { assignment, rows } };
-    },
-  },
-  {
     method: 'POST',
-    path: '/api/assignments/:id/submissions',
-    handler(ctx) {
-      const student = requireStudent(ctx);
-      const assignment = getAssignment(ctx);
-      if (!assignment.published) throw notFound('作业不存在');
-
-      const content = str(ctx.body.content, '作业内容', { max: 20000 });
-      const attachment = str(ctx.body.attachment, '附件链接', { max: 500, required: false });
-      const overdue = Date.parse(assignment.dueAt) < Date.now();
-      if (overdue && !assignment.allowLate) throw forbidden('作业已截止，无法提交');
-
-      const existing = ctx.db.find(
-        'submissions',
-        (s) => s.assignmentId === assignment.id && s.studentId === student.id,
-      );
-      if (existing && existing.score !== null && existing.score !== undefined) {
-        throw forbidden('作业已批改，无法重新提交');
-      }
-
-      const payload = {
-        content,
-        attachment,
-        submittedAt: new Date().toISOString(),
-        late: overdue,
-      };
-      const submission = existing
-        ? ctx.db.update('submissions', existing.id, payload)
-        : ctx.db.insert('submissions', {
-            assignmentId: assignment.id,
-            studentId: student.id,
-            score: null,
-            feedback: '',
-            gradedAt: null,
-            gradedBy: null,
-            ...payload,
-          });
-      return { status: existing ? 200 : 201, body: { submission } };
-    },
-  },
-  {
-    method: 'POST',
-    path: '/api/submissions/:id/grade',
-    handler(ctx) {
-      const teacher = requireTeacher(ctx);
-      const submission = ctx.db.find('submissions', (s) => s.id === ctx.params.id);
-      if (!submission) throw notFound('提交记录不存在');
-      const assignment = ctx.db.find('assignments', (a) => a.id === submission.assignmentId);
-
-      const score = Number(ctx.body.score);
-      if (!Number.isFinite(score) || score < 0 || score > assignment.maxScore) {
-        throw bad(`分数必须是 0 到 ${assignment.maxScore} 之间的数字`);
-      }
-      const feedback = str(ctx.body.feedback, '评语', { max: 2000, required: false });
-      const updated = ctx.db.update('submissions', submission.id, {
-        score,
-        feedback,
-        gradedAt: new Date().toISOString(),
-        gradedBy: teacher.id,
-      });
-      return { status: 200, body: { submission: updated } };
-    },
-  },
-  {
-    method: 'GET',
-    path: '/api/stats',
-    handler(ctx) {
-      const user = requireUser(ctx);
-      return { status: 200, body: { stats: buildStats(ctx.db, user) } };
+    path: '/api/reset',
+    handler({ db }) {
+      db.data = defaultState();
+      db.save();
+      return { status: 200, body: { state: snapshot(db) } };
     },
   },
 ];
 
-function getAssignment(ctx) {
-  const assignment = ctx.db.find('assignments', (a) => a.id === ctx.params.id);
-  if (!assignment) throw notFound('作业不存在');
-  return assignment;
-}
-
-export function buildStats(db, user) {
-  const assignments = db.filter('assignments', (a) => user.role === 'teacher' || a.published);
-
-  if (user.role === 'teacher') {
-    const submissions = db.all('submissions');
-    const graded = submissions.filter((s) => s.score !== null && s.score !== undefined);
-    const studentCount = db.filter('users', (u) => u.role === 'student').length;
-    const expected = assignments.filter((a) => a.published).length * studentCount;
-    return {
-      role: 'teacher',
-      assignmentCount: assignments.length,
-      publishedCount: assignments.filter((a) => a.published).length,
-      studentCount,
-      submissionCount: submissions.length,
-      pendingGradingCount: submissions.length - graded.length,
-      submissionRate: expected ? Number(((submissions.length / expected) * 100).toFixed(1)) : 0,
-      averageScoreRate: graded.length
-        ? Number(
-            (
-              (graded.reduce((sum, s) => {
-                const a = db.find('assignments', (x) => x.id === s.assignmentId);
-                return sum + s.score / a.maxScore;
-              }, 0) /
-                graded.length) *
-              100
-            ).toFixed(1),
-          )
-        : 0,
-    };
-  }
-
-  const mine = assignments.map((a) => ({
-    assignment: a,
-    submission:
-      db.find('submissions', (s) => s.assignmentId === a.id && s.studentId === user.id) ?? null,
-  }));
-  const graded = mine.filter((m) => m.submission?.score !== null && m.submission?.score !== undefined);
-  const earned = graded.reduce((sum, m) => sum + m.submission.score, 0);
-  const total = graded.reduce((sum, m) => sum + m.assignment.maxScore, 0);
-  return {
-    role: 'student',
-    assignmentCount: mine.length,
-    submittedCount: mine.filter((m) => m.submission).length,
-    gradedCount: graded.length,
-    overdueCount: mine.filter((m) => statusOf(m.assignment, m.submission) === 'overdue').length,
-    earnedScore: earned,
-    totalScore: total,
-    scoreRate: total ? Number(((earned / total) * 100).toFixed(1)) : 0,
-  };
-}
-
-export { statusOf, hashPassword };
+export { snapshot, storage, installedApps };

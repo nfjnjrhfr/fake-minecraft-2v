@@ -2,9 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Db, rootDir } from './db.js';
-import { userFromToken } from './auth.js';
-import { HttpError, routes } from './api.js';
-import { seed } from './seed.js';
+import { HttpError, defaultState, routes } from './api.js';
 
 const PUBLIC_DIR = path.join(rootDir, 'public');
 
@@ -27,12 +25,7 @@ function matchRoute(method, pathname) {
     let ok = true;
     for (let i = 0; i < pattern.length; i += 1) {
       if (pattern[i].startsWith(':')) {
-        const value = Number(parts[i]);
-        if (!Number.isInteger(value)) {
-          ok = false;
-          break;
-        }
-        params[pattern[i].slice(1)] = value;
+        params[pattern[i].slice(1)] = parts[i];
       } else if (pattern[i] !== parts[i]) {
         ok = false;
         break;
@@ -48,14 +41,14 @@ async function readJsonBody(req) {
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 1_000_000) throw new HttpError(413, '请求体过大');
+    if (size > 1_000_000) throw new HttpError(413, '請求內容過大');
     chunks.push(chunk);
   }
   if (!chunks.length) return {};
   try {
     return JSON.parse(Buffer.concat(chunks).toString('utf8'));
   } catch {
-    throw new HttpError(400, '请求体不是合法的 JSON');
+    throw new HttpError(400, '請求內容不是合法的 JSON');
   }
 }
 
@@ -72,14 +65,14 @@ function sendJson(res, status, body) {
 function serveStatic(req, res, pathname) {
   const relative = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
   const target = path.join(PUBLIC_DIR, relative);
-  // 防止路径穿越（../../etc/passwd）
+  // 防止路徑穿越（../../etc/passwd）
   if (!target.startsWith(PUBLIC_DIR + path.sep) && target !== PUBLIC_DIR) {
     res.writeHead(403).end('Forbidden');
     return;
   }
   fs.readFile(target, (err, data) => {
     if (err) {
-      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('404 页面不存在');
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('404 找不到頁面');
       return;
     }
     res.writeHead(200, { 'content-type': MIME[path.extname(target)] ?? 'application/octet-stream' });
@@ -87,14 +80,14 @@ function serveStatic(req, res, pathname) {
   });
 }
 
-export function createApp(db = new Db()) {
+export function createApp(db = new Db(undefined, defaultState)) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const pathname = decodeURIComponent(url.pathname);
 
     if (!pathname.startsWith('/api/')) {
       if (req.method !== 'GET') {
-        sendJson(res, 405, { error: '方法不被允许' });
+        sendJson(res, 405, { error: '方法不被允許' });
         return;
       }
       serveStatic(req, res, pathname);
@@ -103,16 +96,12 @@ export function createApp(db = new Db()) {
 
     try {
       const match = matchRoute(req.method, pathname);
-      if (!match) throw new HttpError(404, '接口不存在');
+      if (!match) throw new HttpError(404, '介面不存在');
 
-      const auth = req.headers.authorization ?? '';
-      const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
       const body = req.method === 'GET' || req.method === 'DELETE' ? {} : await readJsonBody(req);
 
       const result = match.route.handler({
         db,
-        token,
-        user: userFromToken(db, token),
         params: match.params,
         query: Object.fromEntries(url.searchParams),
         body,
@@ -123,8 +112,8 @@ export function createApp(db = new Db()) {
         sendJson(res, err.status, { error: err.message });
         return;
       }
-      console.error('[server] 未处理的错误:', err);
-      sendJson(res, 500, { error: '服务器内部错误' });
+      console.error('[server] 未處理的錯誤:', err);
+      sendJson(res, 500, { error: '伺服器內部錯誤' });
     }
   });
   server.db = db;
@@ -133,10 +122,9 @@ export function createApp(db = new Db()) {
 
 const isMain = process.argv[1] && import.meta.url === `file://${path.resolve(process.argv[1])}`;
 if (isMain) {
-  const db = new Db();
-  seed(db);
+  const db = new Db(undefined, defaultState);
   const port = Number(process.env.PORT) || 3000;
   createApp(db).listen(port, () => {
-    console.log(`电子产品作业系统已启动: http://localhost:${port}`);
+    console.log(`潮汐 OS 模擬器已啟動：http://localhost:${port}`);
   });
 }

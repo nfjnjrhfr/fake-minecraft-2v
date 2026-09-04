@@ -1,71 +1,103 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-Hant">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>电子产品课程作业系统</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>⚡</text></svg>" />
-    <link rel="stylesheet" href="/styles.css" />
+    <title>潮汐 OS · 萬象相容層</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🌊</text></svg>" />
+    <link rel="stylesheet" href="/os.css" />
   </head>
   <body>
-    <!-- 登录页 -->
-    <section id="login-view" class="login-view">
-      <form id="login-form" class="login-card">
-        <div class="brand"><span class="brand-mark">⚡</span></div>
-        <h1>电子产品课程作业系统</h1>
-        <p class="muted">Electronics Course Assignment System</p>
+    <div class="device" id="device">
+      <span class="btn-vol up"></span>
+      <span class="btn-vol down"></span>
+      <span class="btn-side power"></span>
 
-        <label>
-          <span>用户名</span>
-          <input name="username" autocomplete="username" placeholder="teacher 或 S2301" required />
-        </label>
-        <label>
-          <span>密码</span>
-          <input name="password" type="password" autocomplete="current-password" required />
-        </label>
+      <div class="screen" id="screen">
+        <div class="wallpaper" id="wallpaper"></div>
+        <div class="veil" id="veil"></div>
 
-        <p id="login-error" class="error" hidden></p>
-        <button class="primary" type="submit">登录</button>
-
-        <div class="demo-hint">
-          <p>演示账号（点击填入）：</p>
-          <button type="button" class="chip" data-user="teacher" data-pass="teacher123">教师 · teacher</button>
-          <button type="button" class="chip" data-user="S2301" data-pass="student123">学生 · 王小明</button>
-          <button type="button" class="chip" data-user="S2304" data-pass="student123">学生 · 孙可欣</button>
+        <div class="statusbar">
+          <span id="status-time">9:41</span>
+          <span class="status-right" id="status-right" title="開啟控制中心">
+            <span id="status-net">5G</span>
+            <svg id="status-wifi" width="16" height="12" viewBox="0 0 16 12" aria-label="Wi-Fi">
+              <path d="M8 10.6 5.9 8.3a3 3 0 0 1 4.2 0L8 10.6Z" fill="currentColor" />
+              <path d="M3.7 6.1a6.3 6.3 0 0 1 8.6 0" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" />
+              <path d="M1.4 3.7a9.7 9.7 0 0 1 13.2 0" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" />
+            </svg>
+            <span class="battery"><i id="battery-fill" style="width:82%"></i></span>
+          </span>
         </div>
-      </form>
-    </section>
+        <div class="island" id="island"></div>
 
-    <!-- 主界面 -->
-    <div id="app-view" hidden>
-      <header class="topbar">
-        <div class="topbar-left">
-          <span class="brand-mark small">⚡</span>
-          <strong>电子产品课程作业系统</strong>
-        </div>
-        <nav id="tabs" class="tabs"></nav>
-        <div class="topbar-right">
-          <span id="who" class="who"></span>
-          <button id="logout" class="ghost">退出</button>
-        </div>
-      </header>
+        <!-- 鎖定畫面 -->
+        <section class="lock" id="lock">
+          <div class="lock-date" id="lock-date"></div>
+          <div class="lock-time" id="lock-time"></div>
+          <div class="lock-note" id="lock-note"></div>
+          <div class="lock-hint">點一下解鎖</div>
+        </section>
 
-      <main id="main" class="main"></main>
-    </div>
+        <!-- 桌面 -->
+        <section class="home" id="home">
+          <div class="pages" id="pages"></div>
+          <div class="dots" id="dots"></div>
+          <div class="dock" id="dock"></div>
+        </section>
 
-    <div id="toast" class="toast" hidden></div>
+        <!-- App 視窗 -->
+        <section class="appwin" id="appwin" hidden></section>
 
-    <!-- 弹窗 -->
-    <div id="modal" class="modal" hidden>
-      <div class="modal-card">
-        <header class="modal-head">
-          <h2 id="modal-title"></h2>
-          <button id="modal-close" class="ghost" aria-label="关闭">✕</button>
-        </header>
-        <div id="modal-body" class="modal-body"></div>
+        <!-- 控制中心 -->
+        <div class="control" id="control" hidden></div>
+
+        <!-- App 切換器 -->
+        <div class="switcher" id="switcher" hidden></div>
+
+        <!-- 通知橫幅 -->
+        <div class="banner" id="banner" hidden></div>
+
+        <div class="homebar" id="homebar" title="點一下回桌面，連點兩下開 App 切換器"></div>
       </div>
     </div>
 
-    <script src="/app.js" type="module"></script>
+    <aside class="sidehint">
+      <div>
+        <h1>潮汐 OS <span style="opacity:.5;font-size:14px">1.0 萬象</span></h1>
+        <p class="tagline">
+          一台電子產品的行動作業系統原型。系統本身只有一套原生介面層 OmniUI，
+          <strong>萬象相容層</strong>負責把 iOS、Android、HarmonyOS、Windows、macOS、
+          Linux、Web 的 App 全部撈進同一個桌面。
+        </p>
+      </div>
+
+      <div class="box">
+        <h4>怎麼玩</h4>
+        <ul>
+          <li>點畫面解鎖，點 App 圖示開啟</li>
+          <li>開「萬象商店」→ 選來源系統 → <strong>一鍵撈取全部</strong></li>
+          <li>撈進來的 App 圖示右下角有來源系統的角標</li>
+          <li>「設定 → 萬象相容層」可以開關各系統的執行環境</li>
+        </ul>
+      </div>
+
+      <div class="box">
+        <h4>操作</h4>
+        <ul>
+          <li><kbd>Esc</kbd> 回桌面 · <kbd>空白鍵</kbd> 解鎖／鎖定</li>
+          <li>點底部白條回桌面，連點兩下開切換器</li>
+          <li>點右上角狀態列開控制中心</li>
+        </ul>
+      </div>
+
+      <p class="note">
+        說明：這是一套可互動的系統原型 —— 桌面、視窗、控制中心、商店與相容層的狀態都是真的，
+        並且存在伺服器上。外來 App 的畫面是相容層的模擬渲染，不是真的在執行 APK 或 PE 執行檔；
+        真要做到那一步需要 ART、Win32、GTK 等實際執行環境。
+      </p>
+    </aside>
+
+    <script type="module" src="/os.js"></script>
   </body>
 </html>

@@ -1,12 +1,11 @@
 {
-  "name": "electronics-assignment-system",
+  "name": "tide-os",
   "version": "1.0.0",
-  "description": "电子产品课程作业系统：教师布置与批改作业，学生在线提交",
+  "description": "潮汐 OS —— 電子產品的行動作業系統原型，內建萬象相容層，可把其他作業系統的 App 全部撈進來",
   "type": "module",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "seed": "node server/seed.js --force",
     "test": "node --test"
   },
   "engines": {

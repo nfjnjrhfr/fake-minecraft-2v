@@ -1,4 +1,4 @@
 node_modules/
-data/db.json
+data/device.json
 *.log
 .DS_Store

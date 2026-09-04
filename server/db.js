@@ -4,31 +4,28 @@ import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const emptyData = () => ({
-  users: [],
-  assignments: [],
-  submissions: [],
-  sessions: [],
-});
-
 /**
- * 极简 JSON 文件数据库：整库读入内存，写入时先写临时文件再重命名，避免半截文件。
- * 作业系统的数据量很小（一个班级几十人），不引入外部依赖。
+ * 極簡 JSON 檔案儲存：整份讀進記憶體，寫入時先寫暫存檔再改名，避免寫到一半的殘檔。
+ * 這是一台裝置的系統狀態（設定、已安裝 App、備忘錄），資料量很小，不引入外部依賴。
  */
 export class Db {
-  constructor(file = process.env.DB_FILE || path.join(rootDir, 'data', 'db.json')) {
+  constructor(
+    file = process.env.DB_FILE || path.join(rootDir, 'data', 'device.json'),
+    initial = () => ({}),
+  ) {
     this.file = file;
-    this.data = emptyData();
+    this.initial = initial;
+    this.data = initial();
     this.load();
   }
 
   load() {
     try {
       const raw = fs.readFileSync(this.file, 'utf8');
-      this.data = { ...emptyData(), ...JSON.parse(raw) };
+      this.data = { ...this.initial(), ...JSON.parse(raw) };
     } catch (err) {
       if (err.code !== 'ENOENT') throw err;
-      this.data = emptyData();
+      this.data = this.initial();
       this.save();
     }
     return this.data;
@@ -42,11 +39,11 @@ export class Db {
   }
 
   reset() {
-    this.data = emptyData();
+    this.data = this.initial();
     this.save();
   }
 
-  /** 表操作 */
+  /** 集合操作 */
   all(table) {
     return this.data[table];
   }
