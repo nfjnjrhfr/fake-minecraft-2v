@@ -8,7 +8,7 @@ Windows、macOS、Linux、Web 七套作業系統的 App **全部撈進同一個�
 
 ```bash
 npm start          # 啟動，預設 http://localhost:3000
-npm test           # 35 個測試
+npm test           # 37 個測試
 npm run build      # 打包成單一 HTML（dist/tide-os.html），不需要伺服器就能開
 PORT=8080 npm start
 DB_FILE=/path/device.json npm start   # 指定裝置狀態檔位置
@@ -34,7 +34,8 @@ DB_FILE=/path/device.json npm start   # 指定裝置狀態檔位置
 - 也能只撈某一套系統、只撈某一個分類，或單獨撈某一個 App
 - 例如：iOS 分頁 → 遊戲分類 →「撈取 iOS 的全部 10 個遊戲」，
   或不選來源直接「一鍵撈取全部遊戲」把各系統的遊戲一次收齊
-- 遊戲在相容層裡會依類型（競速／益智／角色扮演／音樂節奏／模擬經營…）呈現不同的畫面
+- **遊戲是真的能玩的**：每款遊戲的標題畫面依類型不同，按下「開始遊戲」會進到實際可操作的玩法，
+  最高分會存回裝置
 - 撈進來的 App 圖示右下角有來源系統的角標，開啟時頂端會顯示是哪個 runtime 在轉譯
 - 相容層可以逐套開關；**關掉不會刪 App，只會讓它在桌面上「暫停」**，點了會提示去設定開啟
 
@@ -102,6 +103,7 @@ public/
   os.js        桌面、視窗、控制中心、Spotlight、切換器、通知
   apps.js      七個原生 App 的實作
   mocks.js     相容層執行畫面（依 App 介面型態渲染）
+  games.js     七種玩法引擎與遊戲外框（分數、結算、最高分）
   util.js      共用小工具
 build/
   bundle.mjs   把整套打包成單一 HTML
@@ -125,6 +127,7 @@ data/device.json   裝置狀態（已在 .gitignore，首次啟動自動生成�
 | POST | `/api/browse` | 取回一個網頁並抽成可閱讀的區塊 |
 | POST／DELETE | `/api/bookmarks` | 書籤新增與刪除 |
 | POST | `/api/history/clear` | 清除瀏覽紀錄 |
+| POST | `/api/scores` | 回報遊戲分數（只留最高分） |
 | POST | `/api/reset` | 回復原廠設定 |
 
 規則都有測試覆蓋：相容層沒啟用不能撈該系統的 App、重複撈會被擋、內建 App 不可移除、

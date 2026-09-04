@@ -1,4 +1,5 @@
 import { NATIVE_APPS } from './apps.js';
+import { playGame } from './games.js';
 import { renderMock, runtimeStats } from './mocks.js';
 import { $, api, el, esc, fmtSize, tint } from './util.js';
 
@@ -186,11 +187,20 @@ function openApp(id) {
       <span class="name">${esc(s.runtime)}</span>
       <span class="sep">${stats.nodes.toLocaleString()} 節點 · ${stats.fps} FPS · ${stats.ram} MB</span>
     </div>`));
-    body.innerHTML = renderMock(app);
+    if (app.kind === 'game') showGameTitle(app, body);
+    else body.innerHTML = renderMock(app);
   }
   ui.appwin.append(body);
 
   showIsland(`${app.glyph}　${app.name}`);
+}
+
+/** 遊戲的標題畫面：按下開始才真的進到遊戲 */
+function showGameTitle(app, body) {
+  body.innerHTML = renderMock(app);
+  body.querySelector('[data-play]')?.addEventListener('click', () => {
+    playGame(app, { ...ctx(), backToTitle: () => showGameTitle(app, body) }, body);
+  });
 }
 
 function renderAppHeader(app) {
@@ -439,7 +449,7 @@ window.addEventListener('keydown', (e) => {
     else if (!ui.control.hidden) toggleControl(false);
     else closeApp();
   }
-  if (e.key === ' ') {
+  if (e.key === ' ' && !ui.screen.classList.contains('playing')) {
     e.preventDefault();
     ui.lock.classList.contains('away') ? lock() : unlock();
   }

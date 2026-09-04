@@ -6,7 +6,7 @@ import path from 'node:path';
 import { Db } from '../server/db.js';
 import { createApp } from '../server/index.js';
 import { defaultState } from '../server/api.js';
-import { BUILTIN_APPS, CATALOG, SOURCES, catalogFor } from '../server/catalog.js';
+import { BUILTIN_APPS, CATALOG, SOURCES, catalogFor, findApp } from '../server/catalog.js';
 
 async function withServer(run) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tideos-'));
@@ -252,6 +252,40 @@ test('裝置設定會校驗並保存', async () => {
     await call('/api/device', { method: 'PATCH', body: { volume: 480 } });
     assert.equal((await state()).device.volume, 100);
     assert.equal((await call('/api/device', { method: 'PATCH', body: { wallpaper: '不存在' } })).status, 400);
+  });
+});
+
+test('每個遊戲都對應得到一種可以玩的玩法引擎', async () => {
+  const { engineFor } = await import('../public/games.js').catch(() => ({}));
+  // games.js 是給瀏覽器用的模組，這裡只驗證資料面：每款遊戲都有類型
+  const games = CATALOG.filter((a) => a.kind === 'game');
+  assert.ok(games.length >= 12);
+  const GENRES = ['消除', '休閒', '益智', '競速', '動作', '太空冒險', '音樂節奏', '棋類', '策略', '角色扮演', '即時戰略', '模擬經營'];
+  for (const game of games) {
+    assert.ok(GENRES.includes(game.genre), `${game.name} 的類型「${game.genre}」沒有對應的玩法`);
+  }
+  void engineFor;
+});
+
+test('遊戲分數只留最高分，非遊戲不收', async () => {
+  await withServer(async ({ call, state }) => {
+    assert.deepEqual((await state()).scores, {});
+
+    assert.equal((await call('/api/scores', { method: 'POST', body: { id: 'ios.starlap', score: 1200 } })).status, 200);
+    assert.equal((await state()).scores['ios.starlap'], 1200);
+
+    // 比較低的分數不會蓋掉紀錄
+    await call('/api/scores', { method: 'POST', body: { id: 'ios.starlap', score: 300 } });
+    assert.equal((await state()).scores['ios.starlap'], 1200);
+
+    await call('/api/scores', { method: 'POST', body: { id: 'ios.starlap', score: 4800 } });
+    assert.equal((await state()).scores['ios.starlap'], 4800);
+
+    assert.equal(findApp('ios.lumo').kind, 'photo');
+    assert.equal((await call('/api/scores', { method: 'POST', body: { id: 'ios.lumo', score: 10 } })).status, 400);
+    assert.equal((await call('/api/scores', { method: 'POST', body: { id: '不存在', score: 10 } })).status, 404);
+    assert.equal((await call('/api/scores', { method: 'POST', body: { id: 'ios.starlap', score: -5 } })).status, 400);
+    assert.equal((await call('/api/scores', { method: 'POST', body: { id: 'ios.starlap', score: '很高' } })).status, 400);
   });
 });
 

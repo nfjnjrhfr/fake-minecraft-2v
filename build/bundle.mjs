@@ -18,7 +18,7 @@ function flatten(source) {
     .trim();
 }
 
-const modules = ['public/util.js', 'server/catalog.js', 'build/local-api.js', 'public/mocks.js', 'public/apps.js', 'public/os.js'];
+const modules = ['public/util.js', 'server/catalog.js', 'build/local-api.js', 'public/mocks.js', 'public/games.js', 'public/apps.js', 'public/os.js'];
 const script = modules.map((file) => `/* ===== ${file} ===== */\n${flatten(read(file))}`).join('\n\n');
 
 const html = read('public/index.html');

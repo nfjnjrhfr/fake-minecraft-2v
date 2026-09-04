@@ -249,7 +249,7 @@ const KIND = {
             .map(([t, v]) => `<div class="mock-card" style="aspect-ratio:auto;padding:10px;gap:2px;text-align:center">
               <div style="font-size:16px;font-weight:700">${v}</div><div class="mock-sub">${t}</div></div>`).join('')}
         </div>
-        <div class="mock-btn" style="padding:13px">▶　繼續遊戲</div>
+        <button class="mock-btn" data-play style="padding:13px;width:100%">▶　開始遊戲</button>
         ${block()}
         <div class="mock-row" style="gap:8px">
           <span class="mock-pill" style="flex:1;text-align:center">新遊戲</span>

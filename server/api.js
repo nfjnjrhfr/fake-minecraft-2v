@@ -40,6 +40,7 @@ export function defaultState() {
     // 各來源作業系統的相容層開關：關閉後該來源的 App 會被暫停，但不會被移除
     runtimes: { ios: true, android: true, harmony: true, windows: false, macos: false, linux: false, web: true },
     installed: [],
+    scores: {}, // 每個遊戲的最高分
     bookmarks: [
       { id: 1, title: '範例網頁', url: 'https://example.com/' },
       { id: 2, title: '維基百科：作業系統', url: 'https://en.wikipedia.org/wiki/Operating_system' },
@@ -66,6 +67,7 @@ function ensureShape(db) {
   data.device = { ...base.device, ...(data.device ?? {}) };
   data.runtimes = { ...base.runtimes, ...(data.runtimes ?? {}) };
   data.installed = Array.isArray(data.installed) ? data.installed : [];
+  data.scores = data.scores && typeof data.scores === 'object' ? data.scores : {};
   data.bookmarks = Array.isArray(data.bookmarks) ? data.bookmarks : base.bookmarks;
   data.history = Array.isArray(data.history) ? data.history : [];
   data.notes = Array.isArray(data.notes) ? data.notes : [];
@@ -118,6 +120,7 @@ function snapshot(db) {
     installed: installedApps(db),
     storage: storage(db),
     wallpapers: WALLPAPERS,
+    scores: data.scores,
     bookmarks: data.bookmarks,
     history: data.history,
     notes: [...data.notes].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
@@ -316,6 +319,23 @@ export const routes = [
       data.runtimes[os] = Boolean(body.enabled);
       db.save();
       return { status: 200, body: { state: snapshot(db) } };
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/scores',
+    handler({ db, body }) {
+      const data = ensureShape(db);
+      const id = str(body.id, 'App id', { max: 80 });
+      const app = findApp(id);
+      if (!app) throw new HttpError(404, `找不到 App：${id}`);
+      if (app.kind !== 'game') throw new HttpError(400, '只有遊戲會記錄分數');
+      const score = Number(body.score);
+      if (!Number.isFinite(score) || score < 0 || score > 10_000_000) throw new HttpError(400, '分數不正確');
+      // 只留最高分
+      data.scores[id] = Math.max(data.scores[id] ?? 0, Math.round(score));
+      db.save();
+      return { status: 200, body: { scores: data.scores } };
     },
   },
   {

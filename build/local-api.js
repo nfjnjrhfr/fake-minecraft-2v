@@ -39,6 +39,7 @@ function defaultState() {
       dnd: false,
     },
     runtimes: { ios: true, android: true, harmony: true, windows: false, macos: false, linux: false, web: true },
+    scores: {},
     installed: CATALOG.filter((a) => PRESET.includes(a.os)).map((a) => ({ id: a.id, installedAt: new Date().toISOString() })),
     bookmarks: [
       { id: 1, title: '潮汐 OS 說明', url: 'https://omni.tide/' },
@@ -124,6 +125,7 @@ const snapshot = () => ({
   installed: installedApps(),
   storage: storage(),
   wallpapers: WALLPAPERS,
+  scores: data.scores,
   bookmarks: data.bookmarks,
   history: data.history,
   notes: [...data.notes].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
@@ -329,6 +331,18 @@ function route(path, { method = 'GET', body = {} } = {}) {
     data.runtimes[body.os] = Boolean(body.enabled);
     save();
     return { state: snapshot() };
+  }
+
+  if (url.pathname === '/api/scores') {
+    const app = findApp(body.id);
+    if (!app) fail(`找不到 App：${body.id}`);
+    if (app.kind !== 'game') fail('只有遊戲會記錄分數');
+    const score = Number(body.score);
+    if (!Number.isFinite(score) || score < 0) fail('分數不正確');
+    data.scores = data.scores ?? {};
+    data.scores[body.id] = Math.max(data.scores[body.id] ?? 0, Math.round(score));
+    save();
+    return { scores: data.scores };
   }
 
   if (url.pathname === '/api/browse') return browse(body.url);
