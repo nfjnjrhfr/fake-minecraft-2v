@@ -1,4 +1,8 @@
-import { api, el, esc, fmtSize, shade, tint } from './util.js';
+import { api, el, esc, fmtSize, readImageAsDataUrl, shade, tint } from './util.js';
+
+/** iOS 設定裡那種彩色圓角小圖示 */
+const iconBox = (glyph, color) =>
+  `<span class="li-icon" style="background:${color};color:#fff">${glyph}</span>`;
 
 /* ============================ 萬象商店 ============================ */
 const store = {
@@ -401,7 +405,42 @@ const browser = {
 const settings = {
   id: 'settings',
   render(ctx) {
-    const root = el('<div></div>');
+    const root = el('<div style="padding-bottom:40px"></div>');
+
+    const patch = async (body, { redraw = true } = {}) => {
+      try {
+        const res = await api('/api/device', { method: 'PATCH', body });
+        ctx.setState({ ...ctx.state, device: res.device });
+        if (redraw) draw();
+      } catch (err) {
+        ctx.notify('設定', err.message);
+      }
+    };
+
+    const row = (inner) => el(`<div class="list-item">${inner}</div>`);
+
+    const switchRow = (glyph, color, label, key) => {
+      const node = row(`${iconBox(glyph, color)}<div class="grow"><div class="t">${label}</div></div>
+        <span class="switch ${ctx.state.device[key] ? 'on' : ''}"></span>`);
+      node.querySelector('.switch').addEventListener('click', () => patch({ [key]: !ctx.state.device[key] }));
+      return node;
+    };
+
+    const sliderRow = (glyph, color, label, key) => {
+      const node = row(`${iconBox(glyph, color)}<div class="grow" style="display:grid;gap:2px">
+        <div class="t" style="font-size:13.5px;color:var(--win-sub)">${label}<b style="float:right;color:var(--win-ink)">${ctx.state.device[key]}</b></div>
+        <input type="range" min="0" max="100" value="${ctx.state.device[key]}" /></div>`);
+      const out = node.querySelector('b');
+      node.querySelector('input').addEventListener('input', (e) => {
+        const value = Number(e.target.value);
+        out.textContent = value;
+        ctx.state.device[key] = value;
+        ctx.setState(ctx.state);
+        clearTimeout(node._t);
+        node._t = setTimeout(() => patch({ [key]: value }, { redraw: false }), 220);
+      });
+      return node;
+    };
 
     const draw = () => {
       const { device, storage, sources, wallpapers, installed } = ctx.state;
@@ -410,110 +449,121 @@ const settings = {
       root.append(el(`<div class="hero">
         <h3>${esc(device.name)}</h3>
         <p>${esc(device.osVersion)} · 型號 ${esc(device.model)}<br />
-           已安裝外來 App ${installed.length} 個 · 儲存空間 ${fmtSize(storage.usedMb)} / ${fmtSize(storage.totalMb)}</p>
+           已撈取外來 App ${installed.length} 個 · ${fmtSize(storage.usedMb)} / ${fmtSize(storage.totalMb)}</p>
         <div class="bar-track"><i style="width:${storage.percent}%"></i></div>
       </div>`));
 
-      // 萬象相容層
-      root.append(el('<div class="section-title">萬象相容層 · 各來源作業系統的執行環境</div>'));
+      /* 萬象相容層 */
+      root.append(el('<div class="section-title">萬象相容層</div>'));
       const rt = el('<div class="list"></div>');
       sources.filter((s) => !s.builtin).forEach((s) => {
-        const row = el(`<div class="list-item">
-          <span style="font-size:20px;width:26px;text-align:center">${s.glyph}</span>
-          <div class="grow">
-            <div class="t">${esc(s.name)}</div>
-            <div class="d">${esc(s.runtime)} · 已撈取 ${s.installed}/${s.total}</div>
-          </div>
-          <span class="switch ${s.enabled ? 'on' : ''}"></span>
-        </div>`);
-        row.querySelector('.switch').addEventListener('click', async () => {
+        const node = row(`${iconBox(s.glyph, s.accent)}
+          <div class="grow"><div class="t">${esc(s.name)}</div><div class="d">${esc(s.runtime)} · 已撈取 ${s.installed}/${s.total}</div></div>
+          <span class="switch ${s.enabled ? 'on' : ''}"></span>`);
+        node.querySelector('.switch').addEventListener('click', async () => {
           try {
             const res = await api('/api/runtimes', { method: 'PATCH', body: { os: s.os, enabled: !s.enabled } });
             ctx.setState(res.state);
             ctx.notify(s.name, s.enabled ? '相容層已關閉，該來源的 App 暫停執行' : '相容層已啟用');
             draw();
           } catch (err) {
-            ctx.notify('操作失敗', err.message);
+            ctx.notify('設定', err.message);
           }
         });
-        rt.append(row);
+        rt.append(node);
       });
-      root.append(rt, el('<p class="section-title" style="padding-top:4px;line-height:1.6">關閉相容層不會刪除已撈取的 App，只會讓它們在桌面上暫停。</p>'));
+      root.append(rt, el('<p class="foot-note">關閉相容層不會刪除已撈取的 App，只會讓它們在桌面上暫停。</p>'));
 
-      // 外觀
-      root.append(el('<div class="section-title">外觀</div>'));
-      const look = el('<div class="list"></div>');
-      const darkRow = el(`<div class="list-item"><span style="width:26px;text-align:center">🌙</span>
-        <div class="grow"><div class="t">深色模式</div></div><span class="switch ${device.darkMode ? 'on' : ''}"></span></div>`);
-      darkRow.querySelector('.switch').addEventListener('click', () => patch({ darkMode: !device.darkMode }));
-      look.append(darkRow);
+      /* 桌布 */
+      root.append(el('<div class="section-title">桌布</div>'));
+      const wall = el('<div class="list"></div>');
 
-      const wpRow = el('<div style="padding:12px 16px;display:grid;gap:9px"><div class="d" style="font-size:11.5px;color:#93a0b6">桌布</div><div style="display:flex;gap:9px;flex-wrap:wrap"></div></div>');
-      const swatches = wpRow.querySelector('div:last-child');
-      wallpapers.forEach((w) => {
-        const s = el(`<button title="${esc(w.name)}" style="width:44px;height:60px;border-radius:11px;background:linear-gradient(160deg,${w.from},${w.to});box-shadow:${
-          device.wallpaper === w.id ? '0 0 0 2.5px #fff' : '0 0 0 1px rgba(255,255,255,.18)'
+      const pickRow = row(`${iconBox('🖼', '#34c759')}<div class="grow"><div class="t">選擇自己的照片</div>
+        <div class="d">從你的裝置挑一張圖片當背景</div></div><button class="pill-btn">選擇</button>`);
+      const file = el('<input type="file" accept="image/*" hidden />');
+      pickRow.append(file);
+      pickRow.querySelector('button').addEventListener('click', () => file.click());
+      file.addEventListener('change', async () => {
+        const chosen = file.files?.[0];
+        file.value = '';
+        if (!chosen) return;
+        try {
+          const dataUrl = await readImageAsDataUrl(chosen);
+          await patch({ wallpaperImage: dataUrl });
+          ctx.notify('桌布', '已換成你自己的照片');
+        } catch (err) {
+          ctx.notify('桌布', err.message);
+        }
+      });
+      wall.append(pickRow);
+
+      const swatchRow = el('<div class="list-item" style="display:block;padding:14px"><div class="d" style="margin-bottom:10px">內建桌布</div><div style="display:flex;gap:10px;flex-wrap:wrap"></div></div>');
+      const swatches = swatchRow.querySelector('div:last-child');
+      if (device.wallpaperImage) {
+        const own = el(`<button title="你自己的照片" style="width:46px;height:64px;border-radius:12px;background-image:url('${device.wallpaperImage}');background-size:cover;background-position:center;box-shadow:${
+          device.wallpaper === 'custom' ? '0 0 0 3px var(--blue)' : '0 0 0 1px var(--win-line)'
         }"></button>`);
-        s.addEventListener('click', () => patch({ wallpaper: w.id }));
-        swatches.append(s);
+        own.addEventListener('click', () => patch({ wallpaper: 'custom' }));
+        swatches.append(own);
+      }
+      wallpapers.forEach((w) => {
+        const sw = el(`<button title="${esc(w.name)}" style="width:46px;height:64px;border-radius:12px;background:linear-gradient(160deg,${w.from},${w.to});box-shadow:${
+          device.wallpaper === w.id ? '0 0 0 3px var(--blue)' : '0 0 0 1px var(--win-line)'
+        }"></button>`);
+        sw.addEventListener('click', () => patch({ wallpaper: w.id }));
+        swatches.append(sw);
       });
-      look.append(wpRow);
-      root.append(look);
+      wall.append(swatchRow, sliderRow('🌫', '#8e8e93', '桌布模糊', 'wallpaperBlur'), sliderRow('🌗', '#5856d6', '桌布變暗', 'wallpaperDim'));
 
-      // 顯示與聲音
+      if (device.wallpaperImage) {
+        const clear = row(`${iconBox('🗑', '#ff3b30')}<div class="grow"><div class="t" style="color:var(--red)">移除自己的桌布</div></div>`);
+        clear.classList.add('tap');
+        clear.addEventListener('click', () => patch({ wallpaperImage: null }));
+        wall.append(clear);
+      }
+      root.append(wall, el('<p class="foot-note">照片會縮到 1400 像素以內再存進裝置。相片 App 裡的每一張也可以直接設成桌布。</p>'));
+
+      /* 顯示與聲音 */
       root.append(el('<div class="section-title">顯示與聲音</div>'));
-      const sliders = el('<div style="padding:12px 16px;display:grid;gap:16px"></div>');
-      sliders.append(slider('🔆 亮度', device.brightness, (v) => patch({ brightness: v }, true)));
-      sliders.append(slider('🔊 音量', device.volume, (v) => patch({ volume: v }, true)));
-      root.append(sliders);
+      const display = el('<div class="list"></div>');
+      display.append(
+        switchRow('🌙', '#5856d6', '深色模式', 'darkMode'),
+        sliderRow('🔆', '#007aff', '亮度', 'brightness'),
+        sliderRow('🔊', '#ff2d55', '音量', 'volume'),
+      );
+      root.append(display);
 
-      // 連線
+      /* 連線 */
       root.append(el('<div class="section-title">連線</div>'));
       const conn = el('<div class="list"></div>');
-      [['wifi', '📶', 'Wi‑Fi'], ['bluetooth', '🔵', '藍牙'], ['dnd', '🌜', '勿擾模式']].forEach(([key, ico, label]) => {
-        const row = el(`<div class="list-item"><span style="width:26px;text-align:center">${ico}</span>
-          <div class="grow"><div class="t">${label}</div></div><span class="switch ${device[key] ? 'on' : ''}"></span></div>`);
-        row.querySelector('.switch').addEventListener('click', () => patch({ [key]: !device[key] }));
-        conn.append(row);
-      });
+      conn.append(
+        switchRow('📶', '#007aff', 'Wi‑Fi', 'wifi'),
+        switchRow('🔵', '#0a84ff', '藍牙', 'bluetooth'),
+        switchRow('🌜', '#5e5ce6', '勿擾模式', 'dnd'),
+      );
       root.append(conn);
 
-      // 回復原廠
-      const reset = el('<div style="padding:20px 16px 40px"><button class="pill-btn danger" style="width:100%;padding:11px">回復原廠設定</button></div>');
-      reset.querySelector('button').addEventListener('click', async () => {
+      /* 一般 */
+      root.append(el('<div class="section-title">一般</div>'));
+      const general = el('<div class="list"></div>');
+      general.append(row(`${iconBox('💾', '#8e8e93')}<div class="grow"><div class="t">儲存空間</div>
+        <div class="d">系統 ${fmtSize(storage.systemMb)} · App ${fmtSize(storage.usedMb - storage.systemMb)} · 剩餘 ${fmtSize(storage.freeMb)}</div></div>`));
+      const reset = row(`${iconBox('↺', '#ff3b30')}<div class="grow"><div class="t" style="color:var(--red)">回復原廠設定</div></div>`);
+      reset.classList.add('tap');
+      reset.addEventListener('click', async () => {
         const res = await api('/api/reset', { method: 'POST' });
         ctx.setState(res.state);
         ctx.notify('潮汐 OS', '已回復原廠設定');
         draw();
       });
-      root.append(reset);
-    };
-
-    const patch = async (body, quiet = false) => {
-      try {
-        const res = await api('/api/device', { method: 'PATCH', body });
-        ctx.setState({ ...ctx.state, device: res.device });
-        if (!quiet) draw();
-      } catch (err) {
-        ctx.notify('設定失敗', err.message);
-      }
+      general.append(reset);
+      root.append(general);
     };
 
     draw();
     return root;
   },
 };
-
-function slider(label, value, onInput) {
-  const wrap = el(`<label style="display:grid;gap:7px"><span style="font-size:12.5px;color:#c3ccdd">${label} <b style="float:right;font-weight:600">${value}</b></span>
-    <input type="range" min="0" max="100" value="${value}" /></label>`);
-  const out = wrap.querySelector('b');
-  wrap.querySelector('input').addEventListener('input', (e) => {
-    out.textContent = e.target.value;
-    onInput(Number(e.target.value));
-  });
-  return wrap;
-}
 
 /* ============================ 備忘錄 ============================ */
 const notes = {
@@ -783,21 +833,56 @@ const terminal = {
 };
 
 /* ============================ 相片 ============================ */
+const PHOTO_PALETTE = ['#2f8fff', '#34d399', '#f6b93b', '#ec4899', '#8b5cf6', '#ef4444', '#14b8a6', '#f97316'];
+const photoStyle = (i) => `linear-gradient(${(i * 47) % 360}deg, ${PHOTO_PALETTE[i % PHOTO_PALETTE.length]}, ${shade(PHOTO_PALETTE[i % PHOTO_PALETTE.length], -0.5)})`;
+
+/** 把一張「相片」畫成圖檔，才能拿去當桌布 */
+function photoToDataUrl(i, w = 900, h = 1600) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx2d = canvas.getContext('2d');
+  const angle = ((i * 47) % 360) * (Math.PI / 180);
+  const x = Math.cos(angle) * w, y = Math.sin(angle) * h;
+  const grad = ctx2d.createLinearGradient((w - x) / 2, (h - y) / 2, (w + x) / 2, (h + y) / 2);
+  const base = PHOTO_PALETTE[i % PHOTO_PALETTE.length];
+  grad.addColorStop(0, base);
+  grad.addColorStop(1, shade(base, -0.5));
+  ctx2d.fillStyle = grad;
+  ctx2d.fillRect(0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
+
 const photos = {
   id: 'photos',
-  render() {
+  render(ctx) {
     const root = el('<div style="padding:12px"></div>');
-    const grid = el('<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px"></div>');
-    const palette = ['#2f8fff', '#34d399', '#f6b93b', '#ec4899', '#8b5cf6', '#ef4444', '#14b8a6', '#f97316'];
+    const grid = el('<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px"></div>');
+
     for (let i = 0; i < 24; i += 1) {
-      const c = palette[i % palette.length];
-      const cell = el(`<button style="aspect-ratio:1;border-radius:8px;background:linear-gradient(${(i * 47) % 360}deg, ${c}, ${shade(c, -0.5)})"></button>`);
+      const cell = el(`<button style="aspect-ratio:1;border-radius:3px;background:${photoStyle(i)}"></button>`);
       cell.addEventListener('click', () => {
         const full = el(`<div style="position:absolute;inset:0;background:#000;z-index:5;display:grid;place-items:center">
-          <div style="width:86%;aspect-ratio:3/4;border-radius:16px;background:linear-gradient(${(i * 47) % 360}deg, ${c}, ${shade(c, -0.5)})"></div>
-          <div style="position:absolute;bottom:56px;color:#98a4ba;font-size:12px">IMG_${String(1000 + i)}.HEIF · 4032 × 3024</div>
+          <div style="width:84%;aspect-ratio:9/16;border-radius:14px;background:${photoStyle(i)}"></div>
+          <div style="position:absolute;top:60px;left:0;right:0;text-align:center;color:rgba(255,255,255,.75);font-size:12.5px">IMG_${String(1000 + i)}.HEIF · 900 × 1600</div>
+          <div style="position:absolute;bottom:52px;left:0;right:0;display:flex;justify-content:center;gap:12px"></div>
         </div>`);
-        full.addEventListener('click', () => full.remove());
+        const bar = full.querySelector('div:last-child');
+        const setWall = el('<button class="pill-btn" style="background:rgba(255,255,255,.16);color:#fff">設為桌布</button>');
+        setWall.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          try {
+            const res = await api('/api/device', { method: 'PATCH', body: { wallpaperImage: photoToDataUrl(i) } });
+            ctx.setState({ ...ctx.state, device: res.device });
+            ctx.notify('桌布', '已設成這張相片');
+            full.remove();
+          } catch (err) {
+            ctx.notify('桌布', err.message);
+          }
+        });
+        const close = el('<button class="pill-btn" style="background:rgba(255,255,255,.16);color:#fff">關閉</button>');
+        close.addEventListener('click', () => full.remove());
+        bar.append(setWall, close);
         root.append(full);
       });
       grid.append(cell);

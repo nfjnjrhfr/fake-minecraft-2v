@@ -36,14 +36,23 @@ function matchRoute(method, pathname) {
   return null;
 }
 
+const MAX_BODY_BYTES = 6 * 1024 * 1024; // 自訂桌布會夾在請求裡，上限要留得夠
+
 async function readJsonBody(req) {
   const chunks = [];
   let size = 0;
+  let oversize = false;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 1_000_000) throw new HttpError(413, '請求內容過大');
-    chunks.push(chunk);
+    if (size > MAX_BODY_BYTES) {
+      // 先把剩下的內容讀完再回錯，否則客戶端會等不到回應
+      oversize = true;
+      chunks.length = 0;
+      continue;
+    }
+    if (!oversize) chunks.push(chunk);
   }
+  if (oversize) throw new HttpError(413, '請求內容過大');
   if (!chunks.length) return {};
   try {
     return JSON.parse(Buffer.concat(chunks).toString('utf8'));

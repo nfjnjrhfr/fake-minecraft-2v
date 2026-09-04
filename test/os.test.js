@@ -255,6 +255,49 @@ test('裝置設定會校驗並保存', async () => {
   });
 });
 
+test('可以換成自己的桌布，也可以換回內建的', async () => {
+  await withServer(async ({ call, state }) => {
+    const image = `data:image/jpeg;base64,${'A'.repeat(400)}`;
+
+    const ok = await call('/api/device', { method: 'PATCH', body: { wallpaperImage: image } });
+    assert.equal(ok.status, 200);
+    let device = (await state()).device;
+    assert.equal(device.wallpaperImage, image);
+    assert.equal(device.wallpaper, 'custom', '選了自己的照片就會直接套用');
+
+    // 換回內建桌布時，自己的照片還留著
+    await call('/api/device', { method: 'PATCH', body: { wallpaper: 'dusk' } });
+    device = (await state()).device;
+    assert.equal(device.wallpaper, 'dusk');
+    assert.equal(device.wallpaperImage, image);
+
+    // 清掉自己的照片時，若正在使用它就退回內建桌布
+    await call('/api/device', { method: 'PATCH', body: { wallpaper: 'custom' } });
+    await call('/api/device', { method: 'PATCH', body: { wallpaperImage: null } });
+    device = (await state()).device;
+    assert.equal(device.wallpaperImage, null);
+    assert.notEqual(device.wallpaper, 'custom');
+  });
+});
+
+test('桌布只收圖片、有大小上限，模糊與變暗會夾在範圍內', async () => {
+  await withServer(async ({ call, state }) => {
+    for (const bad of ['data:text/html;base64,AAAA', 'https://example.com/a.png', 'AAAA']) {
+      assert.equal((await call('/api/device', { method: 'PATCH', body: { wallpaperImage: bad } })).status, 400, bad);
+    }
+    const huge = `data:image/png;base64,${'A'.repeat(4_000_001)}`;
+    assert.equal((await call('/api/device', { method: 'PATCH', body: { wallpaperImage: huge } })).status, 413);
+
+    // 沒有選過照片就不能把桌布設成 custom
+    assert.equal((await call('/api/device', { method: 'PATCH', body: { wallpaper: 'custom' } })).status, 400);
+
+    await call('/api/device', { method: 'PATCH', body: { wallpaperBlur: 240, wallpaperDim: -30 } });
+    const device = (await state()).device;
+    assert.equal(device.wallpaperBlur, 100);
+    assert.equal(device.wallpaperDim, 0);
+  });
+});
+
 test('備忘錄可以新增、修改、刪除', async () => {
   await withServer(async ({ call, state }) => {
     assert.equal((await state()).notes.length, 1);

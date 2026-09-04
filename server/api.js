@@ -27,6 +27,9 @@ export function defaultState() {
       model: 'TIDE-A1',
       osVersion: '潮汐 OS 1.0（萬象）',
       wallpaper: 'aurora',
+      wallpaperImage: null, // 使用者自己的桌布（data URL）
+      wallpaperBlur: 0,
+      wallpaperDim: 0,
       darkMode: false,
       brightness: 82,
       volume: 55,
@@ -262,10 +265,33 @@ export const routes = [
     handler({ db, body }) {
       const data = ensureShape(db);
       const patch = {};
+      // 先處理自訂桌布，才能在同一次請求裡把 wallpaper 切成 custom
+      if ('wallpaperImage' in body) {
+        if (body.wallpaperImage === null || body.wallpaperImage === '') {
+          patch.wallpaperImage = null;
+          if (data.device.wallpaper === 'custom') patch.wallpaper = WALLPAPERS[0].id;
+        } else {
+          const image = String(body.wallpaperImage);
+          if (!/^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(image)) {
+            throw new HttpError(400, '桌布必須是 png／jpeg／webp 圖片');
+          }
+          if (image.length > 4_000_000) throw new HttpError(413, '這張桌布太大了，請換一張小一點的');
+          patch.wallpaperImage = image;
+          patch.wallpaper = 'custom';
+        }
+      }
       if ('wallpaper' in body) {
         const id = str(body.wallpaper, '桌布', { max: 40 });
-        if (!WALLPAPERS.some((w) => w.id === id)) throw new HttpError(400, '沒有這張桌布');
+        const hasImage = patch.wallpaperImage ?? data.device.wallpaperImage;
+        if (id === 'custom') {
+          if (!hasImage) throw new HttpError(400, '還沒有選過自己的桌布');
+        } else if (!WALLPAPERS.some((w) => w.id === id)) {
+          throw new HttpError(400, '沒有這張桌布');
+        }
         patch.wallpaper = id;
+      }
+      for (const key of ['wallpaperBlur', 'wallpaperDim']) {
+        if (key in body) patch[key] = clamp(body[key], key === 'wallpaperBlur' ? '桌布模糊' : '桌布變暗');
       }
       if ('brightness' in body) patch.brightness = clamp(body.brightness, '亮度');
       if ('volume' in body) patch.volume = clamp(body.volume, '音量');

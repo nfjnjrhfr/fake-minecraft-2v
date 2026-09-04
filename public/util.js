@@ -29,6 +29,29 @@ export const tint = (app) => `--c1:${app.color};--c2:${shade(app.color, -0.42)}`
 export const fmtSize = (mb) =>
   mb >= 1024 ? `${(mb / 1024).toFixed(mb >= 10240 ? 0 : 1)} GB` : `${mb} MB`;
 
+/** 讀一張圖片並縮到合理大小，避免整張原圖塞進裝置狀態 */
+export function readImageAsDataUrl(file, maxSide = 1400) {
+  return new Promise((resolve, reject) => {
+    if (!/^image\//.test(file.type)) return reject(new Error('請選一個圖片檔'));
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('讀不到這個檔案'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('這個圖片無法解碼'));
+      img.onload = () => {
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export async function api(path, { method = 'GET', body } = {}) {
   const res = await fetch(path, {
     method,
