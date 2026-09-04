@@ -177,7 +177,10 @@ function openApp(id) {
 function renderAppHeader(app) {
   if (!app) return;
   const source = sourceOf(app.os);
-  const sub = app.os === 'tide' ? app.category : `來自 ${source.name} · ${fmtSize(app.size)}`;
+  const sub =
+    app.os === 'tide'
+      ? app.category
+      : `來自 ${source.name} · ${app.genre ? `${app.genre} · ` : ''}${fmtSize(app.size)}`;
   const head = el(`<div class="app-head" style="${tint(app)}">
     <span class="mini">${app.glyph}</span>
     <div><h2>${esc(app.name)}</h2><div class="sub">${esc(sub)}</div></div>

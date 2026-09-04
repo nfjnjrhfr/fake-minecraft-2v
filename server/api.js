@@ -155,6 +155,10 @@ export const routes = [
         if (!findSource(query.os) || query.os === 'tide') throw new HttpError(404, '未知的來源作業系統');
         apps = catalogFor(query.os);
       }
+      if (query.category) {
+        apps = apps.filter((a) => a.category === query.category);
+        if (!apps.length) throw new HttpError(404, `找不到分類：${query.category}`);
+      }
       if (query.q) {
         const q = String(query.q).toLowerCase();
         apps = apps.filter((a) =>
@@ -191,10 +195,16 @@ export const routes = [
     handler({ db, body }) {
       const data = ensureShape(db);
       const targets = body.os ? [String(body.os)] : SOURCES.filter((s) => !s.builtin).map((s) => s.os);
+      const category = body.category ? String(body.category) : null;
 
       for (const os of targets) {
         const source = findSource(os);
         if (!source || source.builtin) throw new HttpError(404, `未知的來源作業系統：${os}`);
+      }
+      // 指定分類時，先確認這個分類在目標來源裡真的有東西可撈
+      const pick = (os) => catalogFor(os).filter((app) => !category || app.category === category);
+      if (category && !targets.some((os) => pick(os).length)) {
+        throw new HttpError(404, `找不到分類：${category}`);
       }
       // 只指定單一來源時，相容層沒開就直接報錯；批次撈取全部時自動略過未啟用的來源
       if (body.os && data.runtimes[targets[0]] === false) {
@@ -205,17 +215,18 @@ export const routes = [
       let already = 0;
       const skipped = [];
       for (const os of targets) {
+        if (!pick(os).length) continue;
         if (data.runtimes[os] === false) {
           skipped.push(findSource(os).name);
           continue;
         }
-        for (const app of catalogFor(os)) {
+        for (const app of pick(os)) {
           if (installOne(db, app.id) === 'installed') installed += 1;
           else already += 1;
         }
       }
       db.save();
-      return { status: 200, body: { installed, already, skipped, state: snapshot(db) } };
+      return { status: 200, body: { installed, already, skipped, category, state: snapshot(db) } };
     },
   },
   {

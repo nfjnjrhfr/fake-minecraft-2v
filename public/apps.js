@@ -5,36 +5,45 @@ const store = {
   id: 'store',
   render(ctx) {
     const root = el('<div></div>');
-    let filter = ctx.memo.storeFilter ?? 'all';
+    let osFilter = ctx.memo.storeFilter ?? 'all';
+    let category = ctx.memo.storeCategory ?? null;
     let keyword = ctx.memo.storeKeyword ?? '';
 
     const draw = async () => {
-      const { sources, apps } = await api(
-        `/api/catalog${filter === 'all' ? '' : `?os=${filter}`}${keyword ? `${filter === 'all' ? '?' : '&'}q=${encodeURIComponent(keyword)}` : ''}`,
-      );
+      // 一次取回整份目錄（含已安裝狀態），來源與分類都在前端過濾，計數才會處處一致
+      const { sources, apps } = await api(`/api/catalog${keyword ? `?q=${encodeURIComponent(keyword)}` : ''}`);
       const external = sources.filter((s) => !s.builtin);
-      const totalAll = external.reduce((n, s) => n + s.total, 0);
-      const gotAll = external.reduce((n, s) => n + s.installed, 0);
+
+      const scope = apps.filter((a) => osFilter === 'all' || a.os === osFilter);
+      const categories = [...new Set(scope.map((a) => a.category))]
+        .map((name) => ({ name, count: scope.filter((a) => a.category === name).length }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-Hant'));
+      if (category && !categories.some((c) => c.name === category)) category = null;
+
+      const shown = scope.filter((a) => !category || a.category === category);
+      // 「一鍵撈取全部」的範圍：目前選到的分類，不受來源分頁影響
+      const wide = apps.filter((a) => !category || a.category === category);
+      const wideGot = wide.filter((a) => a.installed).length;
+      const label = category ?? 'App';
 
       root.replaceChildren();
 
-      // 一鍵撈取
       const hero = el(`<div class="hero">
-        <h3>把其他系統的 App 全部撈進來</h3>
-        <p>萬象相容層目前接上 ${external.length} 套作業系統，共 ${totalAll} 個 App，已在這台裝置上 ${gotAll} 個。
-           未啟用相容層的來源會自動略過。</p>
-        <button class="big-btn" ${gotAll >= totalAll ? 'disabled' : ''}>
-          ${gotAll >= totalAll ? '全部都撈完了' : `一鍵撈取全部（還有 ${totalAll - gotAll} 個）`}
+        <h3>把其他系統的${category ? esc(category) : ' App'}全部撈進來</h3>
+        <p>萬象相容層接上 ${external.length} 套作業系統${category ? `，其中「${esc(category)}」共 ${wide.length} 個` : `，共 ${apps.length} 個 App`}，
+           已在這台裝置上 ${wideGot} 個。未啟用相容層的來源會自動略過。</p>
+        <button class="big-btn" ${wideGot >= wide.length ? 'disabled' : ''}>
+          ${wideGot >= wide.length ? `全部${esc(label)}都撈完了` : `一鍵撈取全部${esc(label)}（還有 ${wide.length - wideGot} 個）`}
         </button>
       </div>`);
       hero.querySelector('button').addEventListener('click', async (e) => {
         e.target.disabled = true;
         e.target.textContent = '撈取中…';
         try {
-          const res = await api('/api/apps/install-all', { method: 'POST', body: {} });
+          const res = await api('/api/apps/install-all', { method: 'POST', body: category ? { category } : {} });
           ctx.setState(res.state);
           const skipped = res.skipped.length ? `，略過未啟用的 ${res.skipped.join('、')}` : '';
-          ctx.notify('萬象相容層', `已撈取 ${res.installed} 個 App${skipped}`);
+          ctx.notify('萬象相容層', `已撈取 ${res.installed} 個${esc(label)}${skipped}`);
         } catch (err) {
           ctx.notify('撈取失敗', err.message);
         }
@@ -42,20 +51,40 @@ const store = {
       });
       root.append(hero);
 
-      // 來源分頁
+      // 來源系統分頁
       const tabs = el('<div class="tabs-os"></div>');
-      const mk = (key, label, extra = '') => {
-        const b = el(`<button class="tab-os ${filter === key ? 'on' : ''}">${label}${extra}</button>`);
-        b.addEventListener('click', () => { filter = key; ctx.memo.storeFilter = key; draw(); });
+      const mkTab = (key, text, extra = '') => {
+        const b = el(`<button class="tab-os ${osFilter === key ? 'on' : ''}">${text}${extra}</button>`);
+        b.addEventListener('click', () => { osFilter = key; ctx.memo.storeFilter = key; draw(); });
         return b;
       };
-      tabs.append(mk('all', '全部'));
+      tabs.append(mkTab('all', '全部'));
       external.forEach((s) =>
         tabs.append(
-          mk(s.os, `${s.glyph} ${s.short}`, `<span class="count">${s.installed}/${s.total}</span>${s.enabled ? '' : ' ⏸'}`),
+          mkTab(s.os, `${s.glyph} ${s.short}`, `<span class="count">${s.installed}/${s.total}</span>${s.enabled ? '' : ' ⏸'}`),
         ),
       );
       root.append(tabs);
+
+      // 分類分頁
+      if (categories.length > 1) {
+        const chips = el('<div class="tabs-os" style="padding-top:0"></div>');
+        const mkChip = (name) => {
+          const on = category === name || (!category && name === null);
+          const count = name ? categories.find((c) => c.name === name).count : scope.length;
+          const chip = el(`<button class="tab-os ${on ? 'on' : ''}" style="font-size:12px">${
+            name ? esc(name) : '全部分類'
+          }<span class="count">${count}</span></button>`);
+          chip.addEventListener('click', () => {
+            category = name;
+            ctx.memo.storeCategory = name;
+            draw();
+          });
+          return chip;
+        };
+        chips.append(mkChip(null), ...categories.slice(0, 8).map((c) => mkChip(c.name)));
+        root.append(chips);
+      }
 
       const search = el('<div style="padding:0 14px 8px"><input class="field" placeholder="搜尋 App 名稱或分類" /></div>');
       const input = search.querySelector('input');
@@ -68,22 +97,30 @@ const store = {
       });
       root.append(search);
 
-      // 單一來源時，顯示該來源的相容層資訊與整包撈取
-      if (filter !== 'all') {
-        const s = external.find((x) => x.os === filter);
-        const card = el(`<div class="hero" style="background:linear-gradient(150deg, ${s.accent}44, rgba(255,255,255,.05))">
-          <h3>${s.glyph} ${esc(s.name)} · ${s.installed}/${s.total}</h3>
+      // 選定單一來源時，顯示它的相容層資訊與整包撈取
+      if (osFilter !== 'all') {
+        const s = external.find((x) => x.os === osFilter);
+        const got = shown.filter((a) => a.installed).length;
+        const card = el(`<div class="hero" style="background:linear-gradient(150deg, ${s.accent}33, rgba(127,127,127,.06))">
+          <h3>${s.glyph} ${esc(s.name)}${category ? ` · ${esc(category)}` : ''} · ${got}/${shown.length}</h3>
           <p><strong>${esc(s.runtime)}</strong><br />${esc(s.detail)}</p>
-          <button class="big-btn" ${!s.enabled || s.installed >= s.total ? 'disabled' : ''}>
-            ${!s.enabled ? '相容層未啟用（到「設定」開啟）' : s.installed >= s.total ? '已全部撈取' : `撈取 ${esc(s.name)} 的全部 ${s.total} 個 App`}
+          <button class="big-btn" ${!s.enabled || got >= shown.length ? 'disabled' : ''}>
+            ${!s.enabled
+              ? '相容層未啟用（到「設定」開啟）'
+              : got >= shown.length
+                ? `已全部撈取`
+                : `撈取 ${esc(s.name)} 的全部 ${shown.length} 個${esc(category ?? ' App')}`}
           </button>
         </div>`);
         card.querySelector('button').addEventListener('click', async (e) => {
           e.target.disabled = true;
           try {
-            const res = await api('/api/apps/install-all', { method: 'POST', body: { os: filter } });
+            const res = await api('/api/apps/install-all', {
+              method: 'POST',
+              body: category ? { os: osFilter, category } : { os: osFilter },
+            });
             ctx.setState(res.state);
-            ctx.notify(s.name, `已撈取 ${res.installed} 個 App 到桌面`);
+            ctx.notify(s.name, `已撈取 ${res.installed} 個${esc(category ?? ' App')}到桌面`);
           } catch (err) {
             ctx.notify('撈取失敗', err.message);
           }
@@ -92,18 +129,17 @@ const store = {
         root.append(card);
       }
 
-      // App 清單
-      if (!apps.length) {
+      if (!shown.length) {
         root.append(el('<p class="section-title" style="text-align:center;padding:40px 0">找不到符合的 App</p>'));
         return;
       }
+
       const list = el('<div class="list"></div>');
       const bySource = new Map();
-      apps.forEach((a) => bySource.set(a.os, [...(bySource.get(a.os) ?? []), a]));
-
+      shown.forEach((a) => bySource.set(a.os, [...(bySource.get(a.os) ?? []), a]));
       for (const [os, group] of bySource) {
         const s = external.find((x) => x.os === os);
-        if (filter === 'all') list.append(el(`<div class="section-title">${s.glyph} ${esc(s.name)} · ${esc(s.runtime)}</div>`));
+        if (osFilter === 'all') list.append(el(`<div class="section-title">${s.glyph} ${esc(s.name)} · ${esc(s.runtime)}</div>`));
         group.forEach((app) => list.append(storeRow(app, s, ctx, draw)));
       }
       root.append(list);
@@ -119,7 +155,7 @@ function storeRow(app, source, ctx, redraw) {
     <span class="icon" style="${tint(app)};width:44px;height:44px;border-radius:12px;font-size:21px">${app.glyph}</span>
     <div class="grow">
       <div class="t">${esc(app.name)} <span style="font-weight:400;opacity:.5;font-size:11.5px">${esc(app.en)}</span></div>
-      <div class="d">${esc(app.category)} · ${fmtSize(app.size)}${app.enabled ? '' : ' · 相容層未啟用'}</div>
+      <div class="d">${esc(app.genre ?? app.category)} · ${fmtSize(app.size)}${app.enabled ? '' : ' · 相容層未啟用'}</div>
     </div>
   </div>`);
 
@@ -432,9 +468,9 @@ const terminal = {
         ['可用指令：',
           '  apps                列出桌面上的 App',
           '  sources             列出所有來源作業系統與相容層狀態',
-          '  ls <os>             列出某個系統可撈取的 App',
+          '  ls <os> [分類]      列出某個系統可撈取的 App',
           '  install <app-id>    撈取單一 App',
-          '  fetch <os|all>      撈取整個系統的全部 App',
+          '  fetch <os|all> [分類]  撈取整包 App，例如 fetch ios 遊戲',
           '  uninstall <app-id>  移除 App',
           '  open <app-id>       開啟 App',
           '  df                  儲存空間',
@@ -457,10 +493,13 @@ const terminal = {
           .map((s) => `${(s.os + '        ').slice(0, 9)} ${s.enabled ? '啟用' : '停用'}  ${s.installed}/${s.total}  ${s.runtime}`)
           .join('\n'),
       clear: () => { view.textContent = ''; return ''; },
-      async ls(os) {
-        if (!os) return '用法：ls <os>，例如 ls android';
-        const { apps } = await api(`/api/catalog?os=${encodeURIComponent(os)}`);
-        return apps.map((a) => `${(a.id + '                    ').slice(0, 20)} ${a.name}  ${fmtSize(a.size)}${a.installed ? '  [已安裝]' : ''}`).join('\n');
+      async ls(os, category) {
+        if (!os) return '用法：ls <os> [分類]，例如 ls ios 遊戲';
+        const q = `?os=${encodeURIComponent(os)}${category ? `&category=${encodeURIComponent(category)}` : ''}`;
+        const { apps } = await api(`/api/catalog${q}`);
+        return apps
+          .map((a) => `${(a.id + '                    ').slice(0, 20)} ${a.name}  ${a.genre ?? a.category}  ${fmtSize(a.size)}${a.installed ? '  [已安裝]' : ''}`)
+          .join('\n');
       },
       async install(id) {
         if (!id) return '用法：install <app-id>';
@@ -474,12 +513,14 @@ const terminal = {
         ctx.setState(res.state);
         return `已移除 ${id}`;
       },
-      async fetch(os) {
-        if (!os) return '用法：fetch <os|all>，例如 fetch android';
-        const res = await api('/api/apps/install-all', { method: 'POST', body: os === 'all' ? {} : { os } });
+      async fetch(os, category) {
+        if (!os) return '用法：fetch <os|all> [分類]，例如 fetch ios 遊戲';
+        const body = os === 'all' ? {} : { os };
+        if (category) body.category = category;
+        const res = await api('/api/apps/install-all', { method: 'POST', body });
         ctx.setState(res.state);
         const skip = res.skipped.length ? `，略過 ${res.skipped.join('、')}` : '';
-        return `已撈取 ${res.installed} 個 App，${res.already} 個原本就在${skip}`;
+        return `已撈取 ${res.installed} 個${category ?? ' App'}，${res.already} 個原本就在${skip}`;
       },
       open(id) {
         if (!id) return '用法：open <app-id>';

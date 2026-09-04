@@ -178,13 +178,85 @@ const KIND = {
   },
 
   game(app, rnd) {
-    return `<div class="mock" style="min-height:100%;align-content:center;justify-items:center;text-align:center;background:radial-gradient(120% 70% at 50% 20%,var(--c1),#05070c 70%)">
-      <div style="font-size:46px">${app.glyph}</div>
-      <h3 style="font-size:22px;letter-spacing:2px">${esc(app.name)}</h3>
-      <div class="mock-sub">存檔 ${rnd(1, 3)} · 進度 ${rnd(10, 96)}%</div>
-      <div class="mock-btn" style="min-width:170px;margin-top:10px">繼續遊戲</div>
-      <div class="mock-pill">新遊戲</div>
-      <div class="mock-pill">設定</div>
+    const genre = app.genre ?? '遊戲';
+    const stars = (n) => '★'.repeat(n) + '☆'.repeat(3 - n);
+
+    // 依遊戲類型換下半部的內容，讓每款遊戲的畫面不一樣
+    const BLOCKS = {
+      排行榜: () => `<div class="mock-card">
+        <div class="mock-title" style="font-size:13px">本週排行</div>
+        ${['Nova', 'Kite', '你', 'Rex', 'Mio'].map((n, i) => `<div class="mock-row" style="gap:10px">
+          <span class="mock-sub" style="width:16px">${i + 1}</span>
+          <span style="font-size:13px;flex:1;${n === '你' ? 'font-weight:700' : ''}">${n}</span>
+          <span class="mock-sub">${(9800 - i * rnd(120, 400)).toLocaleString()}</span></div>`).join('')}
+      </div>`,
+      關卡: () => `<div class="mock-card">
+        <div class="mock-title" style="font-size:13px">第 ${rnd(2, 9)} 章 · 關卡</div>
+        <div class="grid3" style="grid-template-columns:repeat(4,1fr);gap:8px">
+          ${Array.from({ length: 8 }, (_, i) => {
+            const done = i < 5;
+            return `<div style="aspect-ratio:1;border-radius:12px;display:grid;place-items:center;gap:2px;
+              background:${done ? 'linear-gradient(160deg,var(--c1),var(--c2))' : 'var(--win-fill)'};
+              font-size:13px;font-weight:700;color:${done ? '#fff' : 'inherit'};opacity:${done ? 1 : 0.5}">
+              ${i + 1}<span style="font-size:8px">${done ? stars(rnd(1, 3)) : '☆☆☆'}</span></div>`;
+          }).join('')}
+        </div>
+      </div>`,
+      隊伍: () => `<div class="mock-card">
+        <div class="mock-title" style="font-size:13px">出戰隊伍</div>
+        ${['狂風劍士', '暗夜遊俠', '星辰祭司'].map((n) => `<div class="mock-row" style="gap:10px">
+          <div class="mock-av" style="width:30px;height:30px;border-radius:9px"></div>
+          <div style="flex:1"><div style="font-size:12.5px">${n}</div>
+            <div class="progress" style="margin-top:4px"><i style="animation:none;width:${rnd(45, 96)}%"></i></div></div>
+          <span class="mock-sub">Lv.${rnd(18, 72)}</span></div>`).join('')}
+      </div>`,
+      曲目: () => `<div class="mock-card">
+        <div class="mock-title" style="font-size:13px">曲目</div>
+        ${['潮汐脈衝', '霓虹迴路', '深海節拍'].map((n) => `<div class="mock-row" style="gap:10px">
+          <span style="font-size:16px">🎼</span>
+          <div style="flex:1"><div style="font-size:12.5px">${n}</div><div class="mock-sub">難度 ${rnd(6, 14)} · 最佳 ${rnd(90, 99)}.${rnd(10, 99)}%</div></div>
+          <span class="mock-pill">FULL COMBO</span></div>`).join('')}
+      </div>`,
+      資源: () => `<div class="mock-card">
+        <div class="grid3">
+          ${[['💰', '金幣', rnd(12, 98) * 1000], ['⚡', '體力', `${rnd(20, 60)}/60`], ['🏗', '建築', rnd(4, 28)]]
+            .map(([ico, label, v]) => `<div style="aspect-ratio:auto;text-align:center">
+              <div style="font-size:19px">${ico}</div>
+              <div style="font-size:13px;font-weight:700">${typeof v === 'number' ? v.toLocaleString() : v}</div>
+              <div class="mock-sub">${label}</div></div>`).join('')}
+        </div>
+        <div class="mock-sub">下一次收成還有 ${rnd(2, 48)} 分鐘</div>
+      </div>`,
+    };
+    const PICK = {
+      競速: '排行榜', 即時戰略: '排行榜', 策略: '排行榜', 棋類: '排行榜',
+      益智: '關卡', 消除: '關卡',
+      角色扮演: '隊伍', 動作: '隊伍', 太空冒險: '隊伍',
+      音樂節奏: '曲目',
+      模擬經營: '資源', 休閒: '資源',
+    };
+    const block = BLOCKS[PICK[genre] ?? '關卡'];
+
+    return `<div class="mock" style="padding:0;gap:0">
+      <div style="padding:34px 16px 20px;text-align:center;background:radial-gradient(120% 90% at 50% 0%, var(--c1), var(--c2))">
+        <div style="font-size:52px;line-height:1">${app.glyph}</div>
+        <h3 style="font-size:22px;letter-spacing:2px;color:#fff;margin-top:6px">${esc(app.name)}</h3>
+        <div style="font-size:11.5px;color:rgba(255,255,255,.8);letter-spacing:1px">${esc(app.en)} · ${esc(genre)}</div>
+      </div>
+      <div style="padding:14px;display:grid;gap:12px">
+        <div class="grid3">
+          ${[['存檔', rnd(1, 3)], ['進度', `${rnd(12, 96)}%`], ['成就', `${rnd(3, 40)}/48`]]
+            .map(([t, v]) => `<div class="mock-card" style="aspect-ratio:auto;padding:10px;gap:2px;text-align:center">
+              <div style="font-size:16px;font-weight:700">${v}</div><div class="mock-sub">${t}</div></div>`).join('')}
+        </div>
+        <div class="mock-btn" style="padding:13px">▶　繼續遊戲</div>
+        ${block()}
+        <div class="mock-row" style="gap:8px">
+          <span class="mock-pill" style="flex:1;text-align:center">新遊戲</span>
+          <span class="mock-pill" style="flex:1;text-align:center">商城</span>
+          <span class="mock-pill" style="flex:1;text-align:center">設定</span>
+        </div>
+      </div>
     </div>`;
   },
 };

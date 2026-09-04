@@ -16,9 +16,12 @@ DB_FILE=/path/device.json npm start   # 指定裝置狀態檔位置
 ## 這台裝置能做什麼
 
 **萬象相容層**
-- 七套來源作業系統，共 49 個 App，每套都有自己的執行期轉譯方案（runtime adapter）
+- 七套來源作業系統，共 59 個 App（含 12 款遊戲），每套都有自己的執行期轉譯方案（runtime adapter）
 - 商店裡按一下**「一鍵撈取全部」**，把所有系統的 App 一次全裝到桌面
-- 也能只撈某一套系統，或單獨撈某一個 App
+- 也能只撈某一套系統、只撈某一個分類，或單獨撈某一個 App
+- 例如：iOS 分頁 → 遊戲分類 →「撈取 iOS 的全部 10 個遊戲」，
+  或不選來源直接「一鍵撈取全部遊戲」把各系統的遊戲一次收齊
+- 遊戲在相容層裡會依類型（競速／益智／角色扮演／音樂節奏／模擬經營…）呈現不同的畫面
 - 撈進來的 App 圖示右下角有來源系統的角標，開啟時頂端會顯示是哪個 runtime 在轉譯
 - 相容層可以逐套開關；**關掉不會刪 App，只會讓它在桌面上「暫停」**，點了會提示去設定開啟
 
@@ -43,7 +46,8 @@ DB_FILE=/path/device.json npm start   # 指定裝置狀態檔位置
 - **設定** — 相容層開關、外觀、顯示與聲音、連線、儲存空間、回復原廠
 - **備忘錄** — 新增／修改／刪除，存在伺服器上
 - **計算機** — 完整四則運算
-- **終端機** — `apps`／`sources`／`ls <os>`／`install`／`fetch <os|all>`／`uninstall`／`open`／`df`／`uname`
+- **終端機** — `apps`／`sources`／`ls <os> [分類]`／`install`／`fetch <os|all> [分類]`／`uninstall`／`open`／`df`／`uname`
+  （例如 `fetch ios 遊戲` 就是把 iOS 遊戲全部撈進來）
 - **相片**、**時鐘**（即時世界時鐘）
 
 裝置狀態（設定、已撈取的 App、備忘錄）都寫進 JSON 檔，重開機後還在。
@@ -82,9 +86,9 @@ data/device.json   裝置狀態（已在 .gitignore，首次啟動自動生成�
 | 方法 | 路徑 | 說明 |
 | --- | --- | --- |
 | GET | `/api/state` | 裝置狀態、相容層、已安裝 App、儲存空間、備忘錄 |
-| GET | `/api/catalog?os=&q=` | App 目錄，可依來源系統與關鍵字查詢 |
+| GET | `/api/catalog?os=&category=&q=` | App 目錄，可依來源系統、分類與關鍵字查詢 |
 | POST | `/api/apps/install` | 撈取單一 App |
-| POST | `/api/apps/install-all` | 一鍵撈取（帶 `os` 就只撈那一套，不帶就撈全部） |
+| POST | `/api/apps/install-all` | 一鍵撈取；帶 `os` 只撈那一套，帶 `category` 只撈那個分類，兩個都不帶就撈全部 |
 | POST | `/api/apps/uninstall` | 移除 App |
 | PATCH | `/api/device` | 桌布、深色模式、亮度、音量、連線 |
 | PATCH | `/api/runtimes` | 開關某一套相容層 |
@@ -92,8 +96,8 @@ data/device.json   裝置狀態（已在 .gitignore，首次啟動自動生成�
 | POST | `/api/reset` | 回復原廠設定 |
 
 規則都有測試覆蓋：相容層沒啟用不能撈該系統的 App、重複撈會被擋、內建 App 不可移除、
-關閉相容層只暫停不刪除、一鍵撈取會略過未啟用的來源、設定值會夾在合法範圍內、
-狀態重開機後保留。
+關閉相容層只暫停不刪除、一鍵撈取會略過未啟用的來源、按分類撈取只會裝到該分類的 App、
+不存在的分類會被拒絕、設定值會夾在合法範圍內、狀態重開機後保留。
 
 ## 說明
 

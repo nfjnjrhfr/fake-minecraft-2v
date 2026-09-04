@@ -81,7 +81,7 @@ export const SOURCES = [
   },
 ];
 
-// [id, 名稱, 英文名, 分類, 圖示, 主色, 介面型態, 體積(MB)]
+// [id, 名稱, 英文名, 分類, 圖示, 主色, 介面型態, 體積(MB), 類型（遊戲才有）]
 const APPS = {
   ios: [
     ['lumo', '光影', 'Lumo', '攝影修圖', '📷', '#ff7a59', 'photo', 186],
@@ -91,6 +91,17 @@ const APPS = {
     ['cloudmap', '雲圖', 'Cloudmap', '地圖導航', '🗺', '#3aa7ff', 'map', 240],
     ['calmly', '靜心', 'Calmly', '冥想放鬆', '🧘', '#6c8cff', 'player', 96],
     ['snapcut', '快剪', 'SnapCut', '影片剪輯', '🎬', '#8b5cf6', 'tool', 318],
+    // 遊戲
+    ['starlap', '星軌競速', 'StarLap', '遊戲', '🏎', '#e11d48', 'game', 2480, '競速'],
+    ['blockmaze', '方塊迷城', 'BlockMaze', '遊戲', '🧩', '#f59e0b', 'game', 320, '益智'],
+    ['bladerealm', '幻界之刃', 'BladeRealm', '遊戲', '⚔️', '#7c3aed', 'game', 3240, '角色扮演'],
+    ['rhythmring', '節奏光輪', 'RhythmRing', '遊戲', '🎵', '#ec4899', 'game', 1120, '音樂節奏'],
+    ['kingdomcraft', '王國築夢', 'KingdomCraft', '遊戲', '🏰', '#0ea5e9', 'game', 1860, '模擬經營'],
+    ['deepdrift', '深空棄艦', 'DeepDrift', '遊戲', '🚀', '#1d4ed8', 'game', 2960, '太空冒險'],
+    ['catcafe', '貓咪咖啡屋', 'CatCafé', '遊戲', '🐱', '#f97316', 'game', 460, '休閒'],
+    ['fruitpop', '三消果園', 'FruitPop', '遊戲', '🍓', '#22c55e', 'game', 280, '消除'],
+    ['shadowstep', '暗影潛行', 'ShadowStep', '遊戲', '🥷', '#334155', 'game', 2140, '動作'],
+    ['tacticgrid', '棋盤戰記', 'TacticGrid', '遊戲', '♟', '#0f766e', 'game', 640, '策略'],
   ],
   android: [
     ['linkr', '訊聯', 'Linkr', '即時通訊', '💬', '#22c55e', 'chat', 148],
@@ -116,7 +127,7 @@ const APPS = {
     ['codekeep', '代碼堡', 'CodeKeep', '程式編輯', '⌨️', '#475569', 'code', 580],
     ['screensmith', '錄屏師', 'ScreenSmith', '螢幕錄影', '🎥', '#7c3aed', 'tool', 210],
     ['datakey', '資料鍵', 'DataKey', '資料庫工具', '🗄', '#0f766e', 'code', 336],
-    ['starfront', '星際爭鋒', 'StarFront', '策略遊戲', '🎮', '#1d4ed8', 'game', 1840],
+    ['starfront', '星際爭鋒', 'StarFront', '遊戲', '🎮', '#1d4ed8', 'game', 1840, '即時戰略'],
     ['flowchartx', '流程圖 X', 'FlowchartX', '圖表繪製', '🧩', '#ea580c', 'tool', 288],
   ],
   macos: [
@@ -144,7 +155,7 @@ const APPS = {
     ['radiowave', '電台', 'RadioWave', '網路電台', '📻', '#ef4444', 'player', 3],
     ['chartwiz', '圖表師', 'ChartWiz', '資料圖表', '📉', '#14b8a6', 'stats', 7],
     ['stickywall', '便籤牆', 'StickyWall', '便籤', '🟨', '#eab308', 'panel', 2],
-    ['goplay', '棋道', 'GoPlay', '圍棋對弈', '⚫', '#57534e', 'game', 9],
+    ['goplay', '棋道', 'GoPlay', '遊戲', '⚫', '#57534e', 'game', 9, '棋類'],
   ],
 };
 
@@ -160,7 +171,7 @@ export const BUILTIN_APPS = [
 ];
 
 export const CATALOG = Object.entries(APPS).flatMap(([os, rows]) =>
-  rows.map(([id, name, en, category, glyph, color, kind, size]) => ({
+  rows.map(([id, name, en, category, glyph, color, kind, size, genre]) => ({
     id: `${os}.${id}`,
     os,
     name,
@@ -170,6 +181,7 @@ export const CATALOG = Object.entries(APPS).flatMap(([os, rows]) =>
     color,
     kind,
     size,
+    ...(genre ? { genre } : {}),
   })),
 );
 

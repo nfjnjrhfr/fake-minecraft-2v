@@ -36,7 +36,7 @@ async function withServer(run) {
 test('App 目錄涵蓋各個來源作業系統', () => {
   const external = SOURCES.filter((s) => !s.builtin);
   assert.equal(external.length, 7);
-  assert.equal(CATALOG.length, 49);
+  assert.equal(CATALOG.length, 59);
   for (const source of external) {
     assert.ok(catalogFor(source.os).length > 0, `${source.os} 應該有 App`);
     assert.ok(source.runtime.length > 0, `${source.os} 應該有對應的執行期轉譯方案`);
@@ -44,6 +44,16 @@ test('App 目錄涵蓋各個來源作業系統', () => {
   // 每個 App 的 id 都以來源系統當前綴，且不重複
   assert.equal(new Set(CATALOG.map((a) => a.id)).size, CATALOG.length);
   assert.ok(CATALOG.every((a) => a.id.startsWith(`${a.os}.`)));
+});
+
+test('iOS 目錄裡有一整批遊戲，且遊戲跨系統成為同一個分類', () => {
+  const games = CATALOG.filter((a) => a.category === '遊戲');
+  const iosGames = games.filter((a) => a.os === 'ios');
+  assert.equal(iosGames.length, 10);
+  assert.ok(games.length > iosGames.length, '其他系統也有遊戲');
+  // 每款遊戲都要有類型與 game 介面型態，相容層才知道怎麼畫
+  assert.ok(games.every((g) => g.kind === 'game' && typeof g.genre === 'string' && g.genre.length > 0));
+  assert.equal(new Set(iosGames.map((g) => g.genre)).size, 10, '10 款 iOS 遊戲的類型各不相同');
 });
 
 test('初始狀態只有內建 App，沒有外來 App', async () => {
@@ -132,6 +142,51 @@ test('一鍵撈取全部會略過未啟用的來源，開啟後可補齊', async
   });
 });
 
+test('可以只撈某個系統的某個分類：把 iOS 遊戲全部拉進來', async () => {
+  await withServer(async ({ call, state }) => {
+    const iosGames = catalogFor('ios').filter((a) => a.category === '遊戲');
+
+    const res = await call('/api/apps/install-all', { method: 'POST', body: { os: 'ios', category: '遊戲' } });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.installed, iosGames.length);
+    assert.equal(res.body.category, '遊戲');
+
+    const s = await state();
+    assert.equal(s.installed.length, iosGames.length, '只裝了遊戲，沒有把其他 iOS App 一起裝進來');
+    assert.ok(s.installed.every((a) => a.os === 'ios' && a.category === '遊戲'));
+    assert.deepEqual(
+      s.installed.map((a) => a.id).sort(),
+      iosGames.map((a) => a.id).sort(),
+    );
+
+    // 再撈一次不會重複
+    const again = await call('/api/apps/install-all', { method: 'POST', body: { os: 'ios', category: '遊戲' } });
+    assert.equal(again.body.installed, 0);
+    assert.equal(again.body.already, iosGames.length);
+  });
+});
+
+test('不帶來源、只帶分類，就會跨系統撈同一個分類', async () => {
+  await withServer(async ({ call, state }) => {
+    const res = await call('/api/apps/install-all', { method: 'POST', body: { category: '遊戲' } });
+    // Windows 的遊戲會因為相容層未啟用而被略過
+    assert.deepEqual(res.body.skipped, ['Windows']);
+
+    const s = await state();
+    assert.ok(s.installed.every((a) => a.category === '遊戲'));
+    assert.ok(new Set(s.installed.map((a) => a.os)).size > 1, '不只一個來源系統');
+    assert.equal(s.installed.length, CATALOG.filter((a) => a.category === '遊戲' && a.os !== 'windows').length);
+  });
+});
+
+test('不存在的分類會被拒絕', async () => {
+  await withServer(async ({ call }) => {
+    assert.equal((await call('/api/apps/install-all', { method: 'POST', body: { category: '書法' } })).status, 404);
+    assert.equal((await call('/api/apps/install-all', { method: 'POST', body: { os: 'ios', category: '書法' } })).status, 404);
+    assert.equal((await call('/api/catalog?category=書法')).status, 404);
+  });
+});
+
 test('關閉相容層只會讓 App 暫停，不會刪掉', async () => {
   await withServer(async ({ call, state }) => {
     await call('/api/apps/install-all', { method: 'POST', body: { os: 'ios' } });
@@ -175,6 +230,10 @@ test('目錄可以依來源系統與關鍵字查詢', async () => {
     const search = await call('/api/catalog?q=導航');
     assert.ok(search.body.apps.length >= 2);
     assert.ok(search.body.apps.every((a) => a.category.includes('導航')));
+
+    const iosGames = await call('/api/catalog?os=ios&category=遊戲');
+    assert.equal(iosGames.body.apps.length, 10);
+    assert.ok(iosGames.body.apps.every((a) => a.os === 'ios' && a.category === '遊戲'));
 
     assert.equal((await call('/api/catalog?os=plan9')).status, 404);
   });
