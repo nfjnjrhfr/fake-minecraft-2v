@@ -5,6 +5,12 @@
   var KEY = 'pet-word-game.v1';
   var CORRECT_PER_COIN = 10;   // 答對 10 個 ⇒ 1 枚 PET 單詞幣
 
+  /* 第一次開啟時跟隨系統的淺色／深色設定，之後以使用者的選擇為準 */
+  function prefersLight() {
+    try { return global.matchMedia && global.matchMedia('(prefers-color-scheme: light)').matches; }
+    catch (e) { return false; }
+  }
+
   function defaults() {
     return {
       version: 1,
@@ -23,7 +29,7 @@
         sound: true,
         haptics: true,
         doubleClick: true,  // 雙擊連線（關閉則改為單擊）
-        theme: 'dark'
+        theme: prefersLight() ? 'light' : 'dark'
       }
     };
   }

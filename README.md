@@ -48,6 +48,16 @@
 
 ## 怎麼跑
 
+### 最省事：單檔版
+`standalone/pet-word-game.html` 是把 CSS、JS、圖示全部內嵌好的單一檔案。
+下載後雙擊就能玩，不需要伺服器、不需要網路，傳給別人也只要傳這一個檔。
+改完原始碼後重新產生：
+
+```bash
+python3 tools/build-standalone.py
+```
+
+### 開發版
 直接用瀏覽器開 `index.html` 就能玩。
 想要 PWA 離線安裝（Service Worker 需要 http/https）：
 
@@ -85,4 +95,6 @@ js/net.js               連線層：BroadcastChannel（離線）＋ WebRTC（線
 js/game.js              遊戲主程式
 manifest.webmanifest    PWA 設定
 sw.js                   Service Worker（離線快取）
+tools/build-standalone.py  打包成單檔的腳本
+standalone/             產出：單檔版 HTML
 ```

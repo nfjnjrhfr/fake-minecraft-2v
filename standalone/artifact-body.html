@@ -1,0 +1,2091 @@
+<title>PET 單詞連線</title>
+<style>
+/* PET 單詞連線 — 版面樣式（手機、平板、桌機、觸控與滑鼠皆適用） */
+:root {
+  --bg: #0b1220;
+  --bg2: #111c32;
+  --card: #16233c;
+  --card2: #1c2c4a;
+  --line: #27385c;
+  --fg: #e8eefc;
+  --fg-dim: #9db0d4;
+  --accent: #4f9dff;
+  --accent2: #6ee7b7;
+  --good: #34d399;
+  --bad: #f87171;
+  --gold: #fbbf24;
+  --radius: 14px;
+  --tap: 48px;
+}
+[data-theme="light"] {
+  --bg: #f4f7fd;
+  --bg2: #ffffff;
+  --card: #ffffff;
+  --card2: #eef3fc;
+  --line: #d3ddf0;
+  --fg: #14203a;
+  --fg-dim: #5a6b8c;
+  --accent: #2563eb;
+  --accent2: #059669;
+  --good: #059669;
+  --bad: #dc2626;
+  --gold: #d97706;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  overscroll-behavior-y: contain;
+}
+body {
+  min-height: 100svh;
+  background-image: radial-gradient(1200px 600px at 50% -10%, var(--bg2), transparent 70%);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ---------- 頂列 ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px calc(10px);
+  padding-top: calc(10px + env(safe-area-inset-top));
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.brand { flex: 1; margin: 0; font-size: 1.05rem; font-weight: 700; letter-spacing: .5px; }
+.icon-btn {
+  min-width: 40px; height: 40px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--card); color: var(--fg);
+  font-size: 1.05rem; cursor: pointer;
+}
+.icon-btn:active { transform: scale(.94); }
+
+.coin-box {
+  position: relative; display: flex; align-items: center; gap: 4px;
+  padding: 4px 12px 4px 34px; height: 40px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); cursor: pointer; user-select: none;
+}
+.coin-box .ring { position: absolute; left: 4px; top: 4px; width: 32px; height: 32px; transform: rotate(-90deg); }
+.ring-bg, .ring-fg { fill: none; stroke-width: 3; }
+.ring-bg { stroke: var(--line); }
+.ring-fg {
+  stroke: var(--gold); stroke-linecap: round;
+  stroke-dasharray: 97.4; stroke-dashoffset: 97.4;
+  transition: stroke-dashoffset .45s ease;
+}
+.coin-emoji { position: absolute; left: 12px; top: 10px; font-size: .95rem; }
+.coin-count { font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; }
+.coin-box.bump { animation: bump .5s ease; }
+@keyframes bump { 0%,100% { transform: scale(1); } 40% { transform: scale(1.18); } }
+
+/* ---------- 版面 ---------- */
+#app { max-width: 900px; margin: 0 auto; padding: 14px 14px 40px; }
+.screen { display: none; animation: fade .25s ease; }
+.screen.active { display: block; }
+@keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.screen-title { font-size: 1.2rem; margin: 4px 0 14px; }
+
+.hero { text-align: center; margin: 10px 0 18px; }
+.hero-sub { color: var(--fg-dim); margin: 0 0 6px; }
+.hero-tip { margin: 0; font-size: .95rem; }
+.hero-tip b { color: var(--accent2); }
+
+.cards { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 18px; }
+@media (min-width: 620px) { .cards { grid-template-columns: repeat(3, 1fr); } }
+.mode-card {
+  display: grid; grid-template-columns: 44px 1fr; grid-template-rows: auto auto;
+  gap: 2px 12px; text-align: left; align-items: center;
+  padding: 14px; min-height: var(--tap);
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  color: var(--fg); cursor: pointer;
+}
+@media (min-width: 620px) {
+  .mode-card { grid-template-columns: 1fr; text-align: center; gap: 4px; padding: 18px 12px; }
+}
+.mode-ico { grid-row: span 2; font-size: 1.8rem; text-align: center; }
+@media (min-width: 620px) { .mode-ico { grid-row: auto; } }
+.mode-name { font-weight: 700; }
+.mode-desc { color: var(--fg-dim); font-size: .85rem; }
+.mode-card:active { transform: scale(.98); }
+.mode-card:hover { border-color: var(--accent); }
+
+.panel {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 14px; margin-bottom: 14px;
+}
+.panel h2 { margin: 0 0 10px; font-size: .98rem; }
+.panel h2 small { color: var(--fg-dim); font-weight: 400; }
+.hint { color: var(--fg-dim); font-size: .87rem; margin: 0 0 10px; }
+.foot-note { text-align: center; color: var(--fg-dim); font-size: .9rem; }
+.foot-note b { color: var(--gold); }
+.muted { color: var(--fg-dim); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  min-height: 40px; padding: 8px 14px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card2); color: var(--fg);
+  font-size: .9rem; cursor: pointer;
+}
+.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+
+.btn {
+  min-height: var(--tap); padding: 10px 18px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--card2); color: var(--fg);
+  font-size: .95rem; cursor: pointer; font-family: inherit;
+}
+.btn:active { transform: scale(.97); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.btn.wide, .input.wide { width: 100%; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.row.center { justify-content: center; }
+
+.input, .code {
+  background: var(--bg2); color: var(--fg); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px; font-size: 1rem; font-family: inherit;
+  min-height: var(--tap); flex: 1; min-width: 0;
+}
+.code { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .78rem; word-break: break-all; resize: vertical; }
+.field { display: block; margin-top: 12px; }
+.field > span { display: block; font-size: .87rem; color: var(--fg-dim); margin-bottom: 6px; }
+.status { text-align: center; color: var(--fg-dim); font-size: .88rem; min-height: 1.4em; }
+.status.ok { color: var(--good); font-weight: 700; }
+.status.err { color: var(--bad); }
+
+.switch { display: flex; align-items: center; gap: 10px; padding: 10px 0; cursor: pointer; min-height: var(--tap); }
+.switch input { width: 22px; height: 22px; accent-color: var(--accent); }
+.danger-zone { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+
+/* ---------- HUD ---------- */
+.hud { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+.hud-item {
+  display: flex; flex-direction: column; align-items: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px 4px;
+}
+.hud-k { font-size: .7rem; color: var(--fg-dim); }
+.hud-v { font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.versus { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: .82rem; }
+.vs-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--card2); overflow: hidden; }
+.vs-bar i { display: block; height: 100%; width: 0; background: var(--accent2); transition: width .3s ease; }
+.vs-num { font-variant-numeric: tabular-nums; color: var(--fg-dim); }
+
+/* ---------- 牌桌 ---------- */
+.board {
+  position: relative;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px 46px;
+  touch-action: manipulation;
+}
+@media (min-width: 620px) { .board { gap: 12px 110px; } }
+.wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 1; }
+.col { display: flex; flex-direction: column; gap: 10px; position: relative; z-index: 2; }
+
+.tile {
+  position: relative;
+  min-height: 58px; display: flex; flex-direction: column; justify-content: center;
+  padding: 8px 10px; border-radius: 12px;
+  background: var(--card); border: 2px solid var(--line); color: var(--fg);
+  cursor: pointer; user-select: none; text-align: center;
+  font-size: 1rem; line-height: 1.25; word-break: break-word;
+  transition: transform .12s ease, border-color .15s ease, background .15s ease, opacity .3s ease;
+}
+.tile .pos { font-size: .68rem; color: var(--fg-dim); }
+.tile:active { transform: scale(.97); }
+.tile.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, var(--card)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.tile.matched { border-color: var(--good); background: color-mix(in srgb, var(--good) 18%, var(--card)); opacity: .75; cursor: default; }
+.tile.hinted { border-color: var(--gold); animation: glow 1s ease 2; }
+@keyframes glow { 0%,100% { box-shadow: none; } 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--gold) 40%, transparent); } }
+.tile.shake { animation: shake .38s ease; border-color: var(--bad); }
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); } 40% { transform: translateX(7px); }
+  60% { transform: translateX(-4px); } 80% { transform: translateX(4px); }
+}
+.tile .dot {
+  position: absolute; top: 50%; width: 10px; height: 10px; margin-top: -5px;
+  border-radius: 50%; background: var(--line);
+}
+.col#col-left .dot { right: -6px; }
+.col#col-right .dot { left: -6px; }
+.tile.matched .dot { background: var(--good); }
+.tile.sel .dot { background: var(--accent); }
+
+.wire { fill: none; stroke-width: 3.5; stroke-linecap: round; }
+.wire.ok { stroke: var(--good); }
+.wire.ng { stroke: var(--bad); animation: fadeout .6s ease forwards; }
+.wire.live { stroke: var(--accent); stroke-dasharray: 6 6; }
+@keyframes fadeout { to { opacity: 0; } }
+
+.play-tip { text-align: center; color: var(--fg-dim); font-size: .85rem; margin: 14px 0 4px; }
+
+/* ---------- 結果 / 統計 ---------- */
+.result-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px; }
+@media (min-width: 620px) { .result-grid { grid-template-columns: repeat(3, 1fr); } }
+.res { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center; }
+.res-k { display: block; font-size: .78rem; color: var(--fg-dim); }
+.res-v { display: block; font-size: 1.3rem; font-weight: 800; }
+
+.review { list-style: none; margin: 0; padding: 0; }
+.review li { padding: 9px 2px; border-bottom: 1px dashed var(--line); font-size: .92rem; }
+.review li:last-child { border-bottom: none; }
+.review .en { font-weight: 700; }
+.review .zh { color: var(--accent2); }
+.review .ex { display: block; color: var(--fg-dim); font-size: .82rem; font-style: italic; }
+.review .bad { color: var(--bad); }
+
+/* ---------- 提示 / 單詞幣動畫 ---------- */
+.toast-wrap { position: fixed; left: 0; right: 0; bottom: calc(18px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; z-index: 50; }
+.toast {
+  background: var(--card2); border: 1px solid var(--line); color: var(--fg);
+  padding: 10px 16px; border-radius: 999px; font-size: .9rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35); animation: toastIn .25s ease;
+  max-width: 92vw; text-align: center;
+}
+.toast.ok { border-color: var(--good); }
+.toast.err { border-color: var(--bad); }
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+.coin-pop {
+  position: fixed; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  font-size: 1.2rem; font-weight: 800; color: var(--gold);
+  pointer-events: none; z-index: 60;
+}
+.coin-pop span { font-size: 4rem; animation: coinSpin .9s ease; }
+.coin-pop b { animation: toastIn .3s ease; text-shadow: 0 2px 12px rgba(0,0,0,.5); }
+@keyframes coinSpin {
+  0% { transform: scale(.2) rotateY(0deg); opacity: 0; }
+  40% { transform: scale(1.1) rotateY(360deg); opacity: 1; }
+  100% { transform: scale(1) rotateY(720deg) translateY(-10px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+</style>
+<header class="topbar">
+  <button class="icon-btn" id="btn-home" title="回首頁" aria-label="回首頁">🏠</button>
+  <h1 class="brand">PET 單詞連線</h1>
+  <div class="coin-box" id="coin-box" role="button" tabindex="0" title="PET 單詞幣：答對 10 個得 1 枚">
+    <svg class="ring" viewBox="0 0 36 36" aria-hidden="true">
+      <circle class="ring-bg" cx="18" cy="18" r="15.5"></circle>
+      <circle class="ring-fg" id="coin-ring" cx="18" cy="18" r="15.5"></circle>
+    </svg>
+    <span class="coin-emoji">🪙</span>
+    <span class="coin-count" id="coin-count">0</span>
+  </div>
+  <button class="icon-btn" id="btn-stats" title="統計" aria-label="統計">📊</button>
+  <button class="icon-btn" id="btn-settings" title="設定" aria-label="設定">⚙️</button>
+</header>
+
+<main id="app">
+
+  <!-- ============ 首頁 ============ -->
+  <section class="screen active" id="screen-home">
+    <div class="hero">
+      <p class="hero-sub">劍橋 PET (B1) 核心單字 · <b id="word-total">240</b> 字</p>
+      <p class="hero-tip">玩法：<b>雙擊</b>左邊英文，再<b>雙擊</b>右邊中文，就會連成一條線。</p>
+    </div>
+
+    <div class="cards">
+      <button class="mode-card" data-mode="solo">
+        <span class="mode-ico">🎯</span>
+        <span class="mode-name">單人練習</span>
+        <span class="mode-desc">完全離線，隨時可玩</span>
+      </button>
+      <button class="mode-card" data-mode="local">
+        <span class="mode-ico">📵</span>
+        <span class="mode-name">同裝置對戰</span>
+        <span class="mode-desc">不用網路，開兩個視窗就能連線</span>
+      </button>
+      <button class="mode-card" data-mode="peer">
+        <span class="mode-ico">🌐</span>
+        <span class="mode-name">跨裝置連線</span>
+        <span class="mode-desc">有網路時，兩台裝置直接對戰</span>
+      </button>
+    </div>
+
+    <div class="panel">
+      <h2>每回合題數</h2>
+      <div class="chips" id="pairs-chips">
+        <button class="chip" data-pairs="4">4 對</button>
+        <button class="chip" data-pairs="5">5 對</button>
+        <button class="chip" data-pairs="6">6 對</button>
+        <button class="chip" data-pairs="8">8 對</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>單字主題 <small>（不選 = 全部）</small></h2>
+      <div class="chips" id="cat-chips"></div>
+    </div>
+
+    <p class="foot-note">
+      目前進度：再答對 <b id="to-next">10</b> 題就能再拿到 <b>1 枚 PET 單詞幣</b> 🪙
+    </p>
+  </section>
+
+  <!-- ============ 連線設定 ============ -->
+  <section class="screen" id="screen-link">
+    <h2 class="screen-title" id="link-title">連線</h2>
+
+    <div class="panel" id="link-local">
+      <h2>📵 同裝置連線（不需要網路）</h2>
+      <p class="hint">在<b>同一台裝置</b>再開一個瀏覽器分頁或視窗（手機可用分割畫面），
+        兩邊輸入同一個房號後按「開始連線」。整個過程不經過網路。</p>
+      <div class="row">
+        <input class="input" id="room-input" maxlength="6" placeholder="房號" autocomplete="off" spellcheck="false">
+        <button class="btn" id="btn-room-random">隨機</button>
+        <button class="btn" id="btn-room-copy">複製房號</button>
+      </div>
+      <button class="btn primary wide" id="btn-local-connect">開始連線</button>
+    </div>
+
+    <div class="panel" id="link-peer">
+      <h2>🌐 跨裝置連線（需要網路）</h2>
+      <p class="hint">不需要任何伺服器帳號：主持人產生「邀請碼」，用任何聊天軟體傳給對方；
+        對方貼上後產生「回應碼」再傳回來即可。</p>
+      <div class="row">
+        <button class="btn primary" id="btn-peer-host">我當主持人</button>
+        <button class="btn" id="btn-peer-join">我要加入</button>
+      </div>
+
+      <div class="steps" id="peer-steps" hidden>
+        <label class="field">
+          <span id="out-label">① 把這段邀請碼傳給對方</span>
+          <textarea class="code" id="code-out" readonly rows="3" placeholder="產生中…"></textarea>
+        </label>
+        <div class="row">
+          <button class="btn" id="btn-copy-code">複製代碼</button>
+          <button class="btn" id="btn-share-code">分享</button>
+        </div>
+        <label class="field">
+          <span id="in-label">② 貼上對方回傳的代碼</span>
+          <textarea class="code" id="code-in" rows="3" placeholder="在這裡貼上代碼…" spellcheck="false"></textarea>
+        </label>
+        <button class="btn primary wide" id="btn-code-submit">送出代碼</button>
+      </div>
+    </div>
+
+    <p class="status" id="link-status">尚未連線</p>
+    <div class="row center">
+      <button class="btn" id="btn-link-cancel">取消</button>
+      <button class="btn primary" id="btn-link-start" disabled>開始對戰</button>
+    </div>
+  </section>
+
+  <!-- ============ 遊戲 ============ -->
+  <section class="screen" id="screen-play">
+    <div class="hud">
+      <div class="hud-item"><span class="hud-k">時間</span><span class="hud-v" id="hud-time">0.0</span></div>
+      <div class="hud-item"><span class="hud-k">已連</span><span class="hud-v" id="hud-matched">0/5</span></div>
+      <div class="hud-item"><span class="hud-k">連續</span><span class="hud-v" id="hud-streak">0</span></div>
+      <div class="hud-item"><span class="hud-k">失誤</span><span class="hud-v" id="hud-wrong">0</span></div>
+    </div>
+
+    <div class="versus" id="versus" hidden>
+      <span class="vs-name" id="vs-name">對手</span>
+      <div class="vs-bar"><i id="vs-fill"></i></div>
+      <span class="vs-num" id="vs-num">0/5</span>
+    </div>
+
+    <div class="board" id="board">
+      <svg class="wires" id="wires" aria-hidden="true"></svg>
+      <div class="col" id="col-left"></div>
+      <div class="col" id="col-right"></div>
+    </div>
+
+    <p class="play-tip" id="play-tip">雙擊左邊英文 → 再雙擊右邊中文</p>
+    <div class="row center">
+      <button class="btn" id="btn-quit">結束這局</button>
+      <button class="btn" id="btn-hint">提示 💡</button>
+    </div>
+  </section>
+
+  <!-- ============ 結果 ============ -->
+  <section class="screen" id="screen-result">
+    <h2 class="screen-title" id="result-title">完成！</h2>
+    <div class="result-grid">
+      <div class="res"><span class="res-k">用時</span><span class="res-v" id="res-time">--</span></div>
+      <div class="res"><span class="res-k">答對</span><span class="res-v" id="res-correct">0</span></div>
+      <div class="res"><span class="res-k">失誤</span><span class="res-v" id="res-wrong">0</span></div>
+      <div class="res"><span class="res-k">本局單詞幣</span><span class="res-v" id="res-coins">0</span></div>
+    </div>
+    <div class="panel">
+      <h2>這一局的單字</h2>
+      <ul class="review" id="review"></ul>
+    </div>
+    <div class="row center">
+      <button class="btn primary" id="btn-again">再來一局</button>
+      <button class="btn" id="btn-back-home">回首頁</button>
+    </div>
+  </section>
+
+  <!-- ============ 統計 ============ -->
+  <section class="screen" id="screen-stats">
+    <h2 class="screen-title">我的統計</h2>
+    <div class="result-grid">
+      <div class="res"><span class="res-k">PET 單詞幣</span><span class="res-v" id="st-coins">0</span></div>
+      <div class="res"><span class="res-k">累計答對</span><span class="res-v" id="st-correct">0</span></div>
+      <div class="res"><span class="res-k">累計失誤</span><span class="res-v" id="st-wrong">0</span></div>
+      <div class="res"><span class="res-k">完成回合</span><span class="res-v" id="st-rounds">0</span></div>
+      <div class="res"><span class="res-k">最長連續</span><span class="res-v" id="st-streak">0</span></div>
+      <div class="res"><span class="res-k">最快一局</span><span class="res-v" id="st-best">--</span></div>
+    </div>
+    <div class="panel">
+      <h2>最需要複習的單字</h2>
+      <ul class="review" id="weak-list"><li class="muted">還沒有資料</li></ul>
+    </div>
+    <div class="panel">
+      <h2>換裝置繼續玩</h2>
+      <p class="hint">單詞幣存在這台裝置上。把下面這段代碼複製到另一台裝置匯入，進度就跟著走。</p>
+      <textarea class="code" id="export-code" rows="3" readonly></textarea>
+      <div class="row">
+        <button class="btn" id="btn-export-copy">複製我的進度</button>
+      </div>
+      <label class="field">
+        <span>貼上另一台裝置的進度代碼</span>
+        <textarea class="code" id="import-code" rows="3" placeholder="PET1...." spellcheck="false"></textarea>
+      </label>
+      <button class="btn primary wide" id="btn-import">匯入進度</button>
+    </div>
+    <div class="row center"><button class="btn" id="btn-stats-back">返回</button></div>
+  </section>
+
+  <!-- ============ 設定 ============ -->
+  <section class="screen" id="screen-settings">
+    <h2 class="screen-title">設定</h2>
+    <div class="panel">
+      <label class="switch"><input type="checkbox" id="set-double" checked><span>雙擊連線（關閉改為單擊）</span></label>
+      <label class="switch"><input type="checkbox" id="set-sound" checked><span>音效</span></label>
+      <label class="switch"><input type="checkbox" id="set-haptics" checked><span>震動回饋（手機）</span></label>
+      <label class="switch"><input type="checkbox" id="set-light"><span>淺色主題</span></label>
+    </div>
+    <div class="panel">
+      <h2>暱稱（連線對戰時顯示）</h2>
+      <input class="input wide" id="set-name" maxlength="12" placeholder="例如：小明">
+    </div>
+    <div class="panel danger-zone">
+      <h2>危險區</h2>
+      <p class="hint">清除這台裝置上的所有進度與單詞幣，無法復原。</p>
+      <button class="btn danger" id="btn-reset">清除全部進度</button>
+    </div>
+    <div class="row center"><button class="btn" id="btn-settings-back">返回</button></div>
+  </section>
+
+</main>
+
+<div class="toast-wrap" id="toast-wrap" aria-live="polite"></div>
+<div class="coin-pop" id="coin-pop" hidden><span>🪙</span><b>+1 PET 單詞幣</b></div>
+
+<script>
+/* ===== js/words.js ===== */
+/* PET (B1 Preliminary) 單詞庫 — 依主題分類
+   w: 英文  z: 中文  p: 詞性  c: 分類  ex: 例句 */
+(function (global) {
+  'use strict';
+
+  var CATEGORIES = [
+    { id: 'daily',   name: '日常生活', icon: '🏠' },
+    { id: 'school',  name: '學校教育', icon: '🎒' },
+    { id: 'work',    name: '工作職業', icon: '💼' },
+    { id: 'travel',  name: '旅遊交通', icon: '✈️' },
+    { id: 'food',    name: '食物飲食', icon: '🍜' },
+    { id: 'health',  name: '健康身體', icon: '💊' },
+    { id: 'nature',  name: '環境自然', icon: '🌳' },
+    { id: 'tech',    name: '科技媒體', icon: '💻' },
+    { id: 'feeling', name: '情緒個性', icon: '🙂' },
+    { id: 'verb',    name: '常用動詞', icon: '⚡' },
+    { id: 'adj',     name: '常用形容詞', icon: '🎨' },
+    { id: 'link',    name: '連接與副詞', icon: '🔗' }
+  ];
+
+  var WORDS = [
+    // ---------- 日常生活 ----------
+    { w: 'neighbour',    z: '鄰居',        p: 'n.',   c: 'daily', ex: 'My neighbour helps me look after the cat.' },
+    { w: 'furniture',    z: '家具',        p: 'n.',   c: 'daily', ex: 'We bought some furniture for the new flat.' },
+    { w: 'cupboard',     z: '櫥櫃',        p: 'n.',   c: 'daily', ex: 'The plates are in the cupboard.' },
+    { w: 'blanket',      z: '毯子',        p: 'n.',   c: 'daily', ex: 'She put a warm blanket on the bed.' },
+    { w: 'rubbish',      z: '垃圾',        p: 'n.',   c: 'daily', ex: 'Please take the rubbish outside.' },
+    { w: 'housework',    z: '家務',        p: 'n.',   c: 'daily', ex: 'We share the housework every weekend.' },
+    { w: 'wallet',       z: '皮夾',        p: 'n.',   c: 'daily', ex: 'He left his wallet on the table.' },
+    { w: 'key',          z: '鑰匙',        p: 'n.',   c: 'daily', ex: 'I cannot find my house key.' },
+    { w: 'towel',        z: '毛巾',        p: 'n.',   c: 'daily', ex: 'Take a clean towel from the shelf.' },
+    { w: 'shelf',        z: '架子',        p: 'n.',   c: 'daily', ex: 'The books are on the top shelf.' },
+    { w: 'stairs',       z: '樓梯',        p: 'n.',   c: 'daily', ex: 'Be careful on the stairs.' },
+    { w: 'balcony',      z: '陽台',        p: 'n.',   c: 'daily', ex: 'We have breakfast on the balcony.' },
+    { w: 'washing machine', z: '洗衣機',   p: 'n.',   c: 'daily', ex: 'The washing machine is broken again.' },
+    { w: 'bill',         z: '帳單',        p: 'n.',   c: 'daily', ex: 'The electricity bill arrived this morning.' },
+    { w: 'discount',     z: '折扣',        p: 'n.',   c: 'daily', ex: 'Students get a 10% discount.' },
+    { w: 'receipt',      z: '收據',        p: 'n.',   c: 'daily', ex: 'Keep the receipt in case you return it.' },
+    { w: 'customer',     z: '顧客',        p: 'n.',   c: 'daily', ex: 'The shop was full of customers.' },
+    { w: 'queue',        z: '排隊；隊伍',  p: 'n./v.', c: 'daily', ex: 'We had to queue for twenty minutes.' },
+    { w: 'borrow',       z: '借入',        p: 'v.',   c: 'daily', ex: 'Can I borrow your umbrella?' },
+    { w: 'lend',         z: '借出',        p: 'v.',   c: 'daily', ex: 'She lent me her bike for the day.' },
+
+    // ---------- 學校教育 ----------
+    { w: 'subject',      z: '科目',        p: 'n.',   c: 'school', ex: 'Science is my favourite subject.' },
+    { w: 'homework',     z: '家庭作業',    p: 'n.',   c: 'school', ex: 'I finished my homework before dinner.' },
+    { w: 'exam',         z: '考試',        p: 'n.',   c: 'school', ex: 'The exam lasts two hours.' },
+    { w: 'revise',       z: '複習',        p: 'v.',   c: 'school', ex: 'I need to revise for the test.' },
+    { w: 'notes',        z: '筆記',        p: 'n.',   c: 'school', ex: 'She takes good notes in class.' },
+    { w: 'timetable',    z: '課表；時刻表', p: 'n.',  c: 'school', ex: 'Check the timetable for Monday.' },
+    { w: 'term',         z: '學期',        p: 'n.',   c: 'school', ex: 'The new term starts in September.' },
+    { w: 'degree',       z: '學位',        p: 'n.',   c: 'school', ex: 'He has a degree in history.' },
+    { w: 'progress',     z: '進步',        p: 'n.',   c: 'school', ex: 'You have made good progress this year.' },
+    { w: 'mistake',      z: '錯誤',        p: 'n.',   c: 'school', ex: 'Everyone makes mistakes when learning.' },
+    { w: 'explain',      z: '解釋',        p: 'v.',   c: 'school', ex: 'Can you explain this word to me?' },
+    { w: 'translate',    z: '翻譯',        p: 'v.',   c: 'school', ex: 'Translate the sentence into English.' },
+    { w: 'pronounce',    z: '發音',        p: 'v.',   c: 'school', ex: 'How do you pronounce this name?' },
+    { w: 'practise',     z: '練習',        p: 'v.',   c: 'school', ex: 'You should practise speaking every day.' },
+    { w: 'memorise',     z: '背誦；記住',  p: 'v.',   c: 'school', ex: 'Do not just memorise the words.' },
+    { w: 'dictionary',   z: '字典',        p: 'n.',   c: 'school', ex: 'Look it up in the dictionary.' },
+    { w: 'library',      z: '圖書館',      p: 'n.',   c: 'school', ex: 'The library closes at nine.' },
+    { w: 'classmate',    z: '同學',        p: 'n.',   c: 'school', ex: 'My classmates are very friendly.' },
+    { w: 'uniform',      z: '制服',        p: 'n.',   c: 'school', ex: 'We wear a uniform at school.' },
+    { w: 'certificate',  z: '證書',        p: 'n.',   c: 'school', ex: 'You will receive a certificate after the course.' },
+
+    // ---------- 工作職業 ----------
+    { w: 'employer',     z: '雇主',        p: 'n.',   c: 'work', ex: 'Her employer gave her an extra day off.' },
+    { w: 'employee',     z: '員工',        p: 'n.',   c: 'work', ex: 'The company has 200 employees.' },
+    { w: 'interview',    z: '面試',        p: 'n./v.', c: 'work', ex: 'I have a job interview on Friday.' },
+    { w: 'salary',       z: '薪水',        p: 'n.',   c: 'work', ex: 'The salary is paid every month.' },
+    { w: 'colleague',    z: '同事',        p: 'n.',   c: 'work', ex: 'My colleagues are easy to work with.' },
+    { w: 'meeting',      z: '會議',        p: 'n.',   c: 'work', ex: 'The meeting starts at ten.' },
+    { w: 'deadline',     z: '截止期限',    p: 'n.',   c: 'work', ex: 'The deadline is next Tuesday.' },
+    { w: 'experience',   z: '經驗',        p: 'n.',   c: 'work', ex: 'She has five years of experience.' },
+    { w: 'apply',        z: '申請',        p: 'v.',   c: 'work', ex: 'I applied for a summer job.' },
+    { w: 'earn',         z: '賺取',        p: 'v.',   c: 'work', ex: 'He earns enough to travel.' },
+    { w: 'manage',       z: '管理；設法做到', p: 'v.', c: 'work', ex: 'She manages a small team.' },
+    { w: 'engineer',     z: '工程師',      p: 'n.',   c: 'work', ex: 'My sister is a software engineer.' },
+    { w: 'nurse',        z: '護理師',      p: 'n.',   c: 'work', ex: 'The nurse checked my temperature.' },
+    { w: 'lawyer',       z: '律師',        p: 'n.',   c: 'work', ex: 'You should talk to a lawyer.' },
+    { w: 'chef',         z: '主廚',        p: 'n.',   c: 'work', ex: 'The chef made a special dessert.' },
+    { w: 'shift',        z: '輪班',        p: 'n.',   c: 'work', ex: 'He works the night shift.' },
+    { w: 'part-time',    z: '兼職的',      p: 'adj.', c: 'work', ex: 'She has a part-time job at a café.' },
+    { w: 'retire',       z: '退休',        p: 'v.',   c: 'work', ex: 'My father retired last year.' },
+    { w: 'overtime',     z: '加班',        p: 'n.',   c: 'work', ex: 'He worked overtime to finish the report.' },
+    { w: 'career',       z: '職業生涯',    p: 'n.',   c: 'work', ex: 'He wants a career in music.' },
+
+    // ---------- 旅遊交通 ----------
+    { w: 'journey',      z: '旅程',        p: 'n.',   c: 'travel', ex: 'The journey takes about three hours.' },
+    { w: 'luggage',      z: '行李',        p: 'n.',   c: 'travel', ex: 'Leave your luggage at the hotel.' },
+    { w: 'passport',     z: '護照',        p: 'n.',   c: 'travel', ex: 'Do not forget your passport.' },
+    { w: 'ticket',       z: '車票；門票',  p: 'n.',   c: 'travel', ex: 'I bought a return ticket.' },
+    { w: 'platform',     z: '月台',        p: 'n.',   c: 'travel', ex: 'The train leaves from platform 4.' },
+    { w: 'flight',       z: '航班',        p: 'n.',   c: 'travel', ex: 'Our flight was delayed by an hour.' },
+    { w: 'delay',        z: '延誤',        p: 'n./v.', c: 'travel', ex: 'There was a long delay at the airport.' },
+    { w: 'abroad',       z: '在國外',      p: 'adv.', c: 'travel', ex: 'They are studying abroad this year.' },
+    { w: 'accommodation', z: '住宿',       p: 'n.',   c: 'travel', ex: 'The price includes accommodation.' },
+    { w: 'book',         z: '預訂',        p: 'v.',   c: 'travel', ex: 'We booked a room online.' },
+    { w: 'tourist',      z: '觀光客',      p: 'n.',   c: 'travel', ex: 'The old town is full of tourists.' },
+    { w: 'guide',        z: '導遊；指南',  p: 'n.',   c: 'travel', ex: 'The guide showed us the castle.' },
+    { w: 'map',          z: '地圖',        p: 'n.',   c: 'travel', ex: 'I downloaded a map of the city.' },
+    { w: 'traffic',      z: '交通；車流',  p: 'n.',   c: 'travel', ex: 'The traffic was terrible this morning.' },
+    { w: 'rush hour',    z: '尖峰時段',    p: 'n.',   c: 'travel', ex: 'Avoid travelling during rush hour.' },
+    { w: 'coach',        z: '長途巴士',    p: 'n.',   c: 'travel', ex: 'We went to London by coach.' },
+    { w: 'ferry',        z: '渡輪',        p: 'n.',   c: 'travel', ex: 'The ferry crosses the river every hour.' },
+    { w: 'destination',  z: '目的地',      p: 'n.',   c: 'travel', ex: 'Our final destination was the beach.' },
+    { w: 'suitcase',     z: '行李箱',      p: 'n.',   c: 'travel', ex: 'My suitcase is too heavy.' },
+    { w: 'view',         z: '景色',        p: 'n.',   c: 'travel', ex: 'The room has a lovely view of the sea.' },
+
+    // ---------- 食物飲食 ----------
+    { w: 'recipe',       z: '食譜',        p: 'n.',   c: 'food', ex: 'This recipe is easy to follow.' },
+    { w: 'ingredient',   z: '食材',        p: 'n.',   c: 'food', ex: 'Mix all the ingredients in a bowl.' },
+    { w: 'vegetable',    z: '蔬菜',        p: 'n.',   c: 'food', ex: 'Eat more fresh vegetables.' },
+    { w: 'dessert',      z: '甜點',        p: 'n.',   c: 'food', ex: 'We had ice cream for dessert.' },
+    { w: 'snack',        z: '點心',        p: 'n.',   c: 'food', ex: 'I had a quick snack before class.' },
+    { w: 'meal',         z: '一餐',        p: 'n.',   c: 'food', ex: 'Dinner is the main meal of the day.' },
+    { w: 'boil',         z: '煮沸',        p: 'v.',   c: 'food', ex: 'Boil the water for five minutes.' },
+    { w: 'fry',          z: '油炸；煎',    p: 'v.',   c: 'food', ex: 'Fry the onions until they are soft.' },
+    { w: 'bake',         z: '烘烤',        p: 'v.',   c: 'food', ex: 'She baked a cake for my birthday.' },
+    { w: 'taste',        z: '嚐起來；味道', p: 'v./n.', c: 'food', ex: 'This soup tastes delicious.' },
+    { w: 'delicious',    z: '美味的',      p: 'adj.', c: 'food', ex: 'The noodles were absolutely delicious.' },
+    { w: 'menu',         z: '菜單',        p: 'n.',   c: 'food', ex: 'Can we see the menu, please?' },
+    { w: 'order',        z: '點餐；訂購',  p: 'v./n.', c: 'food', ex: 'I ordered a salad and a juice.' },
+    { w: 'waiter',       z: '服務生',      p: 'n.',   c: 'food', ex: 'The waiter brought us some water.' },
+    { w: 'vegetarian',   z: '素食者；素食的', p: 'n./adj.', c: 'food', ex: 'My brother is a vegetarian.' },
+    { w: 'flavour',      z: '風味',        p: 'n.',   c: 'food', ex: 'This tea has a strong flavour.' },
+    { w: 'fresh',        z: '新鮮的',      p: 'adj.', c: 'food', ex: 'We bought fresh bread this morning.' },
+    { w: 'thirsty',      z: '口渴的',      p: 'adj.', c: 'food', ex: 'I am thirsty after running.' },
+    { w: 'sour',         z: '酸的',        p: 'adj.', c: 'food', ex: 'The lemon is very sour.' },
+    { w: 'plate',        z: '盤子',        p: 'n.',   c: 'food', ex: 'Put the cake on a small plate.' },
+
+    // ---------- 健康身體 ----------
+    { w: 'headache',     z: '頭痛',        p: 'n.',   c: 'health', ex: 'I have a bad headache today.' },
+    { w: 'medicine',     z: '藥',          p: 'n.',   c: 'health', ex: 'Take this medicine twice a day.' },
+    { w: 'injury',       z: '受傷',        p: 'n.',   c: 'health', ex: 'He missed the game because of an injury.' },
+    { w: 'treatment',    z: '治療',        p: 'n.',   c: 'health', ex: 'The treatment lasted two weeks.' },
+    { w: 'appointment',  z: '預約',        p: 'n.',   c: 'health', ex: 'I made an appointment with the dentist.' },
+    { w: 'exercise',     z: '運動；練習',  p: 'n./v.', c: 'health', ex: 'Regular exercise keeps you healthy.' },
+    { w: 'breathe',      z: '呼吸',        p: 'v.',   c: 'health', ex: 'Breathe slowly and relax.' },
+    { w: 'recover',      z: '康復',        p: 'v.',   c: 'health', ex: 'She recovered quickly after the operation.' },
+    { w: 'ill',          z: '生病的',      p: 'adj.', c: 'health', ex: 'He felt ill after the trip.' },
+    { w: 'painful',      z: '疼痛的',      p: 'adj.', c: 'health', ex: 'My knee is still painful.' },
+    { w: 'fit',          z: '健康的；合身', p: 'adj.', c: 'health', ex: 'Cycling keeps me fit.' },
+    { w: 'diet',         z: '飲食',        p: 'n.',   c: 'health', ex: 'A balanced diet is important.' },
+    { w: 'shoulder',     z: '肩膀',        p: 'n.',   c: 'health', ex: 'He hurt his left shoulder.' },
+    { w: 'stomach',      z: '胃；肚子',    p: 'n.',   c: 'health', ex: 'My stomach hurts a little.' },
+    { w: 'temperature',  z: '體溫；溫度',  p: 'n.',   c: 'health', ex: 'The nurse took my temperature.' },
+    { w: 'chemist',      z: '藥局；藥劑師', p: 'n.',  c: 'health', ex: 'You can buy it at the chemist.' },
+    { w: 'ambulance',    z: '救護車',      p: 'n.',   c: 'health', ex: 'Someone called an ambulance.' },
+    { w: 'operation',    z: '手術',        p: 'n.',   c: 'health', ex: 'The operation went well.' },
+    { w: 'sleepy',       z: '想睡的',      p: 'adj.', c: 'health', ex: 'I feel sleepy after lunch.' },
+    { w: 'relax',        z: '放鬆',        p: 'v.',   c: 'health', ex: 'Music helps me relax.' },
+
+    // ---------- 環境自然 ----------
+    { w: 'environment',  z: '環境',        p: 'n.',   c: 'nature', ex: 'We must protect the environment.' },
+    { w: 'pollution',    z: '污染',        p: 'n.',   c: 'nature', ex: 'Air pollution is a serious problem.' },
+    { w: 'recycle',      z: '回收',        p: 'v.',   c: 'nature', ex: 'We recycle paper and glass.' },
+    { w: 'climate',      z: '氣候',        p: 'n.',   c: 'nature', ex: 'The climate here is quite dry.' },
+    { w: 'forest',       z: '森林',        p: 'n.',   c: 'nature', ex: 'We walked through the forest.' },
+    { w: 'island',       z: '島嶼',        p: 'n.',   c: 'nature', ex: 'They live on a small island.' },
+    { w: 'desert',       z: '沙漠',        p: 'n.',   c: 'nature', ex: 'It almost never rains in the desert.' },
+    { w: 'weather',      z: '天氣',        p: 'n.',   c: 'nature', ex: 'The weather changed suddenly.' },
+    { w: 'thunder',      z: '雷',          p: 'n.',   c: 'nature', ex: 'We heard thunder in the distance.' },
+    { w: 'flood',        z: '水災',        p: 'n.',   c: 'nature', ex: 'The flood damaged many houses.' },
+    { w: 'earthquake',   z: '地震',        p: 'n.',   c: 'nature', ex: 'The earthquake lasted ten seconds.' },
+    { w: 'energy',       z: '能源；活力',  p: 'n.',   c: 'nature', ex: 'Solar energy is clean and cheap.' },
+    { w: 'waste',        z: '浪費；廢棄物', p: 'v./n.', c: 'nature', ex: 'Do not waste water.' },
+    { w: 'wildlife',     z: '野生動物',    p: 'n.',   c: 'nature', ex: 'The park protects local wildlife.' },
+    { w: 'plant',        z: '植物；種植',  p: 'n./v.', c: 'nature', ex: 'They planted trees along the road.' },
+    { w: 'countryside',  z: '鄉間',        p: 'n.',   c: 'nature', ex: 'We spent the weekend in the countryside.' },
+    { w: 'valley',       z: '山谷',        p: 'n.',   c: 'nature', ex: 'A small river runs through the valley.' },
+    { w: 'sunrise',      z: '日出',        p: 'n.',   c: 'nature', ex: 'We got up early to watch the sunrise.' },
+    { w: 'seaside',      z: '海邊',        p: 'n.',   c: 'nature', ex: 'We spend every summer at the seaside.' },
+    { w: 'protect',      z: '保護',        p: 'v.',   c: 'nature', ex: 'We should protect the oceans.' },
+
+    // ---------- 科技媒體 ----------
+    { w: 'screen',       z: '螢幕',        p: 'n.',   c: 'tech', ex: 'The screen is too bright.' },
+    { w: 'download',     z: '下載',        p: 'v.',   c: 'tech', ex: 'You can download the app for free.' },
+    { w: 'upload',       z: '上傳',        p: 'v.',   c: 'tech', ex: 'She uploaded the photos yesterday.' },
+    { w: 'password',     z: '密碼',        p: 'n.',   c: 'tech', ex: 'I forgot my password again.' },
+    { w: 'device',       z: '裝置',        p: 'n.',   c: 'tech', ex: 'The game works on any device.' },
+    { w: 'network',      z: '網路',        p: 'n.',   c: 'tech', ex: 'The network is very slow today.' },
+    { w: 'offline',      z: '離線的',      p: 'adj.', c: 'tech', ex: 'You can still play offline.' },
+    { w: 'connect',      z: '連線；連接',  p: 'v.',   c: 'tech', ex: 'Connect your phone to the printer.' },
+    { w: 'message',      z: '訊息',        p: 'n.',   c: 'tech', ex: 'I sent you a message this morning.' },
+    { w: 'website',      z: '網站',        p: 'n.',   c: 'tech', ex: 'Their website is easy to use.' },
+    { w: 'search',       z: '搜尋',        p: 'v./n.', c: 'tech', ex: 'Search for the word online.' },
+    { w: 'battery',      z: '電池',        p: 'n.',   c: 'tech', ex: 'My battery is almost flat.' },
+    { w: 'charger',      z: '充電器',      p: 'n.',   c: 'tech', ex: 'Can I borrow your charger?' },
+    { w: 'headphones',   z: '耳機',        p: 'n.',   c: 'tech', ex: 'He wore headphones on the bus.' },
+    { w: 'advertisement', z: '廣告',       p: 'n.',   c: 'tech', ex: 'I saw an advertisement for the concert.' },
+    { w: 'channel',      z: '頻道',        p: 'n.',   c: 'tech', ex: 'There is a film on channel five.' },
+    { w: 'programme',    z: '節目',        p: 'n.',   c: 'tech', ex: 'It is my favourite TV programme.' },
+    { w: 'keyboard',     z: '鍵盤',        p: 'n.',   c: 'tech', ex: 'The keyboard stopped working.' },
+    { w: 'software',     z: '軟體',        p: 'n.',   c: 'tech', ex: 'We need to update the software.' },
+    { w: 'invention',    z: '發明',        p: 'n.',   c: 'tech', ex: 'The phone was a great invention.' },
+
+    // ---------- 情緒個性 ----------
+    { w: 'confident',    z: '有自信的',    p: 'adj.', c: 'feeling', ex: 'She feels confident about the exam.' },
+    { w: 'nervous',      z: '緊張的',      p: 'adj.', c: 'feeling', ex: 'I was nervous before the interview.' },
+    { w: 'patient',      z: '有耐心的',    p: 'adj.', c: 'feeling', ex: 'Be patient with your little brother.' },
+    { w: 'polite',       z: '有禮貌的',    p: 'adj.', c: 'feeling', ex: 'He is always polite to customers.' },
+    { w: 'generous',     z: '慷慨的',      p: 'adj.', c: 'feeling', ex: 'It was generous of you to pay.' },
+    { w: 'honest',       z: '誠實的',      p: 'adj.', c: 'feeling', ex: 'Please give me an honest answer.' },
+    { w: 'lazy',         z: '懶惰的',      p: 'adj.', c: 'feeling', ex: 'I felt lazy on Sunday morning.' },
+    { w: 'proud',        z: '驕傲的',      p: 'adj.', c: 'feeling', ex: 'Her parents are proud of her.' },
+    { w: 'shy',          z: '害羞的',      p: 'adj.', c: 'feeling', ex: 'He is too shy to speak in class.' },
+    { w: 'curious',      z: '好奇的',      p: 'adj.', c: 'feeling', ex: 'Children are naturally curious.' },
+    { w: 'disappointed', z: '失望的',      p: 'adj.', c: 'feeling', ex: 'I was disappointed with the film.' },
+    { w: 'surprised',    z: '驚訝的',      p: 'adj.', c: 'feeling', ex: 'We were surprised by the news.' },
+    { w: 'worried',      z: '擔心的',      p: 'adj.', c: 'feeling', ex: 'She is worried about her results.' },
+    { w: 'cheerful',     z: '開朗的',      p: 'adj.', c: 'feeling', ex: 'He gave me a cheerful smile.' },
+    { w: 'annoyed',      z: '惱怒的',      p: 'adj.', c: 'feeling', ex: 'I was annoyed by the noise.' },
+    { w: 'brave',        z: '勇敢的',      p: 'adj.', c: 'feeling', ex: 'It was brave of her to speak up.' },
+    { w: 'friendly',     z: '友善的',      p: 'adj.', c: 'feeling', ex: 'The staff were very friendly.' },
+    { w: 'serious',      z: '嚴肅的；嚴重的', p: 'adj.', c: 'feeling', ex: 'This is a serious problem.' },
+    { w: 'sense of humour', z: '幽默感',   p: 'n.',   c: 'feeling', ex: 'She has a great sense of humour.' },
+    { w: 'attitude',     z: '態度',        p: 'n.',   c: 'feeling', ex: 'He has a positive attitude to work.' },
+
+    // ---------- 常用動詞 ----------
+    { w: 'achieve',      z: '達成',        p: 'v.',   c: 'verb', ex: 'She achieved her goal in one year.' },
+    { w: 'admit',        z: '承認',        p: 'v.',   c: 'verb', ex: 'He admitted that he was wrong.' },
+    { w: 'avoid',        z: '避免',        p: 'v.',   c: 'verb', ex: 'Try to avoid sugary drinks.' },
+    { w: 'complain',     z: '抱怨',        p: 'v.',   c: 'verb', ex: 'They complained about the service.' },
+    { w: 'describe',     z: '描述',        p: 'v.',   c: 'verb', ex: 'Describe the picture in detail.' },
+    { w: 'discover',     z: '發現',        p: 'v.',   c: 'verb', ex: 'We discovered a small café nearby.' },
+    { w: 'encourage',    z: '鼓勵',        p: 'v.',   c: 'verb', ex: 'My teacher encouraged me to try.' },
+    { w: 'improve',      z: '改善',        p: 'v.',   c: 'verb', ex: 'Reading improves your vocabulary.' },
+    { w: 'invite',       z: '邀請',        p: 'v.',   c: 'verb', ex: 'They invited us to the party.' },
+    { w: 'prefer',       z: '偏好',        p: 'v.',   c: 'verb', ex: 'I prefer tea to coffee.' },
+    { w: 'prepare',      z: '準備',        p: 'v.',   c: 'verb', ex: 'We prepared dinner together.' },
+    { w: 'realise',      z: '意識到',      p: 'v.',   c: 'verb', ex: 'I did not realise it was so late.' },
+    { w: 'suggest',      z: '建議',        p: 'v.',   c: 'verb', ex: 'He suggested going by train.' },
+    { w: 'promise',      z: '承諾',        p: 'v./n.', c: 'verb', ex: 'She promised to call me back.' },
+    { w: 'repair',       z: '修理',        p: 'v.',   c: 'verb', ex: 'Can you repair my bike?' },
+    { w: 'refuse',       z: '拒絕',        p: 'v.',   c: 'verb', ex: 'He refused to answer the question.' },
+    { w: 'compare',      z: '比較',        p: 'v.',   c: 'verb', ex: 'Compare the two photos carefully.' },
+    { w: 'decide',       z: '決定',        p: 'v.',   c: 'verb', ex: 'We decided to stay at home.' },
+    { w: 'arrange',      z: '安排',        p: 'v.',   c: 'verb', ex: 'I arranged a meeting for Monday.' },
+    { w: 'celebrate',    z: '慶祝',        p: 'v.',   c: 'verb', ex: 'They celebrated their anniversary.' },
+
+    // ---------- 常用形容詞 ----------
+    { w: 'available',    z: '可得到的',    p: 'adj.', c: 'adj', ex: 'Tickets are available online.' },
+    { w: 'comfortable',  z: '舒適的',      p: 'adj.', c: 'adj', ex: 'These shoes are very comfortable.' },
+    { w: 'crowded',      z: '擁擠的',      p: 'adj.', c: 'adj', ex: 'The train was crowded this morning.' },
+    { w: 'difficult',    z: '困難的',      p: 'adj.', c: 'adj', ex: 'The second question was difficult.' },
+    { w: 'expensive',    z: '昂貴的',      p: 'adj.', c: 'adj', ex: 'That jacket is too expensive.' },
+    { w: 'famous',       z: '著名的',      p: 'adj.', c: 'adj', ex: 'The city is famous for its bridges.' },
+    { w: 'modern',       z: '現代的',      p: 'adj.', c: 'adj', ex: 'They live in a modern flat.' },
+    { w: 'ordinary',     z: '普通的',      p: 'adj.', c: 'adj', ex: 'It was an ordinary Tuesday.' },
+    { w: 'quiet',        z: '安靜的',      p: 'adj.', c: 'adj', ex: 'We found a quiet corner to study.' },
+    { w: 'similar',      z: '相似的',      p: 'adj.', c: 'adj', ex: 'The two words have similar meanings.' },
+    { w: 'useful',       z: '有用的',      p: 'adj.', c: 'adj', ex: 'This app is really useful.' },
+    { w: 'common',       z: '常見的',      p: 'adj.', c: 'adj', ex: 'This is a common mistake.' },
+    { w: 'empty',        z: '空的',        p: 'adj.', c: 'adj', ex: 'The street was completely empty.' },
+    { w: 'heavy',        z: '重的',        p: 'adj.', c: 'adj', ex: 'My bag is too heavy to carry.' },
+    { w: 'careful',      z: '小心的',      p: 'adj.', c: 'adj', ex: 'Be careful with the hot water.' },
+    { w: 'boring',       z: '無聊的',      p: 'adj.', c: 'adj', ex: 'The lesson was a bit boring.' },
+    { w: 'dangerous',    z: '危險的',      p: 'adj.', c: 'adj', ex: 'It is dangerous to cycle at night.' },
+    { w: 'lucky',        z: '幸運的',      p: 'adj.', c: 'adj', ex: 'You are lucky to live near the sea.' },
+    { w: 'perfect',      z: '完美的',      p: 'adj.', c: 'adj', ex: 'The weather was perfect for a picnic.' },
+    { w: 'traditional',  z: '傳統的',      p: 'adj.', c: 'adj', ex: 'We tried some traditional food.' },
+
+    // ---------- 連接與副詞 ----------
+    { w: 'although',     z: '雖然',        p: 'conj.', c: 'link', ex: 'Although it rained, we enjoyed it.' },
+    { w: 'however',      z: '然而',        p: 'adv.', c: 'link', ex: 'It was cold; however, we went out.' },
+    { w: 'because of',   z: '因為（後接名詞）', p: 'prep.', c: 'link', ex: 'We stayed in because of the rain.' },
+    { w: 'in order to',  z: '為了',        p: 'phr.', c: 'link', ex: 'She left early in order to catch the bus.' },
+    { w: 'therefore',    z: '因此',        p: 'adv.', c: 'link', ex: 'It was late; therefore we took a taxi.' },
+    { w: 'instead of',   z: '而不是',      p: 'prep.', c: 'link', ex: 'Take the bus instead of a taxi.' },
+    { w: 'as well as',   z: '除了…也',    p: 'phr.', c: 'link', ex: 'She speaks French as well as English.' },
+    { w: 'unless',       z: '除非',        p: 'conj.', c: 'link', ex: 'We will go unless it rains.' },
+    { w: 'while',        z: '當…的時候',  p: 'conj.', c: 'link', ex: 'He called while I was cooking.' },
+    { w: 'finally',      z: '最後',        p: 'adv.', c: 'link', ex: 'Finally, add the salt.' },
+    { w: 'immediately',  z: '立刻',        p: 'adv.', c: 'link', ex: 'Call me immediately after the test.' },
+    { w: 'probably',     z: '可能',        p: 'adv.', c: 'link', ex: 'She will probably arrive late.' },
+    { w: 'hardly',       z: '幾乎不',      p: 'adv.', c: 'link', ex: 'I could hardly hear him.' },
+    { w: 'especially',   z: '尤其',        p: 'adv.', c: 'link', ex: 'I like fruit, especially mangoes.' },
+    { w: 'recently',     z: '最近',        p: 'adv.', c: 'link', ex: 'We recently moved to a new house.' },
+    { w: 'suddenly',     z: '突然',        p: 'adv.', c: 'link', ex: 'Suddenly the lights went out.' },
+    { w: 'usually',      z: '通常',        p: 'adv.', c: 'link', ex: 'I usually walk to school.' },
+    { w: 'nearly',       z: '幾乎',        p: 'adv.', c: 'link', ex: 'It is nearly nine o\'clock.' },
+    { w: 'at least',     z: '至少',        p: 'phr.', c: 'link', ex: 'Practise at least ten minutes a day.' },
+    { w: 'by the way',   z: '順帶一提',    p: 'phr.', c: 'link', ex: 'By the way, did you call her?' }
+  ];
+
+  global.PET_DATA = { CATEGORIES: CATEGORIES, WORDS: WORDS };
+})(this);
+
+
+/* ===== js/store.js ===== */
+/* 本機進度儲存：單詞幣、統計、設定。完全離線，不需要網路。 */
+(function (global) {
+  'use strict';
+
+  var KEY = 'pet-word-game.v1';
+  var CORRECT_PER_COIN = 10;   // 答對 10 個 ⇒ 1 枚 PET 單詞幣
+
+  /* 第一次開啟時跟隨系統的淺色／深色設定，之後以使用者的選擇為準 */
+  function prefersLight() {
+    try { return global.matchMedia && global.matchMedia('(prefers-color-scheme: light)').matches; }
+    catch (e) { return false; }
+  }
+
+  function defaults() {
+    return {
+      version: 1,
+      name: '',
+      totalCorrect: 0,
+      totalWrong: 0,
+      coins: 0,
+      rounds: 0,
+      bestTime: 0,          // 毫秒，最快完成一輪
+      bestStreak: 0,
+      streak: 0,
+      learned: {},          // word -> {ok: n, ng: n}
+      settings: {
+        pairs: 5,
+        cats: [],           // 空陣列 = 全部主題
+        sound: true,
+        haptics: true,
+        doubleClick: true,  // 雙擊連線（關閉則改為單擊）
+        theme: prefersLight() ? 'light' : 'dark'
+      }
+    };
+  }
+
+  function safeParse(raw) {
+    try { return JSON.parse(raw); } catch (e) { return null; }
+  }
+
+  var mem = null;   // localStorage 不可用時的後備（無痕模式等）
+
+  function readRaw() {
+    try { return global.localStorage.getItem(KEY); } catch (e) { return mem; }
+  }
+  function writeRaw(v) {
+    try { global.localStorage.setItem(KEY, v); } catch (e) { mem = v; }
+  }
+
+  function merge(base, extra) {
+    if (!extra || typeof extra !== 'object') return base;
+    Object.keys(extra).forEach(function (k) {
+      if (k === 'settings') {
+        base.settings = merge(base.settings, extra.settings);
+      } else if (k in base) {
+        base[k] = extra[k];
+      }
+    });
+    return base;
+  }
+
+  var state = merge(defaults(), safeParse(readRaw()));
+
+  function save() {
+    writeRaw(JSON.stringify(state));
+  }
+
+  var listeners = [];
+  function emit() { listeners.forEach(function (fn) { fn(state); }); }
+
+  var Store = {
+    CORRECT_PER_COIN: CORRECT_PER_COIN,
+
+    get: function () { return state; },
+    settings: function () { return state.settings; },
+
+    onChange: function (fn) { listeners.push(fn); },
+
+    set: function (patch) {
+      merge(state, patch);
+      save(); emit();
+    },
+
+    setSetting: function (k, v) {
+      state.settings[k] = v;
+      save(); emit();
+    },
+
+    /* 記錄一次答對；回傳這次新獲得的單詞幣數量 */
+    correct: function (word) {
+      var before = Math.floor(state.totalCorrect / CORRECT_PER_COIN);
+      state.totalCorrect += 1;
+      state.streak += 1;
+      if (state.streak > state.bestStreak) state.bestStreak = state.streak;
+      if (word) {
+        var e = state.learned[word] || { ok: 0, ng: 0 };
+        e.ok += 1; state.learned[word] = e;
+      }
+      var after = Math.floor(state.totalCorrect / CORRECT_PER_COIN);
+      var gained = after - before;
+      if (gained > 0) state.coins += gained;
+      save(); emit();
+      return gained;
+    },
+
+    wrong: function (word) {
+      state.totalWrong += 1;
+      state.streak = 0;
+      if (word) {
+        var e = state.learned[word] || { ok: 0, ng: 0 };
+        e.ng += 1; state.learned[word] = e;
+      }
+      save(); emit();
+    },
+
+    finishRound: function (ms) {
+      state.rounds += 1;
+      if (ms > 0 && (state.bestTime === 0 || ms < state.bestTime)) state.bestTime = ms;
+      save(); emit();
+    },
+
+    /* 距離下一枚單詞幣還差幾題 */
+    toNextCoin: function () {
+      return CORRECT_PER_COIN - (state.totalCorrect % CORRECT_PER_COIN);
+    },
+    coinProgress: function () {
+      return (state.totalCorrect % CORRECT_PER_COIN) / CORRECT_PER_COIN;
+    },
+
+    /* 跨裝置搬移進度：匯出成一段文字 */
+    exportCode: function () {
+      var json = JSON.stringify(state);
+      return 'PET1.' + global.PET_UTIL.b64encode(json);
+    },
+    importCode: function (code) {
+      code = String(code || '').trim();
+      if (code.indexOf('PET1.') !== 0) throw new Error('格式不符');
+      var json = global.PET_UTIL.b64decode(code.slice(5));
+      var data = safeParse(json);
+      if (!data) throw new Error('資料損毀');
+      // 合併：取兩邊較高的紀錄，避免覆蓋掉本機成績
+      var cur = state;
+      var next = merge(defaults(), data);
+      next.totalCorrect = Math.max(cur.totalCorrect, next.totalCorrect);
+      next.totalWrong = Math.max(cur.totalWrong, next.totalWrong);
+      next.coins = Math.max(cur.coins, next.coins, Math.floor(next.totalCorrect / CORRECT_PER_COIN));
+      next.rounds = Math.max(cur.rounds, next.rounds);
+      next.bestStreak = Math.max(cur.bestStreak, next.bestStreak);
+      if (cur.bestTime && next.bestTime) next.bestTime = Math.min(cur.bestTime, next.bestTime);
+      else next.bestTime = next.bestTime || cur.bestTime;
+      state = next;
+      save(); emit();
+      return state;
+    },
+
+    reset: function () {
+      state = defaults();
+      save(); emit();
+    }
+  };
+
+  global.PET_STORE = Store;
+})(this);
+
+
+/* ===== js/util.js ===== */
+/* 共用工具：UTF-8 安全的 base64、亂數種子、洗牌、音效、震動 */
+(function (global) {
+  'use strict';
+
+  function b64encode(str) {
+    var bytes = new TextEncoder().encode(str);
+    var bin = '';
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return global.btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function b64decode(s) {
+    s = String(s).replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    var bin = global.atob(s);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
+  /* mulberry32：同一個 seed 在任何裝置上都產生同一副牌，
+     連線對戰時雙方不必傳整副題目，只要傳 seed。 */
+  function rng(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function shuffle(arr, rand) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(rand() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  function randomSeed() {
+    if (global.crypto && global.crypto.getRandomValues) {
+      return global.crypto.getRandomValues(new Uint32Array(1))[0];
+    }
+    return Math.floor(Math.random() * 0xFFFFFFFF);
+  }
+
+  function roomCode() {
+    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', out = '';
+    var buf = (global.crypto && global.crypto.getRandomValues)
+      ? global.crypto.getRandomValues(new Uint8Array(5))
+      : [0, 0, 0, 0, 0].map(function () { return Math.floor(Math.random() * 256); });
+    for (var i = 0; i < 5; i++) out += chars[buf[i] % chars.length];
+    return out;
+  }
+
+  /* 用 WebAudio 即時合成音效，不需要任何音檔，離線一樣有聲音 */
+  var actx = null;
+  function tone(freq, ms, type, gain) {
+    if (!PET_STORE.settings().sound) return;
+    try {
+      if (!actx) actx = new (global.AudioContext || global.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+      var o = actx.createOscillator(), g = actx.createGain();
+      o.type = type || 'sine';
+      o.frequency.value = freq;
+      g.gain.value = 0;
+      o.connect(g); g.connect(actx.destination);
+      var t = actx.currentTime;
+      g.gain.linearRampToValueAtTime(gain == null ? 0.12 : gain, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + ms / 1000);
+      o.start(t); o.stop(t + ms / 1000 + 0.02);
+    } catch (e) { /* 音效失敗不影響遊戲 */ }
+  }
+
+  var Sound = {
+    pick:  function () { tone(660, 90, 'triangle', 0.07); },
+    good:  function () { tone(880, 110, 'sine', 0.10); setTimeout(function () { tone(1320, 150, 'sine', 0.09); }, 90); },
+    bad:   function () { tone(180, 200, 'sawtooth', 0.07); },
+    coin:  function () { tone(1046, 90, 'square', 0.07); setTimeout(function () { tone(1568, 220, 'square', 0.07); }, 85); },
+    win:   function () { [523, 659, 784, 1046].forEach(function (f, i) { setTimeout(function () { tone(f, 200, 'triangle', 0.09); }, i * 110); }); }
+  };
+
+  function vibrate(pattern) {
+    if (!PET_STORE.settings().haptics) return;
+    if (global.navigator && global.navigator.vibrate) {
+      try { global.navigator.vibrate(pattern); } catch (e) {}
+    }
+  }
+
+  function fmtTime(ms) {
+    if (!ms) return '--';
+    var s = Math.floor(ms / 1000), m = Math.floor(s / 60);
+    s = s % 60;
+    return (m > 0 ? m + ':' + (s < 10 ? '0' : '') + s : s + '.' + Math.floor((ms % 1000) / 100) + ' 秒');
+  }
+
+  global.PET_UTIL = {
+    b64encode: b64encode,
+    b64decode: b64decode,
+    rng: rng,
+    shuffle: shuffle,
+    randomSeed: randomSeed,
+    roomCode: roomCode,
+    Sound: Sound,
+    vibrate: vibrate,
+    fmtTime: fmtTime
+  };
+})(this);
+
+
+/* ===== js/net.js ===== */
+/* 連線層：兩種對戰方式
+   1) 同裝置連線（local）— 用 BroadcastChannel / localStorage，完全不需要網路。
+      同一台裝置開兩個視窗、兩個分頁，或手機分割畫面都能互連。
+   2) 跨裝置連線（peer）— WebRTC DataChannel，用「邀請碼 / 回應碼」手動交換，
+      不需要我們自己的伺服器。有網路時走 STUN；同一個 Wi-Fi 下即使沒有外網也常能直連。 */
+(function (global) {
+  'use strict';
+
+  var STUN = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' }
+  ];
+
+  function Emitter() { this._h = {}; }
+  Emitter.prototype.on = function (ev, fn) {
+    (this._h[ev] = this._h[ev] || []).push(fn); return this;
+  };
+  Emitter.prototype.emit = function (ev, a, b) {
+    (this._h[ev] || []).forEach(function (fn) { fn(a, b); });
+  };
+
+  /* ---------- 壓縮（讓邀請碼短一點；瀏覽器不支援時自動退回純 base64） ---------- */
+  function pack(obj) {
+    var json = JSON.stringify(obj);
+    if (!global.CompressionStream) return Promise.resolve('R' + PET_UTIL.b64encode(json));
+    try {
+      var cs = new global.CompressionStream('deflate-raw');
+      var stream = new Blob([json]).stream().pipeThrough(cs);
+      return new Response(stream).arrayBuffer().then(function (buf) {
+        var bytes = new Uint8Array(buf), bin = '';
+        for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        return 'Z' + global.btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      }).catch(function () { return 'R' + PET_UTIL.b64encode(json); });
+    } catch (e) {
+      return Promise.resolve('R' + PET_UTIL.b64encode(json));
+    }
+  }
+
+  function unpack(code) {
+    code = String(code || '').replace(/\s+/g, '');
+    var tag = code[0], body = code.slice(1);
+    if (tag === 'R') return Promise.resolve(JSON.parse(PET_UTIL.b64decode(body)));
+    if (tag !== 'Z') return Promise.reject(new Error('代碼格式不正確'));
+    var s = body.replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    var bin = global.atob(s);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    var ds = new global.DecompressionStream('deflate-raw');
+    var stream = new Blob([bytes]).stream().pipeThrough(ds);
+    return new Response(stream).text().then(JSON.parse);
+  }
+
+  /* ---------- 同裝置連線（零網路） ---------- */
+  function LocalLink() {
+    Emitter.call(this);
+    this.kind = 'local';
+    this.room = '';
+    this.isHost = false;
+    this.opened = false;
+    this._bc = null;
+    this._onStorage = null;
+    this._me = PET_UTIL.roomCode() + Date.now().toString(36);
+    this._seq = 0;
+  }
+  LocalLink.prototype = Object.create(Emitter.prototype);
+
+  LocalLink.prototype._channel = function () {
+    var self = this, name = 'pet-word-game/' + this.room;
+    if (global.BroadcastChannel) {
+      this._bc = new global.BroadcastChannel(name);
+      this._bc.onmessage = function (e) { self._recv(e.data); };
+      return 'BroadcastChannel';
+    }
+    // 後備：localStorage 事件（同樣不經過網路）
+    this._key = 'pet-net/' + this.room;
+    this._onStorage = function (e) {
+      if (e.key !== self._key || !e.newValue) return;
+      var env = null;
+      try { env = JSON.parse(e.newValue); } catch (err) { return; }
+      if (env && env.from !== self._me) self._recv(env.data);
+    };
+    global.addEventListener('storage', this._onStorage);
+    return 'localStorage';
+  };
+
+  LocalLink.prototype._recv = function (data) {
+    if (!data) return;
+    if (data.__sys === 'hello') {
+      if (!this.opened) { this.opened = true; this.emit('open'); }
+      this._raw({ __sys: 'hi' });
+      return;
+    }
+    if (data.__sys === 'hi') {
+      if (!this.opened) { this.opened = true; this.emit('open'); }
+      return;
+    }
+    if (data.__sys === 'bye') { this.emit('close', '對方離開了'); return; }
+    this.emit('message', data);
+  };
+
+  LocalLink.prototype._raw = function (data) {
+    if (this._bc) { this._bc.postMessage(data); return; }
+    try {
+      global.localStorage.setItem(this._key, JSON.stringify({ from: this._me, seq: ++this._seq, data: data }));
+    } catch (e) {}
+  };
+
+  LocalLink.prototype.start = function (room, asHost) {
+    this.room = (room || 'LOCAL').toUpperCase();
+    this.isHost = !!asHost;
+    var how = this._channel();
+    this.emit('status', '同裝置連線已開啟（' + how + '）；房號 ' + this.room);
+    this._raw({ __sys: 'hello' });
+    var self = this;
+    this._ping = setInterval(function () { if (!self.opened) self._raw({ __sys: 'hello' }); }, 1200);
+    setTimeout(function () { clearInterval(self._ping); }, 60000);
+    return Promise.resolve();
+  };
+
+  LocalLink.prototype.send = function (obj) { this._raw(obj); };
+
+  LocalLink.prototype.close = function () {
+    clearInterval(this._ping);
+    try { this._raw({ __sys: 'bye' }); } catch (e) {}
+    if (this._bc) { try { this._bc.close(); } catch (e) {} this._bc = null; }
+    if (this._onStorage) global.removeEventListener('storage', this._onStorage);
+    this.opened = false;
+  };
+
+  /* ---------- 跨裝置連線（WebRTC，無自建伺服器） ---------- */
+  function PeerLink() {
+    Emitter.call(this);
+    this.kind = 'peer';
+    this.isHost = false;
+    this.opened = false;
+    this.pc = null;
+    this.dc = null;
+  }
+  PeerLink.prototype = Object.create(Emitter.prototype);
+
+  PeerLink.prototype._newPC = function () {
+    var self = this;
+    var pc = new (global.RTCPeerConnection || global.webkitRTCPeerConnection)({ iceServers: STUN });
+    pc.oniceconnectionstatechange = function () {
+      self.emit('status', '連線狀態：' + pc.iceConnectionState);
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+        self.emit('close', '連線中斷');
+      }
+    };
+    this.pc = pc;
+    return pc;
+  };
+
+  PeerLink.prototype._bindChannel = function (dc) {
+    var self = this;
+    this.dc = dc;
+    dc.onopen = function () { self.opened = true; self.emit('open'); };
+    dc.onclose = function () { self.opened = false; self.emit('close', '對方離開了'); };
+    dc.onmessage = function (e) {
+      var data = null;
+      try { data = JSON.parse(e.data); } catch (err) { return; }
+      self.emit('message', data);
+    };
+  };
+
+  /* 等 ICE 蒐集完成（最多 4 秒，之後用目前已有的候選）*/
+  PeerLink.prototype._gathered = function () {
+    var pc = this.pc;
+    return new Promise(function (resolve) {
+      if (pc.iceGatheringState === 'complete') return resolve();
+      var done = false;
+      function finish() { if (!done) { done = true; resolve(); } }
+      pc.onicegatheringstatechange = function () {
+        if (pc.iceGatheringState === 'complete') finish();
+      };
+      setTimeout(finish, 4000);
+    });
+  };
+
+  /* 主持人：產生邀請碼 */
+  PeerLink.prototype.createOffer = function () {
+    var self = this;
+    this.isHost = true;
+    var pc = this._newPC();
+    this._bindChannel(pc.createDataChannel('pet', { ordered: true }));
+    return pc.createOffer()
+      .then(function (o) { return pc.setLocalDescription(o); })
+      .then(function () { return self._gathered(); })
+      .then(function () { return pack({ t: 'offer', sdp: pc.localDescription.sdp }); });
+  };
+
+  /* 加入者：吃下邀請碼，吐出回應碼 */
+  PeerLink.prototype.acceptOffer = function (code) {
+    var self = this;
+    this.isHost = false;
+    var pc = this._newPC();
+    pc.ondatachannel = function (e) { self._bindChannel(e.channel); };
+    return unpack(code).then(function (msg) {
+      if (!msg || msg.t !== 'offer') throw new Error('這不是邀請碼');
+      return pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
+    })
+      .then(function () { return pc.createAnswer(); })
+      .then(function (a) { return pc.setLocalDescription(a); })
+      .then(function () { return self._gathered(); })
+      .then(function () { return pack({ t: 'answer', sdp: pc.localDescription.sdp }); });
+  };
+
+  /* 主持人：貼回回應碼，連線完成 */
+  PeerLink.prototype.acceptAnswer = function (code) {
+    var self = this;
+    return unpack(code).then(function (msg) {
+      if (!msg || msg.t !== 'answer') throw new Error('這不是回應碼');
+      return self.pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp });
+    });
+  };
+
+  PeerLink.prototype.send = function (obj) {
+    if (this.dc && this.dc.readyState === 'open') {
+      try { this.dc.send(JSON.stringify(obj)); } catch (e) {}
+    }
+  };
+
+  PeerLink.prototype.close = function () {
+    if (this.dc) { try { this.dc.close(); } catch (e) {} }
+    if (this.pc) { try { this.pc.close(); } catch (e) {} }
+    this.dc = this.pc = null;
+    this.opened = false;
+  };
+
+  global.PET_NET = {
+    local: function () { return new LocalLink(); },
+    peer: function () { return new PeerLink(); },
+    supportsPeer: function () { return !!(global.RTCPeerConnection || global.webkitRTCPeerConnection); },
+    supportsLocal: function () { return !!(global.BroadcastChannel || global.localStorage); }
+  };
+})(this);
+
+
+/* ===== js/game.js ===== */
+/* PET 單詞連線 — 主程式
+   ‧ 雙擊連線：雙擊左邊英文，再雙擊右邊中文，兩張卡之間會拉出一條線
+   ‧ 離線可玩；同裝置可連線對戰（不用網路），也可跨裝置連線（有網路）
+   ‧ 每答對 10 個單字 ⇒ 獲得 1 枚 PET 單詞幣 */
+(function (global) {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var Store = global.PET_STORE;
+  var U = global.PET_UTIL;
+  var WORDS = global.PET_DATA.WORDS;
+  var CATEGORIES = global.PET_DATA.CATEGORIES;
+
+  var RING = 2 * Math.PI * 15.5;
+
+  /* ===================== 通用 UI ===================== */
+
+  function show(screen) {
+    ['home', 'link', 'play', 'result', 'stats', 'settings'].forEach(function (s) {
+      $('screen-' + s).classList.toggle('active', s === screen);
+    });
+    global.scrollTo(0, 0);
+  }
+
+  function toast(msg, kind) {
+    var el = document.createElement('div');
+    el.className = 'toast' + (kind ? ' ' + kind : '');
+    el.textContent = msg;
+    $('toast-wrap').appendChild(el);
+    setTimeout(function () {
+      el.style.opacity = '0';
+      el.style.transition = 'opacity .3s';
+      setTimeout(function () { el.remove(); }, 320);
+    }, 2200);
+  }
+
+  function copyText(text) {
+    if (!text) return Promise.reject();
+    if (global.navigator.clipboard && global.isSecureContext) {
+      return global.navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select(); ta.setSelectionRange(0, ta.value.length);
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) {}
+      ta.remove();
+      ok ? resolve() : reject();
+    });
+  }
+
+  function coinPop(n) {
+    var pop = $('coin-pop');
+    pop.querySelector('b').textContent = '+' + n + ' PET 單詞幣';
+    pop.hidden = false;
+    U.Sound.coin();
+    U.vibrate([20, 40, 60]);
+    setTimeout(function () { pop.hidden = true; }, 1300);
+  }
+
+  function refreshCoins(gainedBump) {
+    var s = Store.get();
+    $('coin-count').textContent = s.coins;
+    $('coin-ring').style.strokeDashoffset = String(RING * (1 - Store.coinProgress()));
+    $('to-next').textContent = Store.toNextCoin();
+    if (gainedBump) {
+      var box = $('coin-box');
+      box.classList.remove('bump');
+      void box.offsetWidth;
+      box.classList.add('bump');
+    }
+  }
+
+  function applyTheme() {
+    document.documentElement.setAttribute('data-theme', Store.settings().theme === 'light' ? 'light' : 'dark');
+  }
+
+  /* ===================== 出題 ===================== */
+
+  function buildDeck(seed, pairs, cats) {
+    var rand = U.rng(seed);
+    var pool = WORDS.filter(function (w) { return !cats.length || cats.indexOf(w.c) >= 0; });
+    if (pool.length < pairs) pool = WORDS;
+    var picked = U.shuffle(pool, rand).slice(0, pairs);
+    return {
+      picked: picked,
+      left: U.shuffle(picked.map(function (_, i) { return i; }), rand),
+      right: U.shuffle(picked.map(function (_, i) { return i; }), rand)
+    };
+  }
+
+  /* ===================== 遊戲狀態 ===================== */
+
+  var G = {
+    mode: 'solo',        // solo | local | peer
+    deck: null,
+    seed: 0,
+    pairs: 5,
+    cats: [],
+    matched: 0,
+    wrong: 0,
+    sel: null,           // {side, idx, el}
+    started: 0,
+    timer: null,
+    roundCoins: 0,
+    log: [],             // 本局作答紀錄
+    busy: false,
+    opp: null            // {name, matched, wrong, done, ms}
+  };
+
+  var link = null;       // 連線物件
+  var myId = Math.floor(Math.random() * 1e9);
+  var amHost = true;
+
+  /* ===================== 牌桌 ===================== */
+
+  function tileEl(side, idx, word) {
+    var b = document.createElement('button');
+    b.className = 'tile';
+    b.type = 'button';
+    b.dataset.side = side;
+    b.dataset.idx = String(idx);
+    if (side === 'L') {
+      b.innerHTML = '<span class="en"></span><span class="pos"></span><span class="dot"></span>';
+      b.querySelector('.en').textContent = word.w;
+      b.querySelector('.pos').textContent = word.p;
+      b.setAttribute('aria-label', '英文單字 ' + word.w);
+    } else {
+      b.innerHTML = '<span class="zh"></span><span class="dot"></span>';
+      b.querySelector('.zh').textContent = word.z;
+      b.setAttribute('aria-label', '中文意思 ' + word.z);
+    }
+    bindActivate(b);
+    return b;
+  }
+
+  /* 雙擊（含手機雙點）偵測：同一張卡在 450 毫秒內被點兩次才算數。
+     設定中可切換成單擊。 */
+  function bindActivate(el) {
+    var last = 0;
+    el.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      if (!Store.settings().doubleClick) { activate(el); return; }
+      var now = Date.now();
+      if (now - last < 450) { last = 0; activate(el); }
+      else {
+        last = now;
+        el.classList.add('tap1');
+        setTimeout(function () { el.classList.remove('tap1'); }, 460);
+      }
+    });
+    // 滑鼠原生雙擊也直接生效
+    el.addEventListener('dblclick', function (ev) { ev.preventDefault(); });
+  }
+
+  function renderBoard() {
+    var L = $('col-left'), R = $('col-right');
+    L.innerHTML = ''; R.innerHTML = '';
+    G.deck.left.forEach(function (i) { L.appendChild(tileEl('L', i, G.deck.picked[i])); });
+    G.deck.right.forEach(function (i) { R.appendChild(tileEl('R', i, G.deck.picked[i])); });
+    $('wires').innerHTML = '';
+    drawWires();
+  }
+
+  function tileFor(side, idx) {
+    return document.querySelector('.tile[data-side="' + side + '"][data-idx="' + idx + '"]');
+  }
+
+  /* ---- 連線的線 ---- */
+  var wires = [];   // [{idx}]
+
+  function dotPos(el, side) {
+    var b = $('board').getBoundingClientRect();
+    var r = el.getBoundingClientRect();
+    return {
+      x: (side === 'L' ? r.right - b.left : r.left - b.left),
+      y: r.top - b.top + r.height / 2
+    };
+  }
+
+  function pathBetween(a, b) {
+    var dx = Math.max(28, Math.abs(b.x - a.x) * 0.45);
+    return 'M' + a.x + ',' + a.y + ' C' + (a.x + dx) + ',' + a.y + ' ' + (b.x - dx) + ',' + b.y + ' ' + b.x + ',' + b.y;
+  }
+
+  function drawWires() {
+    var svg = $('wires');
+    // 保留暫時性的線（錯誤／預覽），重畫已完成的線
+    Array.prototype.slice.call(svg.querySelectorAll('.wire.ok')).forEach(function (n) { n.remove(); });
+    wires.forEach(function (w) {
+      var l = tileFor('L', w.idx), r = tileFor('R', w.idx);
+      if (!l || !r) return;
+      var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('class', 'wire ok');
+      p.setAttribute('d', pathBetween(dotPos(l, 'L'), dotPos(r, 'R')));
+      svg.appendChild(p);
+    });
+  }
+
+  function flashWire(aEl, aSide, bEl, bSide) {
+    var svg = $('wires');
+    var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('class', 'wire ng');
+    var a = dotPos(aEl, aSide), b = dotPos(bEl, bSide);
+    p.setAttribute('d', aSide === 'L' ? pathBetween(a, b) : pathBetween(b, a));
+    svg.appendChild(p);
+    setTimeout(function () { p.remove(); }, 620);
+  }
+
+  /* 選取後拉一條虛線跟著手指／滑鼠 */
+  var liveWire = null;
+  function updateLive(x, y) {
+    if (!G.sel) return;
+    var svg = $('wires');
+    if (!liveWire) {
+      liveWire = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      liveWire.setAttribute('class', 'wire live');
+      svg.appendChild(liveWire);
+    }
+    var b = $('board').getBoundingClientRect();
+    var a = dotPos(G.sel.el, G.sel.side);
+    var p = { x: x - b.left, y: y - b.top };
+    liveWire.setAttribute('d', G.sel.side === 'L' ? pathBetween(a, p) : pathBetween(p, a));
+  }
+  function clearLive() {
+    if (liveWire) { liveWire.remove(); liveWire = null; }
+  }
+
+  /* ---- 連線判定 ---- */
+  function activate(el) {
+    if (G.busy) return;
+    if (el.classList.contains('matched')) return;
+    var side = el.dataset.side, idx = Number(el.dataset.idx);
+
+    if (!G.sel) {
+      G.sel = { side: side, idx: idx, el: el };
+      el.classList.add('sel');
+      U.Sound.pick();
+      U.vibrate(10);
+      return;
+    }
+
+    if (G.sel.el === el) {                     // 再點一次 = 取消
+      el.classList.remove('sel'); G.sel = null; clearLive(); return;
+    }
+
+    if (G.sel.side === side) {                 // 同一欄 = 改選
+      G.sel.el.classList.remove('sel');
+      G.sel = { side: side, idx: idx, el: el };
+      el.classList.add('sel');
+      U.Sound.pick();
+      return;
+    }
+
+    var a = G.sel, b = { side: side, idx: idx, el: el };
+    clearLive();
+    a.el.classList.remove('sel');
+    G.sel = null;
+
+    var word = G.deck.picked[a.idx];
+    if (a.idx === b.idx) {
+      a.el.classList.add('matched'); b.el.classList.add('matched');
+      a.el.disabled = true; b.el.disabled = true;
+      wires.push({ idx: a.idx });
+      drawWires();
+      G.matched++;
+      G.log.push({ w: word, ok: true });
+      var gained = Store.correct(word.w);
+      refreshCoins(true);
+      U.Sound.good();
+      U.vibrate(25);
+      if (gained > 0) { G.roundCoins += gained; coinPop(gained); }
+      updateHud();
+      sendProgress();
+      if (G.matched >= G.pairs) finishRound();
+    } else {
+      flashWire(a.el, a.side, b.el, b.side);
+      [a.el, b.el].forEach(function (n) {
+        n.classList.add('shake');
+        setTimeout(function () { n.classList.remove('shake'); }, 400);
+      });
+      G.wrong++;
+      G.log.push({ w: word, ok: false, chose: G.deck.picked[b.idx] });
+      Store.wrong(word.w);
+      U.Sound.bad();
+      U.vibrate([15, 40, 15]);
+      updateHud();
+      sendProgress();
+    }
+  }
+
+  function updateHud() {
+    $('hud-matched').textContent = G.matched + '/' + G.pairs;
+    $('hud-wrong').textContent = G.wrong;
+    $('hud-streak').textContent = Store.get().streak;
+  }
+
+  function tick() {
+    $('hud-time').textContent = ((Date.now() - G.started) / 1000).toFixed(1);
+  }
+
+  /* ===================== 回合流程 ===================== */
+
+  function startRound(seed) {
+    var s = Store.settings();
+    G.pairs = s.pairs;
+    G.cats = s.cats.slice();
+    G.seed = seed || U.randomSeed();
+    G.deck = buildDeck(G.seed, G.pairs, G.cats);
+    G.matched = 0; G.wrong = 0; G.sel = null; G.roundCoins = 0;
+    G.log = []; G.busy = false;
+    wires = [];
+    if (G.opp) { G.opp.matched = 0; G.opp.wrong = 0; G.opp.done = false; }
+
+    renderBoard();
+    updateHud();
+    $('hud-time').textContent = '0.0';
+    $('versus').hidden = (G.mode === 'solo' || !G.opp);
+    if (G.opp) {
+      $('vs-name').textContent = G.opp.name || '對手';
+      $('vs-fill').style.width = '0%';
+      $('vs-num').textContent = '0/' + G.pairs;
+    }
+    $('play-tip').textContent = Store.settings().doubleClick
+      ? '雙擊左邊英文 → 再雙擊右邊中文'
+      : '點一下左邊英文 → 再點一下右邊中文';
+
+    G.started = Date.now();
+    clearInterval(G.timer);
+    G.timer = setInterval(tick, 100);
+    show('play');
+  }
+
+  function finishRound() {
+    clearInterval(G.timer);
+    G.busy = true;
+    var ms = Date.now() - G.started;
+    Store.finishRound(ms);
+    U.Sound.win();
+    send({ t: 'done', ms: ms, matched: G.matched, wrong: G.wrong });
+    showResult(ms);
+  }
+
+  function showResult(ms) {
+    var title = '完成！';
+    if (G.mode !== 'solo' && G.opp) {
+      if (G.opp.done && G.opp.ms < ms) title = '這局輸了，再接再厲 💪';
+      else if (G.opp.done) title = '你贏了！🏆';
+      else title = '你先完成了！🏆 等對手…';
+    }
+    $('result-title').textContent = title;
+    $('res-time').textContent = U.fmtTime(ms);
+    $('res-correct').textContent = G.matched;
+    $('res-wrong').textContent = G.wrong;
+    $('res-coins').textContent = G.roundCoins;
+
+    var ul = $('review');
+    ul.innerHTML = '';
+    G.deck.picked.forEach(function (w) {
+      var missed = G.log.some(function (l) { return !l.ok && l.w.w === w.w; });
+      var li = document.createElement('li');
+      var en = document.createElement('span'); en.className = 'en'; en.textContent = w.w;
+      var zh = document.createElement('span'); zh.className = 'zh'; zh.textContent = '　' + w.p + ' ' + w.z;
+      var ex = document.createElement('span'); ex.className = 'ex'; ex.textContent = w.ex;
+      if (missed) { li.classList.add('bad'); en.textContent = '⚠️ ' + w.w; }
+      li.appendChild(en); li.appendChild(zh); li.appendChild(ex);
+      ul.appendChild(li);
+    });
+    refreshCoins();
+    show('result');
+  }
+
+  function hint() {
+    var left = G.deck.picked.map(function (_, i) { return i; }).filter(function (i) {
+      return !wires.some(function (w) { return w.idx === i; });
+    });
+    if (!left.length) return;
+    var idx = left[Math.floor(Math.random() * left.length)];
+    [tileFor('L', idx), tileFor('R', idx)].forEach(function (n) {
+      if (!n) return;
+      n.classList.add('hinted');
+      setTimeout(function () { n.classList.remove('hinted'); }, 2100);
+    });
+    G.wrong++;
+    Store.wrong(null);
+    updateHud();
+    toast('提示用掉了，記 1 次失誤');
+  }
+
+  /* ===================== 連線對戰 ===================== */
+
+  function send(obj) { if (link && link.opened) link.send(obj); }
+
+  function sendProgress() {
+    send({ t: 'prog', matched: G.matched, wrong: G.wrong });
+  }
+
+  function renderOpp() {
+    if (!G.opp) return;
+    $('versus').hidden = false;
+    $('vs-name').textContent = (G.opp.name || '對手') + (G.opp.done ? '（已完成）' : '');
+    $('vs-fill').style.width = Math.round(100 * G.opp.matched / Math.max(1, G.pairs)) + '%';
+    $('vs-num').textContent = G.opp.matched + '/' + G.pairs;
+  }
+
+  function linkStatus(msg, kind) {
+    var el = $('link-status');
+    el.textContent = msg;
+    el.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  /* 依目前連線狀況重畫狀態列與「開始對戰」按鈕 */
+  function refreshLinkUI() {
+    if (!link || !link.opened) return;
+    if (G.opp && G.opp.name) {
+      linkStatus('已連線：' + G.opp.name + (amHost ? '（由你開始）' : '（等對方開始）'), 'ok');
+      $('btn-link-start').disabled = !amHost;
+      $('btn-link-start').textContent = amHost ? '開始對戰' : '等待對方開始…';
+    } else {
+      linkStatus('已連線！正在交換資料…', 'ok');
+    }
+  }
+
+  function attachLink(l) {
+    detachLink();
+    link = l;
+    l.on('status', function (m) { if (!l.opened) linkStatus(m); });
+    l.on('open', function () {
+      G.opp = G.opp || { name: '', matched: 0, wrong: 0, done: false, ms: 0 };
+      send({ t: 'hello', name: Store.get().name || '對手', id: myId });
+      refreshLinkUI();
+      U.Sound.good();
+    });
+    l.on('close', function (why) {
+      linkStatus(why || '連線已結束', 'err');
+      toast(why || '連線已結束', 'err');
+      $('btn-link-start').disabled = true;
+      G.opp = null;
+      $('versus').hidden = true;
+    });
+    l.on('message', function (m) {
+      if (!m || !m.t) return;
+      if (m.t === 'hello') {
+        G.opp = G.opp || { matched: 0, wrong: 0, done: false, ms: 0 };
+        G.opp.name = m.name || '對手';
+        amHost = myId > m.id;
+        refreshLinkUI();
+        return;
+      }
+      if (m.t === 'start') {
+        Store.set({ settings: { pairs: m.pairs, cats: m.cats || [] } });
+        syncSettingsUI();
+        startRound(m.seed);
+        return;
+      }
+      if (m.t === 'prog') {
+        if (!G.opp) return;
+        G.opp.matched = m.matched; G.opp.wrong = m.wrong;
+        renderOpp();
+        return;
+      }
+      if (m.t === 'done') {
+        if (!G.opp) return;
+        G.opp.done = true; G.opp.ms = m.ms; G.opp.matched = m.matched;
+        renderOpp();
+        if (G.matched >= G.pairs) showResult(Date.now() - G.started);
+        else toast((G.opp.name || '對手') + ' 已經完成了！', 'err');
+        return;
+      }
+    });
+  }
+
+  function detachLink() {
+    if (link) { try { link.close(); } catch (e) {} }
+    link = null;
+    G.opp = null;
+  }
+
+  function hostStartMatch() {
+    var s = Store.settings();
+    var seed = U.randomSeed();
+    send({ t: 'start', seed: seed, pairs: s.pairs, cats: s.cats });
+    startRound(seed);
+  }
+
+  /* ===================== 首頁設定 UI ===================== */
+
+  function syncSettingsUI() {
+    var s = Store.settings();
+    Array.prototype.forEach.call($('pairs-chips').children, function (b) {
+      b.classList.toggle('on', Number(b.dataset.pairs) === s.pairs);
+    });
+    Array.prototype.forEach.call($('cat-chips').children, function (b) {
+      b.classList.toggle('on', s.cats.indexOf(b.dataset.cat) >= 0);
+    });
+    $('set-double').checked = !!s.doubleClick;
+    $('set-sound').checked = !!s.sound;
+    $('set-haptics').checked = !!s.haptics;
+    $('set-light').checked = s.theme === 'light';
+    $('set-name').value = Store.get().name || '';
+  }
+
+  function buildCatChips() {
+    var box = $('cat-chips');
+    box.innerHTML = '';
+    CATEGORIES.forEach(function (c) {
+      var b = document.createElement('button');
+      b.className = 'chip';
+      b.dataset.cat = c.id;
+      b.textContent = c.icon + ' ' + c.name;
+      b.addEventListener('click', function () {
+        var cats = Store.settings().cats.slice();
+        var i = cats.indexOf(c.id);
+        if (i >= 0) cats.splice(i, 1); else cats.push(c.id);
+        var pool = WORDS.filter(function (w) { return !cats.length || cats.indexOf(w.c) >= 0; });
+        if (cats.length && pool.length < Store.settings().pairs) {
+          toast('這些主題的單字不夠出題，已保留原設定');
+          return;
+        }
+        Store.setSetting('cats', cats);
+        syncSettingsUI();
+      });
+      box.appendChild(b);
+    });
+  }
+
+  function renderStats() {
+    var s = Store.get();
+    $('st-coins').textContent = s.coins;
+    $('st-correct').textContent = s.totalCorrect;
+    $('st-wrong').textContent = s.totalWrong;
+    $('st-rounds').textContent = s.rounds;
+    $('st-streak').textContent = s.bestStreak;
+    $('st-best').textContent = U.fmtTime(s.bestTime);
+
+    var weak = Object.keys(s.learned)
+      .map(function (k) { return { w: k, ng: s.learned[k].ng || 0, ok: s.learned[k].ok || 0 }; })
+      .filter(function (x) { return x.ng > 0; })
+      .sort(function (a, b) { return b.ng - a.ng; })
+      .slice(0, 12);
+    var ul = $('weak-list');
+    ul.innerHTML = '';
+    if (!weak.length) {
+      ul.innerHTML = '<li class="muted">還沒有資料，先玩幾局吧！</li>';
+    } else {
+      weak.forEach(function (x) {
+        var found = WORDS.filter(function (w) { return w.w === x.w; })[0];
+        var li = document.createElement('li');
+        var en = document.createElement('span'); en.className = 'en'; en.textContent = x.w;
+        var zh = document.createElement('span'); zh.className = 'zh';
+        zh.textContent = '　' + (found ? found.z : '') + '　錯 ' + x.ng + ' 次';
+        li.appendChild(en); li.appendChild(zh);
+        if (found) {
+          var ex = document.createElement('span'); ex.className = 'ex'; ex.textContent = found.ex;
+          li.appendChild(ex);
+        }
+        ul.appendChild(li);
+      });
+    }
+    $('export-code').value = Store.exportCode();
+  }
+
+  /* ===================== 事件綁定 ===================== */
+
+  function wire() {
+    $('word-total').textContent = WORDS.length;
+
+    $('btn-home').addEventListener('click', function () { detachLink(); clearInterval(G.timer); show('home'); });
+    $('btn-stats').addEventListener('click', function () { renderStats(); show('stats'); });
+    $('btn-settings').addEventListener('click', function () { syncSettingsUI(); show('settings'); });
+    $('btn-stats-back').addEventListener('click', function () { show('home'); });
+    $('btn-settings-back').addEventListener('click', function () { show('home'); });
+    $('coin-box').addEventListener('click', function () { renderStats(); show('stats'); });
+
+    // 模式
+    Array.prototype.forEach.call(document.querySelectorAll('.mode-card'), function (card) {
+      card.addEventListener('click', function () {
+        var mode = card.dataset.mode;
+        G.mode = mode;
+        if (mode === 'solo') { detachLink(); startRound(); return; }
+        openLinkScreen(mode);
+      });
+    });
+
+    // 題數
+    Array.prototype.forEach.call($('pairs-chips').children, function (b) {
+      b.addEventListener('click', function () {
+        Store.setSetting('pairs', Number(b.dataset.pairs));
+        syncSettingsUI();
+      });
+    });
+
+    // 遊戲中
+    $('btn-quit').addEventListener('click', function () {
+      clearInterval(G.timer);
+      if (G.matched > 0) showResult(Date.now() - G.started);
+      else show('home');
+    });
+    $('btn-hint').addEventListener('click', hint);
+    $('btn-again').addEventListener('click', function () {
+      if (G.mode !== 'solo' && link && link.opened) {
+        if (amHost) hostStartMatch();
+        else toast('等對方開始下一局…');
+        return;
+      }
+      startRound();
+    });
+    $('btn-back-home').addEventListener('click', function () { show('home'); });
+
+    // 滑鼠／手指移動時的預覽線
+    var board = $('board');
+    board.addEventListener('pointermove', function (e) { updateLive(e.clientX, e.clientY); });
+    board.addEventListener('pointerleave', clearLive);
+
+    global.addEventListener('resize', drawWires);
+    if (global.ResizeObserver) new ResizeObserver(drawWires).observe(board);
+
+    /* ---- 設定 ---- */
+    $('set-double').addEventListener('change', function () { Store.setSetting('doubleClick', this.checked); });
+    $('set-sound').addEventListener('change', function () { Store.setSetting('sound', this.checked); });
+    $('set-haptics').addEventListener('change', function () { Store.setSetting('haptics', this.checked); });
+    $('set-light').addEventListener('change', function () {
+      Store.setSetting('theme', this.checked ? 'light' : 'dark');
+      applyTheme();
+    });
+    $('set-name').addEventListener('change', function () { Store.set({ name: this.value.trim() }); });
+    $('btn-reset').addEventListener('click', function () {
+      if (global.confirm('確定要清除所有進度與單詞幣嗎？此動作無法復原。')) {
+        Store.reset(); applyTheme(); syncSettingsUI(); refreshCoins(); renderStats();
+        toast('已清除');
+      }
+    });
+
+    /* ---- 進度搬移 ---- */
+    $('btn-export-copy').addEventListener('click', function () {
+      copyText($('export-code').value).then(function () { toast('已複製，貼到另一台裝置匯入', 'ok'); },
+        function () { $('export-code').select(); toast('請長按選取後複製'); });
+    });
+    $('btn-import').addEventListener('click', function () {
+      try {
+        Store.importCode($('import-code').value);
+        applyTheme(); syncSettingsUI(); refreshCoins(true); renderStats();
+        $('import-code').value = '';
+        toast('進度已合併匯入', 'ok');
+      } catch (e) {
+        toast('匯入失敗：' + e.message, 'err');
+      }
+    });
+
+    wireLinkScreen();
+  }
+
+  /* ===================== 連線畫面 ===================== */
+
+  function openLinkScreen(mode) {
+    detachLink();
+    $('link-local').hidden = (mode !== 'local');
+    $('link-peer').hidden = (mode !== 'peer');
+    $('link-title').textContent = '連線對戰';
+    $('peer-steps').hidden = true;
+    $('code-out').value = '';
+    $('code-in').value = '';
+    $('btn-link-start').disabled = true;
+    $('btn-link-start').textContent = '開始對戰';
+    if (mode === 'local') {
+      if (!PET_NET.supportsLocal()) { toast('這個瀏覽器不支援同裝置連線', 'err'); return; }
+      if (!$('room-input').value) $('room-input').value = U.roomCode();
+      linkStatus('輸入同一個房號，兩邊都按「開始連線」');
+    } else {
+      if (!PET_NET.supportsPeer()) { toast('這個瀏覽器不支援 WebRTC 連線', 'err'); return; }
+      linkStatus('選擇你是主持人還是加入者');
+    }
+    show('link');
+  }
+
+  var peerRole = null;   // 'host' | 'join'
+
+  function wireLinkScreen() {
+    $('btn-room-random').addEventListener('click', function () { $('room-input').value = U.roomCode(); });
+    $('btn-room-copy').addEventListener('click', function () {
+      copyText($('room-input').value).then(function () { toast('房號已複製', 'ok'); }, function () { toast('複製失敗'); });
+    });
+
+    $('btn-local-connect').addEventListener('click', function () {
+      var room = ($('room-input').value || '').trim().toUpperCase();
+      if (room.length < 3) { toast('房號至少 3 個字元', 'err'); return; }
+      $('room-input').value = room;
+      var l = PET_NET.local();
+      attachLink(l);
+      l.start(room, true);
+      linkStatus('等待另一個視窗加入房號 ' + room + '…');
+    });
+
+    $('btn-peer-host').addEventListener('click', function () {
+      peerRole = 'host';
+      var l = PET_NET.peer();
+      attachLink(l);
+      $('peer-steps').hidden = false;
+      $('out-label').textContent = '① 把這段「邀請碼」傳給對方';
+      $('in-label').textContent = '② 貼上對方傳回的「回應碼」';
+      $('code-out').value = '產生中，請稍候…';
+      linkStatus('正在產生邀請碼…');
+      l.createOffer().then(function (code) {
+        $('code-out').value = code;
+        linkStatus('邀請碼好了，傳給對方吧');
+      }, function (e) {
+        $('code-out').value = '';
+        linkStatus('產生失敗：' + e.message, 'err');
+      });
+    });
+
+    $('btn-peer-join').addEventListener('click', function () {
+      peerRole = 'join';
+      var l = PET_NET.peer();
+      attachLink(l);
+      $('peer-steps').hidden = false;
+      $('in-label').textContent = '① 貼上對方給你的「邀請碼」，然後按下方按鈕';
+      $('out-label').textContent = '② 把產生的「回應碼」傳回給對方';
+      $('code-out').value = '';
+      $('code-out').placeholder = '送出邀請碼後，這裡會出現回應碼';
+      linkStatus('等你貼上邀請碼');
+    });
+
+    $('btn-copy-code').addEventListener('click', function () {
+      copyText($('code-out').value).then(function () { toast('代碼已複製', 'ok'); },
+        function () { $('code-out').select(); toast('請長按選取後複製'); });
+    });
+
+    $('btn-share-code').addEventListener('click', function () {
+      var text = $('code-out').value;
+      if (!text) { toast('還沒有代碼'); return; }
+      if (global.navigator.share) {
+        global.navigator.share({ title: 'PET 單詞連線', text: text }).catch(function () {});
+      } else {
+        copyText(text).then(function () { toast('已複製，貼給對方即可', 'ok'); }, function () { toast('複製失敗'); });
+      }
+    });
+
+    $('btn-code-submit').addEventListener('click', function () {
+      var code = ($('code-in').value || '').trim();
+      if (!code) { toast('請先貼上代碼', 'err'); return; }
+      if (!link) { toast('請先選擇主持人或加入者', 'err'); return; }
+      if (peerRole === 'join') {
+        linkStatus('處理中…');
+        link.acceptOffer(code).then(function (answer) {
+          $('code-out').value = answer;
+          linkStatus('回應碼好了，傳回給對方，連上就會自動開始');
+        }, function (e) { linkStatus('失敗：' + e.message, 'err'); });
+      } else {
+        linkStatus('處理中…');
+        link.acceptAnswer(code).then(function () {
+          linkStatus('已送出，正在建立連線…');
+        }, function (e) { linkStatus('失敗：' + e.message, 'err'); });
+      }
+    });
+
+    $('btn-link-cancel').addEventListener('click', function () { detachLink(); show('home'); });
+    $('btn-link-start').addEventListener('click', function () {
+      if (!link || !link.opened) { toast('還沒連上', 'err'); return; }
+      hostStartMatch();
+    });
+  }
+
+  /* ===================== 啟動 ===================== */
+
+  function boot() {
+    applyTheme();
+    buildCatChips();
+    syncSettingsUI();
+    refreshCoins();
+    wire();
+    Store.onChange(function () { refreshCoins(); });
+
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})(this);
+
+</script>
