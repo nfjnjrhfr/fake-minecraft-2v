@@ -1,2 +1,88 @@
-# fake-minecraft-2v
-u8ujujujujujujujujujuujuujujujujuujujujujujjujjujujujuujjunjerivcfv dnds xdfbdehbhebhbdehbhbhrhbehebhderbhrvrdfgvfrfrevefvfegfhdevegdervgedryegehwrwehgerhwhrbhdbhdbdhbedbdiuheiuhur4ury4yeeyurheu4u44uyy56t4rueyrjdhjddbhdjebbhjejbhdwehjhejrhjedhjdjdndejndjnsdsjndsjndsjkkd.                                                                             67
+# PET 單詞連線 · Word Link
+
+劍橋 **PET（B1 Preliminary）** 核心單字的連線配對遊戲。純前端、零相依套件，
+打開 `index.html` 就能玩，手機 / 平板 / 桌機、觸控或滑鼠都適用。
+
+![PET 單詞連線](icons/icon-192.png)
+
+## 功能
+
+### 🔗 雙擊連線
+**雙擊**左欄的英文單字，再**雙擊**右欄的中文意思，兩張卡之間就會拉出一條線：
+
+- 配對正確 → 綠色曲線鎖定、卡片變綠、計入答對
+- 配對錯誤 → 紅線一閃、卡片晃動、計 1 次失誤
+- 選取後會有一條虛線跟著手指／滑鼠移動
+- 手機的「雙點」以 450 毫秒內連點兩下判定，不會和瀏覽器的雙擊縮放打架
+- 設定裡可以把「雙擊連線」關掉，改成單擊操作（給小朋友或不便雙擊的人用）
+
+### 📵 不用網路也能連線；🌐 有網路也能連線
+| 模式 | 需要網路？ | 怎麼連 |
+| --- | --- | --- |
+| 單人練習 | 不用 | 直接開始 |
+| **同裝置對戰** | **完全不用** | 同一台裝置開兩個分頁／視窗（手機可分割畫面），兩邊輸入同一個房號。走 `BroadcastChannel`（不支援時退回 `localStorage` 事件），封包不出裝置。 |
+| **跨裝置連線** | 要（同一個 Wi-Fi 下通常也可以） | WebRTC 直連，**不需要我們自己的伺服器**：主持人產生「邀請碼」，用任何聊天軟體傳給對方；對方貼上後產生「回應碼」傳回來即可。 |
+
+對戰時雙方只交換一個亂數種子，兩邊就會產生**完全相同的題目**，即時看到對手的進度條。
+
+### 🪙 PET 單詞幣
+**每答對 10 個單字 → 獲得 1 枚 PET 單詞幣。**
+右上角的金幣旁有一圈進度環，隨時看得到離下一枚還差幾題。
+單詞幣存在本機（`localStorage`），離線照樣累積。
+
+### 📱 全部設備都可用
+- 響應式版面：手機單欄、桌機寬版，觸控目標至少 48px
+- 深色 / 淺色主題
+- 已裝好 PWA（`manifest.webmanifest` + `sw.js`）：用 http(s) 開過一次之後，關掉網路也能從桌面圖示直接玩
+- 進度可跨裝置搬移：統計頁可以複製一段進度代碼，到另一台裝置貼上匯入（採合併制，不會把原本的成績洗掉）
+- 音效用 WebAudio 即時合成、震動用 Vibration API，都沒有額外檔案
+
+## 玩法
+
+1. 選模式（單人練習 / 同裝置對戰 / 跨裝置連線）
+2. 選每回合題數（4 / 5 / 6 / 8 對）與單字主題（12 個主題，不選就是全部）
+3. 雙擊英文 → 雙擊中文，把整組連完
+4. 結算頁會列出這一局的所有單字、詞性與例句，答錯過的會標上 ⚠️
+
+「提示 💡」會把一組正確答案亮起來，代價是記 1 次失誤。
+
+## 怎麼跑
+
+直接用瀏覽器開 `index.html` 就能玩。
+想要 PWA 離線安裝（Service Worker 需要 http/https）：
+
+```bash
+npx http-server -p 8080 .
+# 或
+python3 -m http.server 8080
+```
+
+然後開 <http://localhost:8080>。
+
+## 單字庫
+
+`js/words.js` 共 **240 個** PET/B1 單字，分成 12 個主題：
+日常生活、學校教育、工作職業、旅遊交通、食物飲食、健康身體、
+環境自然、科技媒體、情緒個性、常用動詞、常用形容詞、連接與副詞。
+
+每筆資料包含英文、中文、詞性與一個例句：
+
+```js
+{ w: 'journey', z: '旅程', p: 'n.', c: 'travel', ex: 'The journey takes about three hours.' }
+```
+
+要加字直接往陣列裡加就好，遊戲會自動吃到（英文與中文都不要重複，以免同一題出現兩個正解）。
+
+## 檔案結構
+
+```
+index.html              介面
+css/style.css           版面與主題
+js/words.js             PET 單字庫
+js/store.js             本機進度：單詞幣、統計、設定、匯出匯入
+js/util.js              種子亂數、洗牌、base64、音效、震動
+js/net.js               連線層：BroadcastChannel（離線）＋ WebRTC（線上）
+js/game.js              遊戲主程式
+manifest.webmanifest    PWA 設定
+sw.js                   Service Worker（離線快取）
+```

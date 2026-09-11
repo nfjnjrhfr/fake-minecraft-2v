@@ -1,0 +1,17 @@
+{
+  "name": "PET 單詞連線 · Word Link",
+  "short_name": "PET 單詞",
+  "description": "劍橋 PET (B1) 單字連線遊戲：雙擊連線、離線可玩、可雙人對戰，答對 10 個得 1 枚 PET 單詞幣。",
+  "lang": "zh-Hant",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

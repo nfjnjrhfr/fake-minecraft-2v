@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<meta name="description" content="PET（B1 Preliminary）單詞連線遊戲：雙擊連線、離線可玩、可雙人連線對戰，答對 10 個得 1 枚 PET 單詞幣。">
+<title>PET 單詞連線 · Word Link</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button class="icon-btn" id="btn-home" title="回首頁" aria-label="回首頁">🏠</button>
+  <h1 class="brand">PET 單詞連線</h1>
+  <div class="coin-box" id="coin-box" role="button" tabindex="0" title="PET 單詞幣：答對 10 個得 1 枚">
+    <svg class="ring" viewBox="0 0 36 36" aria-hidden="true">
+      <circle class="ring-bg" cx="18" cy="18" r="15.5"></circle>
+      <circle class="ring-fg" id="coin-ring" cx="18" cy="18" r="15.5"></circle>
+    </svg>
+    <span class="coin-emoji">🪙</span>
+    <span class="coin-count" id="coin-count">0</span>
+  </div>
+  <button class="icon-btn" id="btn-stats" title="統計" aria-label="統計">📊</button>
+  <button class="icon-btn" id="btn-settings" title="設定" aria-label="設定">⚙️</button>
+</header>
+
+<main id="app">
+
+  <!-- ============ 首頁 ============ -->
+  <section class="screen active" id="screen-home">
+    <div class="hero">
+      <p class="hero-sub">劍橋 PET (B1) 核心單字 · <b id="word-total">240</b> 字</p>
+      <p class="hero-tip">玩法：<b>雙擊</b>左邊英文，再<b>雙擊</b>右邊中文，就會連成一條線。</p>
+    </div>
+
+    <div class="cards">
+      <button class="mode-card" data-mode="solo">
+        <span class="mode-ico">🎯</span>
+        <span class="mode-name">單人練習</span>
+        <span class="mode-desc">完全離線，隨時可玩</span>
+      </button>
+      <button class="mode-card" data-mode="local">
+        <span class="mode-ico">📵</span>
+        <span class="mode-name">同裝置對戰</span>
+        <span class="mode-desc">不用網路，開兩個視窗就能連線</span>
+      </button>
+      <button class="mode-card" data-mode="peer">
+        <span class="mode-ico">🌐</span>
+        <span class="mode-name">跨裝置連線</span>
+        <span class="mode-desc">有網路時，兩台裝置直接對戰</span>
+      </button>
+    </div>
+
+    <div class="panel">
+      <h2>每回合題數</h2>
+      <div class="chips" id="pairs-chips">
+        <button class="chip" data-pairs="4">4 對</button>
+        <button class="chip" data-pairs="5">5 對</button>
+        <button class="chip" data-pairs="6">6 對</button>
+        <button class="chip" data-pairs="8">8 對</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>單字主題 <small>（不選 = 全部）</small></h2>
+      <div class="chips" id="cat-chips"></div>
+    </div>
+
+    <p class="foot-note">
+      目前進度：再答對 <b id="to-next">10</b> 題就能再拿到 <b>1 枚 PET 單詞幣</b> 🪙
+    </p>
+  </section>
+
+  <!-- ============ 連線設定 ============ -->
+  <section class="screen" id="screen-link">
+    <h2 class="screen-title" id="link-title">連線</h2>
+
+    <div class="panel" id="link-local">
+      <h2>📵 同裝置連線（不需要網路）</h2>
+      <p class="hint">在<b>同一台裝置</b>再開一個瀏覽器分頁或視窗（手機可用分割畫面），
+        兩邊輸入同一個房號後按「開始連線」。整個過程不經過網路。</p>
+      <div class="row">
+        <input class="input" id="room-input" maxlength="6" placeholder="房號" autocomplete="off" spellcheck="false">
+        <button class="btn" id="btn-room-random">隨機</button>
+        <button class="btn" id="btn-room-copy">複製房號</button>
+      </div>
+      <button class="btn primary wide" id="btn-local-connect">開始連線</button>
+    </div>
+
+    <div class="panel" id="link-peer">
+      <h2>🌐 跨裝置連線（需要網路）</h2>
+      <p class="hint">不需要任何伺服器帳號：主持人產生「邀請碼」，用任何聊天軟體傳給對方；
+        對方貼上後產生「回應碼」再傳回來即可。</p>
+      <div class="row">
+        <button class="btn primary" id="btn-peer-host">我當主持人</button>
+        <button class="btn" id="btn-peer-join">我要加入</button>
+      </div>
+
+      <div class="steps" id="peer-steps" hidden>
+        <label class="field">
+          <span id="out-label">① 把這段邀請碼傳給對方</span>
+          <textarea class="code" id="code-out" readonly rows="3" placeholder="產生中…"></textarea>
+        </label>
+        <div class="row">
+          <button class="btn" id="btn-copy-code">複製代碼</button>
+          <button class="btn" id="btn-share-code">分享</button>
+        </div>
+        <label class="field">
+          <span id="in-label">② 貼上對方回傳的代碼</span>
+          <textarea class="code" id="code-in" rows="3" placeholder="在這裡貼上代碼…" spellcheck="false"></textarea>
+        </label>
+        <button class="btn primary wide" id="btn-code-submit">送出代碼</button>
+      </div>
+    </div>
+
+    <p class="status" id="link-status">尚未連線</p>
+    <div class="row center">
+      <button class="btn" id="btn-link-cancel">取消</button>
+      <button class="btn primary" id="btn-link-start" disabled>開始對戰</button>
+    </div>
+  </section>
+
+  <!-- ============ 遊戲 ============ -->
+  <section class="screen" id="screen-play">
+    <div class="hud">
+      <div class="hud-item"><span class="hud-k">時間</span><span class="hud-v" id="hud-time">0.0</span></div>
+      <div class="hud-item"><span class="hud-k">已連</span><span class="hud-v" id="hud-matched">0/5</span></div>
+      <div class="hud-item"><span class="hud-k">連續</span><span class="hud-v" id="hud-streak">0</span></div>
+      <div class="hud-item"><span class="hud-k">失誤</span><span class="hud-v" id="hud-wrong">0</span></div>
+    </div>
+
+    <div class="versus" id="versus" hidden>
+      <span class="vs-name" id="vs-name">對手</span>
+      <div class="vs-bar"><i id="vs-fill"></i></div>
+      <span class="vs-num" id="vs-num">0/5</span>
+    </div>
+
+    <div class="board" id="board">
+      <svg class="wires" id="wires" aria-hidden="true"></svg>
+      <div class="col" id="col-left"></div>
+      <div class="col" id="col-right"></div>
+    </div>
+
+    <p class="play-tip" id="play-tip">雙擊左邊英文 → 再雙擊右邊中文</p>
+    <div class="row center">
+      <button class="btn" id="btn-quit">結束這局</button>
+      <button class="btn" id="btn-hint">提示 💡</button>
+    </div>
+  </section>
+
+  <!-- ============ 結果 ============ -->
+  <section class="screen" id="screen-result">
+    <h2 class="screen-title" id="result-title">完成！</h2>
+    <div class="result-grid">
+      <div class="res"><span class="res-k">用時</span><span class="res-v" id="res-time">--</span></div>
+      <div class="res"><span class="res-k">答對</span><span class="res-v" id="res-correct">0</span></div>
+      <div class="res"><span class="res-k">失誤</span><span class="res-v" id="res-wrong">0</span></div>
+      <div class="res"><span class="res-k">本局單詞幣</span><span class="res-v" id="res-coins">0</span></div>
+    </div>
+    <div class="panel">
+      <h2>這一局的單字</h2>
+      <ul class="review" id="review"></ul>
+    </div>
+    <div class="row center">
+      <button class="btn primary" id="btn-again">再來一局</button>
+      <button class="btn" id="btn-back-home">回首頁</button>
+    </div>
+  </section>
+
+  <!-- ============ 統計 ============ -->
+  <section class="screen" id="screen-stats">
+    <h2 class="screen-title">我的統計</h2>
+    <div class="result-grid">
+      <div class="res"><span class="res-k">PET 單詞幣</span><span class="res-v" id="st-coins">0</span></div>
+      <div class="res"><span class="res-k">累計答對</span><span class="res-v" id="st-correct">0</span></div>
+      <div class="res"><span class="res-k">累計失誤</span><span class="res-v" id="st-wrong">0</span></div>
+      <div class="res"><span class="res-k">完成回合</span><span class="res-v" id="st-rounds">0</span></div>
+      <div class="res"><span class="res-k">最長連續</span><span class="res-v" id="st-streak">0</span></div>
+      <div class="res"><span class="res-k">最快一局</span><span class="res-v" id="st-best">--</span></div>
+    </div>
+    <div class="panel">
+      <h2>最需要複習的單字</h2>
+      <ul class="review" id="weak-list"><li class="muted">還沒有資料</li></ul>
+    </div>
+    <div class="panel">
+      <h2>換裝置繼續玩</h2>
+      <p class="hint">單詞幣存在這台裝置上。把下面這段代碼複製到另一台裝置匯入，進度就跟著走。</p>
+      <textarea class="code" id="export-code" rows="3" readonly></textarea>
+      <div class="row">
+        <button class="btn" id="btn-export-copy">複製我的進度</button>
+      </div>
+      <label class="field">
+        <span>貼上另一台裝置的進度代碼</span>
+        <textarea class="code" id="import-code" rows="3" placeholder="PET1...." spellcheck="false"></textarea>
+      </label>
+      <button class="btn primary wide" id="btn-import">匯入進度</button>
+    </div>
+    <div class="row center"><button class="btn" id="btn-stats-back">返回</button></div>
+  </section>
+
+  <!-- ============ 設定 ============ -->
+  <section class="screen" id="screen-settings">
+    <h2 class="screen-title">設定</h2>
+    <div class="panel">
+      <label class="switch"><input type="checkbox" id="set-double" checked><span>雙擊連線（關閉改為單擊）</span></label>
+      <label class="switch"><input type="checkbox" id="set-sound" checked><span>音效</span></label>
+      <label class="switch"><input type="checkbox" id="set-haptics" checked><span>震動回饋（手機）</span></label>
+      <label class="switch"><input type="checkbox" id="set-light"><span>淺色主題</span></label>
+    </div>
+    <div class="panel">
+      <h2>暱稱（連線對戰時顯示）</h2>
+      <input class="input wide" id="set-name" maxlength="12" placeholder="例如：小明">
+    </div>
+    <div class="panel danger-zone">
+      <h2>危險區</h2>
+      <p class="hint">清除這台裝置上的所有進度與單詞幣，無法復原。</p>
+      <button class="btn danger" id="btn-reset">清除全部進度</button>
+    </div>
+    <div class="row center"><button class="btn" id="btn-settings-back">返回</button></div>
+  </section>
+
+</main>
+
+<div class="toast-wrap" id="toast-wrap" aria-live="polite"></div>
+<div class="coin-pop" id="coin-pop" hidden><span>🪙</span><b>+1 PET 單詞幣</b></div>
+
+<script src="js/words.js"></script>
+<script src="js/store.js"></script>
+<script src="js/util.js"></script>
+<script src="js/net.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
