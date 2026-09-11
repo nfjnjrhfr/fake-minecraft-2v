@@ -27,6 +27,11 @@
   --gold: #fbbf24;
   --radius: 14px;
   --tap: 48px;
+  /* 不支援 color-mix() 的舊瀏覽器（例如微信安卓內建瀏覽器）用的實色 */
+  --sel-bg: #233a63;
+  --sel-glow: rgba(79, 157, 255, .28);
+  --match-bg: #1b3b3b;
+  --gold-glow: rgba(251, 191, 36, .4);
 }
 [data-theme="light"] {
   --bg: #f4f7fd;
@@ -41,6 +46,10 @@
   --good: #059669;
   --bad: #dc2626;
   --gold: #d97706;
+  --sel-bg: #dbe7fb;
+  --sel-glow: rgba(37, 99, 235, .25);
+  --match-bg: #d8f0e6;
+  --gold-glow: rgba(217, 119, 6, .35);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -68,6 +77,7 @@ body {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 12px calc(10px);
   padding-top: calc(10px + env(safe-area-inset-top));
+  background: var(--bg);                                       /* 舊瀏覽器的退路 */
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
@@ -176,7 +186,7 @@ body {
 
 .switch { display: flex; align-items: center; gap: 10px; padding: 10px 0; cursor: pointer; min-height: var(--tap); }
 .switch input { width: 22px; height: 22px; accent-color: var(--accent); }
-.danger-zone { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.danger-zone { border-color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
 
 /* ---------- HUD ---------- */
 .hud { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
@@ -214,10 +224,21 @@ body {
 }
 .tile .pos { font-size: .68rem; color: var(--fg-dim); }
 .tile:active { transform: scale(.97); }
-.tile.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, var(--card)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
-.tile.matched { border-color: var(--good); background: color-mix(in srgb, var(--good) 18%, var(--card)); opacity: .75; cursor: default; }
+.tile.sel {
+  border-color: var(--accent);
+  background: var(--sel-bg);
+  background: color-mix(in srgb, var(--accent) 22%, var(--card));
+  box-shadow: 0 0 0 3px var(--sel-glow);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.tile.matched {
+  border-color: var(--good);
+  background: var(--match-bg);
+  background: color-mix(in srgb, var(--good) 18%, var(--card));
+  opacity: .75; cursor: default;
+}
 .tile.hinted { border-color: var(--gold); animation: glow 1s ease 2; }
-@keyframes glow { 0%,100% { box-shadow: none; } 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--gold) 40%, transparent); } }
+@keyframes glow { 0%,100% { box-shadow: none; } 50% { box-shadow: 0 0 0 4px var(--gold-glow); } }
 .tile.shake { animation: shake .38s ease; border-color: var(--bad); }
 @keyframes shake {
   0%,100% { transform: translateX(0); }
